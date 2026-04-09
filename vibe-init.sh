@@ -33,10 +33,45 @@ cat << 'EOF' > .cursorrules
 - 拒绝盲目试错：报错必须先分析 Error Traceback。
 - 日志先行：复杂 Bug 先加结构化日志缩小排查范围。
 
+# 技术栈约束 (Tech Stack Constraints) — 项目初始化时填写，锁定后禁止 AI 擅自更换
+- Language: (例如: TypeScript 5.x / Python 3.12)
+- Framework: (例如: Next.js 14 / FastAPI)
+- Database: (例如: PostgreSQL 16 / MongoDB 7)
+- ORM/ODM: (例如: Prisma 5.x / SQLAlchemy 2.x)
+- Package Manager: (例如: pnpm / uv)
+- 禁止使用 (Banned): (例如: var, any 类型, jQuery, lodash)
+- 强制使用 (Enforced): (例如: strict TypeScript, ESM only)
+
+# Git 工作流与版本管理 (Git Workflow & Versioning)
+- 分支策略：遵循项目选定的分支模型（填写: Git Flow / GitHub Flow / Trunk-Based）。未填写时默认 GitHub Flow。
+  - main 分支永远可部署，禁止直接 push。
+  - 功能分支命名：feat/简短描述、fix/简短描述、chore/简短描述。
+- Commit 规范：严格遵循 Conventional Commits。
+  - 格式：<type>(<scope>): <description>
+  - type 枚举：feat | fix | docs | style | refactor | perf | test | chore | ci | build | revert
+- PR/MR 规范：标题遵循 Conventional Commits，描述包含 What/Why/How to test。
+- 版本号策略：遵循 Semantic Versioning 2.0。
+- Tag 与 Release：每次发布打 Git Tag (vX.Y.Z)，生成 CHANGELOG。
+
+# CI/CD 护栏 (CI/CD Pipeline Guardrails)
+- Pipeline 阶段：lint -> test -> build -> security -> deploy
+- 质量门禁：测试覆盖率低于阈值、存在 Critical 安全漏洞、Lint 错误 > 0 时 Pipeline 中断。
+- 环境隔离：dev(push自动部署) / staging(合并main自动部署) / production(Tag触发,手动确认)。
+- 密钥管理：所有密钥通过 CI/CD Secrets 管理，绝对禁止硬编码。
+
 # 状态管理与上下文护栏
 - 架构决策记录：引入新库或遇环境坑，主动提示我更新到 docs/architecture.md 或 MEMORY.md。
 - 活文档同步：重构后强制更新相关文档。
 - 待办收尾：完成后主动清理 TODO.md，并输出 Conventional Commits 规范的提交信息。
+
+# 智能角色路由 (Auto Role Routing)
+当对话上下文中已加载了 .prompts/ 下的角色模板时，根据消息意图自动匹配角色回答。
+回复开头用 [🎭 角色名] 标注当前激活的角色。
+路由规则：
+1. 显式指令优先：明确说了用某角色，无条件切换。
+2. 意图匹配：需求/PRD/业务->PM, UI/设计->Designer, 测试/用例->QA, 审查/Review->Reviewer, 编码/调试->Dev(默认)。
+3. 混合意图：以主要意图角色回答，末尾提示是否需要切换。
+4. 角色惯性：连续工作流中保持当前角色，除非意图明显偏移。
 EOF
 echo "✅ 注入全局认知护栏: .cursorrules"
 
@@ -71,10 +106,40 @@ cat << 'EOF' > docs/architecture.md
 # 系统架构与业务上下文
 
 ## 🎯 业务最终目标
-(在此描述本项目的核心业务目标)
+(用一两句话描述这个项目的最终形态和核心价值。)
 
 ## 🧩 核心模块划分
-- (待补充)
+| 模块名 | 职责描述 | 对外暴露接口 | 依赖的其他模块 |
+|--------|---------|-------------|---------------|
+| (模块 A) | (描述职责) | (接口列表) | (依赖列表) |
+
+## 🗄️ 核心数据模型
+(描述核心实体及其关系。建议用 Mermaid ER 图。)
+
+## 🔌 API 契约概览
+| 端点 | 方法 | 用途 | 请求体摘要 | 响应体摘要 | 鉴权 |
+|------|------|------|-----------|-----------|------|
+| /api/v1/xxx | POST | (用途) | { ... } | { ... } | (Bearer / API Key / 无) |
+
+## 🔀 核心数据流 / 状态管理
+(简述数据从输入到输出的流转过程。建议用 Mermaid 流程图。)
+
+## ⚡ 非功能性需求 (NFR)
+| 指标 | 目标值 | 备注 |
+|------|--------|------|
+| 可用性 SLA | (例如: 99.9%) | |
+| P99 延迟 | (例如: < 200ms) | |
+| QPS 峰值 | (例如: 1000 req/s) | |
+
+## 🚀 部署拓扑
+- 环境: (dev / staging / production)
+- 容器化: (Docker / K8s / Serverless)
+- CI/CD: (GitHub Actions / Jenkins / 其他)
+
+## 📐 架构决策记录 (ADR) 索引
+| # | 日期 | 决策 | 原因 | 状态 |
+|---|------|------|------|------|
+| 1 | (日期) | (决策摘要) | (为什么这样选) | ✅ 生效 / 🚫 废弃 |
 EOF
 echo "✅ 初始化架构文档: docs/architecture.md"
 
@@ -117,6 +182,89 @@ else
     echo "请运行 'brew install pre-commit' 然后手动执行 'pre-commit install'。"
 fi
 
+# 5.5 注入 PR 模板
+mkdir -p .github
+cat << 'EOF' > .github/PULL_REQUEST_TEMPLATE.md
+## What (做了什么)
+<!-- 简述本次变更的内容 -->
+
+## Why (为什么)
+<!-- 说明变更的业务背景或技术原因 -->
+
+## How to Test (如何测试)
+<!-- 描述验证步骤，或说明已通过的自动化测试 -->
+
+## Checklist
+- [ ] 代码遵循项目 `.cursorrules` 中的编码规范
+- [ ] 已编写/更新对应的测试用例
+- [ ] 已更新相关文档 (architecture.md / MEMORY.md / TODO.md)
+- [ ] 无新增 Lint 错误
+- [ ] 已通过 Reviewer Agent 审查（或已提交审查请求）
+
+## Related
+<!-- 关联的 Issue / TODO 项 / 其他 PR -->
+EOF
+echo "✅ 注入 PR 模板: .github/PULL_REQUEST_TEMPLATE.md"
+
+# 5.6 注入 CI/CD 模板 (GitHub Actions)
+mkdir -p .github/workflows
+cat << 'EOF' > .github/workflows/ci.yml
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: "\U0001F9F9 Lint"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup runtime
+        run: echo "TODO: 替换为实际的 setup step"
+      - name: Install dependencies
+        run: echo "TODO: 替换为实际的 install 命令"
+      - name: Run linter
+        run: echo "TODO: 替换为实际的 lint 命令"
+
+  test:
+    name: "\U0001F9EA Test"
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup runtime
+        run: echo "TODO: 替换为实际的 setup step"
+      - name: Install dependencies
+        run: echo "TODO: 替换为实际的 install 命令"
+      - name: Run tests
+        run: echo "TODO: 替换为实际的 test 命令"
+
+  security:
+    name: "\U0001F512 Security Scan"
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run dependency audit
+        run: echo "TODO: 替换为实际的 audit 命令"
+
+  build:
+    name: "\U0001F4E6 Build"
+    runs-on: ubuntu-latest
+    needs: [test, security]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: echo "TODO: 替换为实际的 build 命令"
+EOF
+echo "✅ 注入 CI/CD 模板: .github/workflows/ci.yml"
 
 # 6. 注入上游 PM Agent 护栏
 mkdir -p .prompts
@@ -151,8 +299,6 @@ cat << 'EOF' > .prompts/pm_agent.md
 完成输出后，提示我：“产品方案已定稿，请将上述内容更新至您的 Harness 文档，并唤起 IDE Agent 开始 Vibe Coding。”
 EOF
 echo "✅ 注入 PM 角色模板: .prompts/pm_agent.md"
-
-# ... (保留之前的 PM 和研发初始化代码) ...
 
 # 7. 注入上游 Designer Agent 护栏与目录
 mkdir -p .prompts docs/design
@@ -303,6 +449,89 @@ cat << 'EOF' > .prompts/reviewer_agent.md
 EOF
 echo "✅ 注入 Reviewer 角色模板: .prompts/reviewer_agent.md"
 
-# ... (保留之前的 pre-commit 挂载代码) ...
+# 9. 注入 QA Agent 护栏 (质量保障与测试架构专家)
+cat << 'EOF' > .prompts/qa_agent.md
+# Role: 质量保障与测试架构专家 (QA Architect & Test Strategist)
+
+## 定位与背景
+你是一位拥有 10 年以上测试架构经验的资深 QA 专家。你精通测试金字塔理论，擅长从业务需求中提炼测试策略。
+你**不写业务代码**。你的唯一职责是：根据产品需求和架构设计，输出完整的测试策略、测试用例矩阵和质量门禁标准。
+
+## 核心原则
+- **需求即用例**：每一条 User Story 必须能映射到至少一个可执行的测试用例。
+- **边界优先**：Happy Path 只是起点，真正的质量在边界条件和异常路径中。
+- **可回归性**：所有测试必须可自动化、可重复执行、无环境依赖。
+
+## 核心工作流
+1. **上下文加载**：通读 docs/architecture.md 和 TODO.md。
+2. **测试金字塔规划**：按 Unit(60-70%) / Integration(20-25%) / E2E(5-10%) 分配。
+3. **用例矩阵生成**：对每个模块输出正向用例、边界用例、异常用例。
+4. **质量门禁定义**：输出 PR 合并门禁和发布门禁标准。
+5. **回归策略**：定义全量回归触发条件、增量回归范围、冒烟测试集。
+
+## 交付物
+- 代码块 A：测试策略文档 (docs/test_strategy.md)
+- 代码块 B：测试用例矩阵 (docs/test_cases.md)
+- 代码块 C：追加到 TODO.md 的测试任务
+
+## 协作协议
+- 上游依赖：PM Agent 的 PRD。
+- 下游消费：研发 Agent 根据用例矩阵编写测试代码，Reviewer Agent 审查覆盖度。
+EOF
+echo "✅ 注入 QA 角色模板: .prompts/qa_agent.md"
+
+# 10. 注入 Agent 编排协议
+cat << 'EOF' > .prompts/orchestration.md
+# Agent 编排协议 (Orchestration Protocol)
+
+本文档定义了各 Agent 角色之间的协作流程、交接规范和数据契约。
+用户作为唯一的"调度者"，负责在 Agent 之间传递上下文和裁决争议。
+
+## 标准协作流程
+PM Agent -> (architecture.md + TODO.md) -> Designer Agent -> (design_tokens + components) -> QA Agent -> (test_strategy + test_cases) -> Dev Agent (.cursorrules) -> (代码) -> Reviewer Agent -> (审查报告) -> 通过/打回
+
+## 各 Agent 输入/输出契约
+- PM: 输入(业务想法) -> 输出(architecture.md, TODO.md)
+- Designer: 输入(architecture.md, TODO.md) -> 输出(design_tokens.json, components.md)
+- QA: 输入(architecture.md, TODO.md) -> 输出(test_strategy.md, test_cases.md, TODO追加)
+- Dev (.cursorrules): 输入(所有docs/ + TODO.md + MEMORY.md) -> 输出(源代码)
+- Reviewer: 输入(代码 + architecture.md + TODO.md) -> 输出(审查报告)
+
+## 迭代规则
+- 每个 Agent 完成后必须提示用户进行下一步。
+- Reviewer 打回后最多循环 3 轮，第 3 轮仍未通过则建议重新设计。
+- 争议升级：双方各出数据用例，用户最终裁决。
+
+## 快速唤起指令
+- 唤起 PM: 请切换到 PM 角色 (@pm_agent.md)
+- 唤起 Designer: 请切换到 Designer 角色 (@designer_agent.md)
+- 唤起 QA: 请切换到 QA 角色 (@qa_agent.md)
+- 唤起 Reviewer: 请切换到 Reviewer 角色 (@reviewer_agent.md)
+
+注意：当 .cursorrules 中的"智能角色路由"生效时，大多数情况下无需手动唤起。
+AI 会根据消息意图自动匹配角色。仅在需要强制切换时使用上述指令。
+
+## 文件系统契约
+project-root/
+├── .cursorrules              # Dev Agent 全局规则
+├── .prompts/                 # Agent 角色模板
+│   ├── orchestration.md      # 编排协议
+│   ├── pm_agent.md           # PM
+│   ├── designer_agent.md     # Designer
+│   ├── qa_agent.md           # QA
+│   └── reviewer_agent.md     # Reviewer
+├── .github/
+│   ├── PULL_REQUEST_TEMPLATE.md  # PR 模板
+│   └── workflows/ci.yml         # CI Pipeline
+├── docs/
+│   ├── architecture.md       # 系统架构
+│   ├── ci_cd_templates.md    # CI/CD 模板库
+│   ├── design/               # 设计产出
+│   ├── test_strategy.md      # 测试策略
+│   └── test_cases.md         # 测试用例
+├── MEMORY.md                 # 项目记忆
+└── TODO.md                   # 任务清单
+EOF
+echo "✅ 注入 Agent 编排协议: .prompts/orchestration.md"
 
 echo "🎉 Vibe Coding 脚手架搭建完成！开启你的心流吧。"

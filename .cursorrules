@@ -27,7 +27,68 @@
 - **拒绝盲目试错**：报错时，绝对禁止靠“碰运气”微调业务逻辑。必须先分析 Error Traceback。
 - **日志先行**：修复难以复现或逻辑复杂的 Bug 时，第一步是指导我添加恰当的结构化日志（Logging），通过日志缩小排查范围，然后再修改核心代码。
 
+# 技术栈约束 (Tech Stack Constraints) — 项目初始化时填写，锁定后禁止 AI 擅自更换
+- **Language**: (例如: TypeScript 5.x / Python 3.12)
+- **Framework**: (例如: Next.js 14 / FastAPI)
+- **Database**: (例如: PostgreSQL 16 / MongoDB 7)
+- **ORM/ODM**: (例如: Prisma 5.x / SQLAlchemy 2.x)
+- **Package Manager**: (例如: pnpm / uv)
+- **禁止使用 (Banned)**: (例如: var, any 类型, jQuery, lodash)
+- **强制使用 (Enforced)**: (例如: strict TypeScript, ESM only)
+
+# Git 工作流与版本管理 (Git Workflow & Versioning)
+- **分支策略**：遵循项目选定的分支模型（填写: Git Flow / GitHub Flow / Trunk-Based）。未填写时默认 GitHub Flow。
+  - `main` 分支永远可部署，禁止直接 push。
+  - 功能分支命名：`feat/简短描述`、`fix/简短描述`、`chore/简短描述`。
+  - 发布分支命名（如使用 Git Flow）：`release/vX.Y.Z`。
+- **Commit 规范**：严格遵循 [Conventional Commits](https://www.conventionalcommits.org/)。
+  - 格式：`<type>(<scope>): <description>`
+  - type 枚举：`feat | fix | docs | style | refactor | perf | test | chore | ci | build | revert`
+  - scope 为受影响的模块名（可选但推荐）。
+  - 破坏性变更必须在 footer 中标注 `BREAKING CHANGE:`。
+- **PR/MR 规范**：每个 PR 必须包含：
+  - 标题遵循 Conventional Commits 格式。
+  - 描述中说明：改了什么 (What)、为什么改 (Why)、如何测试 (How to test)。
+  - 关联 TODO.md 中的任务项或 Issue 编号。
+- **版本号策略**：遵循 [Semantic Versioning 2.0](https://semver.org/)。
+  - MAJOR：不兼容的 API 变更。
+  - MINOR：向后兼容的功能新增。
+  - PATCH：向后兼容的 Bug 修复。
+- **Tag 与 Release**：每次发布必须打 Git Tag（`vX.Y.Z`），并生成 CHANGELOG（可借助 `conventional-changelog` 或 `git-cliff`）。
+
+# CI/CD 护栏 (CI/CD Pipeline Guardrails)
+- **Pipeline 阶段约定**：标准流水线应包含以下阶段（按顺序）：
+  1. `lint` — 代码风格检查（ESLint / Ruff / 等）
+  2. `test` — 单元测试 + 集成测试
+  3. `build` — 构建产物
+  4. `security` — 依赖漏洞扫描（npm audit / pip audit / trivy）
+  5. `deploy` — 部署到目标环境
+- **质量门禁 (Quality Gates)**：以下任一失败则 Pipeline 必须中断：
+  - 测试覆盖率低于阈值（项目初始化时填写，如 80%）。
+  - 存在 Critical/High 级别安全漏洞。
+  - Lint 错误数 > 0。
+- **环境隔离**：
+  - `dev` 环境：每次 push 到功能分支自动部署。
+  - `staging` 环境：PR 合并到 main 后自动部署。
+  - `production` 环境：手动触发或 Tag 触发，必须经过 staging 验证。
+- **密钥管理**：所有密钥/Token 必须通过 CI/CD 平台的 Secrets 管理，**绝对禁止**硬编码在代码或配置文件中。
+
 # 状态管理与上下文护栏 (State & Context Management)
 - **架构决策记录 (ADR)**：如果我们在对话中：引入了新依赖、更改了核心数据结构、或解决了一个隐蔽的环境配置坑，你必须**主动**提示我将此规则更新到 `docs/architecture.md` 或 `MEMORY.md` 中。
 - **活文档同步**：每次进行重大重构或数据模型调整后，强制同步更新 `docs/data_models.md` 等相关文档，确保未来的上下文不出现断层。
 - **待办收尾**：完成一段功能后，主动对照 `TODO.md`，清理已完成事项，并直接输出一句符合 Conventional Commits 规范的 Git 提交信息（例：`feat(auth): implement oauth2 callback flow`）。
+
+# 智能角色路由 (Auto Role Routing)
+当对话上下文中已加载了 `.prompts/` 下的角色模板时，你无需等待我显式指令切换角色。
+根据我的消息意图，自动匹配最合适的角色来回答，并在回复开头用 `[🎭 角色名]` 标注当前激活的角色。
+
+**路由规则（按优先级从高到低）**：
+1. **显式指令优先**：如果我明确说了"用 XX 角色"或 "@xx_agent.md"，无条件切换到该角色。
+2. **意图关键词匹配**：根据消息中的核心意图自动路由：
+   - → **PM Agent**：当我讨论需求定义、用户故事、业务逻辑推敲、PRD、功能边界、商业模式时。
+   - → **Designer Agent**：当我讨论 UI/UX、视觉风格、组件设计、设计系统、配色、布局时。
+   - → **QA Agent**：当我讨论测试策略、测试用例、覆盖率、质量门禁、回归测试时。
+   - → **Reviewer Agent**：当我要求审查代码、Review、检查逻辑完备性、安全审计时。
+   - → **Dev Agent（默认）**：当我讨论编码实现、调试、架构设计、技术选型、部署配置时。
+3. **混合意图处理**：如果消息涉及多个角色的职责，以**主要意图**对应的角色回答，但可在回复末尾用 `💡 建议` 提示是否需要切换到其他角色深入讨论。
+4. **角色惯性**：如果当前对话已处于某个角色的连续工作流中（如 PM 正在进行第 2 轮需求碰撞），除非我明确切换或意图发生明显偏移，否则保持当前角色。
