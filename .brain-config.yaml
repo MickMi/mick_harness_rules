@@ -1,0 +1,43 @@
+# Git Brain Configuration
+# This file controls the behavior of the Brain memory system.
+
+version: "0.1.0"
+
+# --- Directory Layout ---
+paths:
+  global: "brain/global"
+  projects: "brain/projects"
+  sessions: "brain/sessions"
+
+# --- Retention Policy ---
+retention:
+  # Session layer auto-archive after N days (raw conversation digests)
+  # Valuable content should already be distilled to Project/Global layers by then.
+  session_ttl_days: 90
+  # Maximum lines per single memory file before splitting
+  max_memory_file_lines: 500
+
+# --- Compound (Distillation) Rules ---
+compound:
+  # Daily: Session → Project layer distillation
+  daily: true
+  # Weekly: Project → Global layer distillation
+  weekly: true
+
+# --- Search Configuration ---
+search:
+  # Primary search engine (ripgrep is the default, always available)
+  engine: "ripgrep"
+  # Fallback engine if primary is unavailable
+  fallback: "ripgrep"
+  # Optional: semantic search tool (e.g., qmd), disabled by default due to ecosystem risk
+  semantic_engine: null
+
+# --- Multi-platform Write Sources ---
+write_sources:
+  # IDE AI (Cursor/Trae/Windsurf): direct shell write
+  ide: true
+  # CLI: `brain push` command
+  cli: true
+  # Webhook: post-conversation trigger
+  webhook: false

@@ -10,18 +10,25 @@
 ```mermaid
 flowchart TD
     User[👤 用户] -->|1. 提出业务想法| PM[📋 PM Agent]
-    PM -->|2. 输出 architecture.md + TODO.md| User
-    User -->|3. 确认方案，唤起设计| Designer[🎨 Designer Agent]
-    Designer -->|4. 输出 design_tokens.json + components.md| User
-    User -->|5. 确认设计，唤起测试策略| QA[🧪 QA Agent]
-    QA -->|6. 输出 test_strategy.md + test_cases.md| User
-    User -->|7. 全部就绪，唤起研发| Dev[⚙️ Dev Agent / .cursorrules]
-    Dev -->|8. 输出代码实现| User
-    User -->|9. 代码完成，唤起审查| Reviewer[🔍 Reviewer Agent]
-    Reviewer -->|10. 输出审查报告| User
-    User -->|11a. 有问题，打回修复| Dev
-    User -->|11b. 通过，合并发布| Done[✅ Done]
+    PM -->|2. 多轮需求审查| Review{🔍 需求审查\n2-3 轮追问}
+    Review -->|需求模糊| PM
+    Review -->|需求清晰| Checklist[📋 需求确认清单]
+    Checklist -->|3. 用户确认| Confirmed[✅ 需求锁定]
+    Confirmed -->|4. 输出 architecture.md + TODO.md| User
+    User -->|5. 确认方案，唤起设计| Designer[🎨 Designer Agent]
+    Designer -->|6. 输出 design_tokens.json + components.md| User
+    User -->|7. 确认设计，唤起测试策略| QA[🧪 QA Agent]
+    QA -->|8. 输出 test_strategy.md + test_cases.md| User
+    User -->|9. 全部就绪，唤起研发| Dev[⚙️ Dev Agent / .cursorrules]
+    Dev -->|10. 输出代码实现| User
+    User -->|11. 代码完成，唤起审查| Reviewer[🔍 Reviewer Agent]
+    Reviewer -->|12. 输出审查报告| User
+    User -->|13a. 有问题，打回修复| Dev
+    User -->|13b. 通过，合并发布| Done[✅ Done]
 ```
+
+> **⚠️ 执行门禁**：步骤 2-3 是强制性的需求审查阶段。在用户确认需求清单之前，
+> 任何 Agent 都**禁止**开始编写实现代码。详见 `pm_agent.md` 中的强制需求审查协议。
 
 ---
 
@@ -31,8 +38,8 @@ flowchart TD
 | 方向 | 内容 | 格式 |
 |------|------|------|
 | **输入** | 用户的业务想法/需求描述 | 自然语言 |
-| **输出 A** | 架构与业务上下文 | 覆盖 `docs/architecture.md` |
-| **输出 B** | 研发任务清单 | 追加到 `TODO.md` |
+| **中间产物** | 需求确认清单 (Requirement Confirmation Checklist) | 结构化 Markdown |
+| **门禁** | 用户逐项确认需求清单 | 用户回复
 
 ### Designer Agent (`designer_agent.md`)
 | 方向 | 内容 | 格式 |
@@ -64,6 +71,12 @@ flowchart TD
 ---
 
 ## 🔄 迭代循环规则
+
+### 需求审查阶段（强制）
+1. PM Agent 收到需求后，**必须进入多轮追问流程**（至少 2 轮，最多 3 轮）。
+2. 追问完成后输出**需求确认清单**，用户逐项确认。
+3. **执行门禁**：用户确认清单前，禁止任何 Agent 开始编写实现代码。
+4. 豁免条件：单文件 Bug 修复、文档更新、格式化、用户明确说"跳过审查"或"直接执行"。
 
 ### 正常流转
 1. 每个 Agent 完成输出后，**必须提示用户进行下一步操作**（例如："请将上述内容更新至文档，并唤起下一个 Agent"）。

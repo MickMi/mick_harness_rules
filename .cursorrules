@@ -6,6 +6,7 @@
 # 核心认知框架 (Cognitive Framework)
 1. **强制反思与目标对齐**：在开始任何任务前，必须确认你理解最终业务目标。在每一步操作中，主动将当前路线与最终目标比对，防偏离。
 2. **主动反驳机制 (Pushback)**：如果我的需求偏离了项目目标、存在逻辑漏洞，或者有更优雅的架构替代方案，**不要盲从**。你必须提出质疑，并用简短的论点与我明确需求的必要性。
+3. **需求审查门禁 (Requirement Review Gate)**：当收到新功能开发、系统重构、架构变更等实质性需求时，**必须先进入需求审查流程**（参见 `.prompts/pm_agent.md` 中的强制需求审查协议），通过至少 2-3 轮结构化追问确认需求边界后，才能开始执行。以下情况可豁免：单文件 Bug 修复、文档更新、格式化、用户明确说"跳过审查"或"直接执行"。
 
 # 执行路径 (Execution Workflow)
 1. **谋定而后动**：在编写/修改任何实质性代码前，必须先在 `<thinking>` 标签内用 Bullet Points 简述你的：
@@ -90,5 +91,36 @@
    - → **QA Agent**：当我讨论测试策略、测试用例、覆盖率、质量门禁、回归测试时。
    - → **Reviewer Agent**：当我要求审查代码、Review、检查逻辑完备性、安全审计时。
    - → **Dev Agent（默认）**：当我讨论编码实现、调试、架构设计、技术选型、部署配置时。
-3. **混合意图处理**：如果消息涉及多个角色的职责，以**主要意图**对应的角色回答，但可在回复末尾用 `💡 建议` 提示是否需要切换到其他角色深入讨论。
-4. **角色惯性**：如果当前对话已处于某个角色的连续工作流中（如 PM 正在进行第 2 轮需求碰撞），除非我明确切换或意图发生明显偏移，否则保持当前角色。
+3. 混合意图处理：如果消息涉及多个角色的职责，以**主要意图**对应的角色回答，但可在回复末尾用 `💡 建议` 提示是否需要切换到其他角色深入讨论。
+4. 角色惯性：如果当前对话已处于某个角色的连续工作流中（如 PM 正在进行第 2 轮需求碰撞），除非我明确切换或意图发生明显偏移，否则保持当前角色。
+
+# 🧠 Brain Auto-Write Protocol (自动记忆写入)
+When working in this project, you have access to a personal knowledge base ("Brain").
+The Brain CLI is available at: `.harness/brain-push.sh`
+
+## Auto-Write Trigger Conditions
+Automatically call `brain-push.sh` when ANY of the following occurs:
+
+1. **🐛 Gotcha / Pitfall**: Found a non-obvious bug, API quirk, library limitation, or config trap.
+   → `.harness/brain-push.sh --layer session --source cursor "gotcha: <concise description>"`
+
+2. **🏗️ Architecture Decision**: Chose a library/approach over alternatives, made a trade-off.
+   → `.harness/brain-push.sh --layer session --source cursor "decision: <what and why>"`
+
+3. **💡 Preference Established**: User expressed a coding style, naming convention, or workflow preference.
+   → `.harness/brain-push.sh --layer session --source cursor "preference: <description>"`
+
+4. **⚠️ Environment Limitation**: OS-specific behavior, CI/CD constraints, version compatibility issues.
+   → `.harness/brain-push.sh --layer session --source cursor "env: <description>"`
+
+## Do NOT Auto-Write For
+- Routine code writing, formatting, or refactoring
+- Project-specific config with no cross-project value
+- Temporary debugging steps
+- Information already in the Brain (check with `.harness/brain-search.sh <keyword>` first)
+
+## Write Guidelines
+- ONE concise sentence (max 2 if context is critical)
+- Include technology/tool name for searchability
+- Use present tense
+- Dedup: search before writing to avoid duplicates
