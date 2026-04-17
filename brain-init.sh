@@ -111,6 +111,20 @@ else
     ok ".cursorrules symlinked to project root."
 fi
 
+# .prompts/ — Symlink entire directory so Agent role templates are never copied
+PROMPTS_LINK="$TARGET_DIR/.prompts"
+if [ -L "$PROMPTS_LINK" ]; then
+    ok ".prompts/ symlink already exists. (idempotent)"
+elif [ -d "$PROMPTS_LINK" ]; then
+    warn ".prompts/ already exists as a regular directory. Backing up to .prompts.bak/"
+    mv "$PROMPTS_LINK" "${PROMPTS_LINK}.bak"
+    ln -s "$HARNESS_ROOT/.prompts" "$PROMPTS_LINK"
+    ok ".prompts/ symlinked (original backed up to .prompts.bak/)"
+else
+    ln -s "$HARNESS_ROOT/.prompts" "$PROMPTS_LINK"
+    ok ".prompts/ symlinked to project root."
+fi
+
 # --- Multi-IDE Rule Injection ---
 # Detect and inject brain rules into other IDE rule files
 
@@ -159,7 +173,7 @@ fi
 info "Phase 3/4: Activate — Ensuring .gitignore isolation..."
 
 GITIGNORE="$TARGET_DIR/.gitignore"
-IGNORE_ENTRIES=(".harness/" ".harness" ".cursorrules")
+IGNORE_ENTRIES=(".harness/" ".harness" ".cursorrules" ".prompts/" ".prompts")
 
 # Create .gitignore if it doesn't exist
 if [ ! -f "$GITIGNORE" ]; then

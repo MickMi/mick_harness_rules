@@ -68,8 +68,8 @@ flowchart TD
 
 挂载方式：
 
-- 通过 symlink（`.harness/`）引入到目标项目，不复制文件
-- `.gitignore` 自动隔离，不会出现在项目的 Git 历史中
+- 通过 symlink（`.harness/`、`.cursorrules`、`.prompts/`）引入到目标项目，不复制文件
+- `.gitignore` 自动隔离，所有脚手架内容不会出现在项目的 Git 历史中
 - 独立于任何业务项目的发布节奏
 
 ## 三层记忆
@@ -157,7 +157,7 @@ mick_harness_rules/
 │   ├── projects/             # 项目专属记忆
 │   └── sessions/             # 原始对话摘要
 ├── brain-init.sh             # 一键挂载 harness + brain 到目标项目
-├── brain-check.sh            # 验证脚手架完整性（9 项检查）
+├── brain-check.sh            # 验证脚手架完整性（10 项检查）
 ├── brain-push.sh             # 向 brain 写入记忆（CLI / 剪贴板 / 交互模式）
 ├── brain-search.sh           # 基于 ripgrep 的记忆检索
 ├── brain-compound.sh         # 智能蒸馏（Session → Project → Global）
@@ -192,13 +192,15 @@ chmod +x ~/mick_harness_rules/*.sh
 
 `vibe-init.sh` 会自动：
 
-1. 创建 `docs/`、`.prompts/` 等目录结构
-2. 部署 `.cursorrules`、Agent 模板、CI/CD 模板
-3. 链式调用 `brain-init.sh`，创建 `.harness/` symlink 并注入 `.gitignore` 隔离
+1. 创建 `docs/` 等目录结构
+2. 部署 CI/CD 模板、MEMORY.md、TODO.md 等项目专属文件
+3. 链式调用 `brain-init.sh`，创建 `.harness/`、`.cursorrules`、`.prompts/` 三个 symlink 并注入 `.gitignore` 隔离
 4. 检测 Cursor / Windsurf / Trae / Copilot 等 IDE 并注入自动写入规则
-5. 运行 `brain-check.sh` 验证完整性
+5. 运行 `brain-check.sh` 验证完整性（10 项检查）
 
 初始化是非破坏式的。已存在的文件备份为 `.bak`，symlink 不覆盖，重复运行不出错。
+
+> **安全设计**：`.cursorrules`、`.prompts/` 等包含 Agent prompt 的文件全部通过 symlink 引用，并被 `.gitignore` 隔离。目标项目发布到 Git 时，不会携带任何脚手架内容。
 
 ### 3. 日常使用
 
@@ -225,7 +227,8 @@ chmod +x ~/mick_harness_rules/*.sh
 
 | IDE | 规则文件 | 注入方式 |
 |-----|---------|---------|
-| Cursor | `.cursorrules` | symlink |
+| Cursor | `.cursorrules` | symlink（`.gitignore` 隔离） |
+| Agent Prompts | `.prompts/` | symlink（`.gitignore` 隔离） |
 | Windsurf | `.windsurfrules` | 追加 |
 | Trae | `.trae/rules` | 追加 |
 | VS Code Copilot | `.github/copilot-instructions.md` | 追加 |
@@ -258,7 +261,7 @@ AI 会在以下事件发生时自动写入记忆：
 
 | 原则 | 说明 |
 |------|------|
-| `.env` 模式 | symlink 挂载，`.gitignore` 隔离，不污染项目仓库 |
+| `.env` 模式 | symlink 挂载，`.gitignore` 隔离，**零泄漏**——目标项目 Git 中不含任何脚手架内容 |
 | 单仓库双职能 | Harness + Brain 同一仓库，统一版本管理 |
 | 验证闭环 | 加载 → 检查 → 拦截 → 报告 |
 | 检索优先 | 禁止全量读取，优先 ripgrep |

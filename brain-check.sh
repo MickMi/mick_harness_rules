@@ -79,13 +79,31 @@ else
 fi
 
 # ============================================================
-# Check 3: .gitignore contains isolation entries
+# Check 3: .prompts/ symlink exists and is valid
 # ============================================================
-echo "📋 Check 3: .gitignore isolation"
+echo "📋 Check 3: .prompts/ symlink"
+PROMPTS_LINK="$TARGET_DIR/.prompts"
+if [ -L "$PROMPTS_LINK" ]; then
+    PROMPTS_TARGET="$(readlink "$PROMPTS_LINK")"
+    if [ -d "$PROMPTS_TARGET" ]; then
+        check_pass ".prompts/ → $PROMPTS_TARGET (valid symlink)"
+    else
+        check_fail ".prompts/ symlink exists but target is broken: $PROMPTS_TARGET"
+    fi
+elif [ -d "$PROMPTS_LINK" ]; then
+    check_warn ".prompts/ exists as a real directory (not a symlink). Agent prompts may leak into project Git."
+else
+    check_fail ".prompts/ does not exist. Run 'brain-init.sh' first."
+fi
+
+# ============================================================
+# Check 4: .gitignore contains isolation entries
+# ============================================================
+echo "📋 Check 4: .gitignore isolation"
 GITIGNORE="$TARGET_DIR/.gitignore"
 if [ -f "$GITIGNORE" ]; then
     MISSING_ENTRIES=()
-    for entry in ".harness/" ".harness" ".cursorrules"; do
+    for entry in ".harness/" ".harness" ".cursorrules" ".prompts/" ".prompts"; do
         if ! grep -qxF "$entry" "$GITIGNORE" 2>/dev/null; then
             MISSING_ENTRIES+=("$entry")
         fi
@@ -105,9 +123,9 @@ else
 fi
 
 # ============================================================
-# Check 4: Brain directory structure is intact
+# Check 5: Brain directory structure is intact
 # ============================================================
-echo "📋 Check 4: Brain directory structure"
+echo "📋 Check 5: Brain directory structure"
 BRAIN_DIRS=("brain/global" "brain/projects" "brain/sessions")
 MISSING_DIRS=()
 for dir in "${BRAIN_DIRS[@]}"; do
@@ -124,9 +142,9 @@ else
 fi
 
 # ============================================================
-# Check 5: .brain-config.yaml exists
+# Check 6: .brain-config.yaml exists
 # ============================================================
-echo "📋 Check 5: .brain-config.yaml"
+echo "📋 Check 6: .brain-config.yaml"
 BRAIN_CONFIG="$HARNESS_ROOT/.brain-config.yaml"
 if [ -f "$BRAIN_CONFIG" ]; then
     check_pass ".brain-config.yaml exists"
@@ -135,9 +153,9 @@ else
 fi
 
 # ============================================================
-# Check 6: Global memory files exist
+# Check 7: Global memory files exist
 # ============================================================
-echo "📋 Check 6: Global memory files"
+echo "📋 Check 7: Global memory files"
 GLOBAL_FILES=("brain/global/preferences.md" "brain/global/gotchas.md")
 MISSING_FILES=()
 for file in "${GLOBAL_FILES[@]}"; do
@@ -153,9 +171,9 @@ else
 fi
 
 # ============================================================
-# Check 7: pre-commit installed (optional)
+# Check 8: pre-commit installed (optional)
 # ============================================================
-echo "📋 Check 7: pre-commit hooks (optional)"
+echo "📋 Check 8: pre-commit hooks (optional)"
 if [ -d "$TARGET_DIR/.git" ]; then
     if [ -f "$TARGET_DIR/.git/hooks/pre-commit" ]; then
         check_pass "pre-commit hook is installed"
@@ -167,9 +185,9 @@ else
 fi
 
 # ============================================================
-# Check 8: MEMORY.md capacity (optional)
+# Check 9: MEMORY.md capacity (optional)
 # ============================================================
-echo "📋 Check 8: MEMORY.md capacity"
+echo "📋 Check 9: MEMORY.md capacity"
 MEMORY_FILE="$HARNESS_ROOT/MEMORY.md"
 MEMORY_MAX_LINES=200
 
@@ -191,9 +209,9 @@ else
 fi
 
 # ============================================================
-# Check 9: Brain auto-write rules present in .cursorrules
+# Check 10: Brain auto-write rules present in .cursorrules
 # ============================================================
-echo "📋 Check 9: Brain auto-write rules"
+echo "📋 Check 10: Brain auto-write rules"
 if [ -f "$CURSORRULES" ] && grep -q "Brain Auto-Write Protocol" "$CURSORRULES" 2>/dev/null; then
     check_pass "Brain auto-write rules are present in .cursorrules"
 else

@@ -154,19 +154,19 @@ safe_copy_dir() {
 # HARNESS MODE: Load from repo templates
 # ============================================================
 run_harness_mode() {
-    info "Phase 1/5: Creating directory structure..."
+    info "Phase 1/4: Creating directory structure..."
     mkdir -p "$TARGET_DIR/docs"
     mkdir -p "$TARGET_DIR/docs/design"
-    mkdir -p "$TARGET_DIR/.prompts"
     mkdir -p "$TARGET_DIR/.github/workflows"
     ok "Directory structure created."
+    info "Note: .cursorrules and .prompts/ will be symlinked by brain-init (not copied)."
 
     echo ""
-    info "Phase 2/5: Deploying core scaffold files..."
+    info "Phase 2/4: Deploying core scaffold files..."
+    # Note: .cursorrules is NOT copied here — it will be symlinked by brain-init.sh
+    # This ensures no harness content leaks into the target project's Git history.
 
-    # .cursorrules — will be overridden by brain-init symlink, but provide a copy as fallback
-    safe_copy "$HARNESS_ROOT/.cursorrules" "$TARGET_DIR/.cursorrules" ".cursorrules"
-
+    # MEMORY.md
     # MEMORY.md — project-specific, generate fresh template if not exists
     if [ ! -f "$TARGET_DIR/MEMORY.md" ] && [ ! -L "$TARGET_DIR/MEMORY.md" ]; then
         cat << 'MEMORY_EOF' > "$TARGET_DIR/MEMORY.md"
@@ -206,17 +206,11 @@ TODO_EOF
     # docs/architecture.md — from harness template
     safe_copy "$HARNESS_ROOT/docs/architecture.md" "$TARGET_DIR/docs/architecture.md" "docs/architecture.md"
 
-    echo ""
-    info "Phase 3/5: Deploying Agent role templates..."
-
-    # .prompts/ — copy all agent templates from harness repo
-    PROMPT_FILES=("pm_agent.md" "designer_agent.md" "reviewer_agent.md" "qa_agent.md" "orchestration.md")
-    for pfile in "${PROMPT_FILES[@]}"; do
-        safe_copy "$HARNESS_ROOT/.prompts/$pfile" "$TARGET_DIR/.prompts/$pfile" ".prompts/$pfile"
-    done
+    # Note: .prompts/ is NOT copied here — it will be symlinked by brain-init.sh
+    # This ensures Agent role prompts don't leak into the target project's Git history.
 
     echo ""
-    info "Phase 4/5: Deploying CI/CD & Git templates..."
+    info "Phase 3/4: Deploying CI/CD & Git templates..."
 
     # .pre-commit-config.yaml
     if [ -f "$HARNESS_ROOT/.pre-commit-config.yaml" ]; then
@@ -251,7 +245,7 @@ PRECOMMIT_EOF
     fi
 
     echo ""
-    info "Phase 5/5: Installing physical guardrails..."
+    info "Phase 4/4: Installing physical guardrails..."
 
     # Install pre-commit hooks
     if command -v pre-commit &> /dev/null; then
