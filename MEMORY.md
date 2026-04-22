@@ -85,6 +85,16 @@
   - 豁免条件：用户明确说"跳过目标设定"、用户已完成过 Goal Discovery、业务目标已填写非占位符内容
   - 优先级：高于需求审查门禁——目标未锚定时，一切需求审查都无意义
 
+- [2026-04-22] ADR-016: 双仓库模型回归（Dual-Repo Model — Harness + Brain Separation）
+  - **取代 ADR-007 的单仓库模型**，回归 ADR-002 的双仓库思路（但动机不同）
+  - Harness 仓库（公开）：工程护栏、脚本工具、框架 ADR → `mick_harness_rules`
+  - Brain 仓库（私有）：个人记忆、偏好、项目经验 → `mick_brain`（`https://github.com/MickMi/mick_brain`）
+  - Brain 仓库默认 clone 到 `~/.mick-brain/`，harness 中的 `brain/` 目录通过 symlink 指向它
+  - 新增 `brain-resolve.sh` 共享库：所有 brain-*.sh 脚本 source 它来解析 BRAIN_DIR 路径
+  - `.brain-config.yaml` 新增 `brain_repo.remote` 和 `brain_repo.local_path` 配置
+  - 向后兼容：未配置 brain_repo 时，所有脚本 fallback 到本地 `brain/` 目录
+  - 变更原因：需要对外分享 harness 仓库，但个人记忆不应公开；多机同步需要 Git，本地存储不够
+
 ## ⚠️ 已知天坑与环境限制 (Gotchas)
 *💡 可检索的详细记忆请查阅 `brain/global/` 目录，本文件侧重于决策日志。*
 

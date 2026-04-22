@@ -36,7 +36,9 @@ if [ -L "$0" ]; then
     HARNESS_ROOT="$(cd "$(dirname "$REAL_SCRIPT")" && pwd)"
 fi
 
-BRAIN_DIR="$HARNESS_ROOT/brain"
+# --- Source shared brain resolver ---
+source "$HARNESS_ROOT/brain-resolve.sh"
+resolve_brain_dir "$HARNESS_ROOT"
 
 # --- Default values ---
 LAYER=""
@@ -361,8 +363,8 @@ for search_dir in "${SEARCH_DIRS[@]}"; do
                     # Print with layer label
                     LAYER_LABEL=$(get_layer_label "$date_dir/x")
                     echo -e "$LAYER_LABEL"
-                    # Make paths relative to harness root for readability
-                    echo "$RESULT" | sed "s|$HARNESS_ROOT/||g"
+                    # Make paths relative for readability
+                    echo "$RESULT" | sed "s|$BRAIN_DIR/||g"
                     echo ""
                 fi
             fi
@@ -400,7 +402,7 @@ for search_dir in "${SEARCH_DIRS[@]}"; do
             fi
 
             # Make paths relative for readability
-            echo "$RESULT" | sed "s|$HARNESS_ROOT/||g"
+            echo "$RESULT" | sed "s|$BRAIN_DIR/||g"
             echo ""
         fi
     fi

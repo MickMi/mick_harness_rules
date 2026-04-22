@@ -22,6 +22,9 @@ fail()  { echo -e "${RED}❌ $1${NC}"; }
 # --- Resolve harness repo root (where this script lives) ---
 HARNESS_ROOT="$(cd "$(dirname "$0")" && pwd)"
 
+# --- Source shared brain resolver ---
+source "$HARNESS_ROOT/brain-resolve.sh"
+
 # --- Parse arguments ---
 FRESH_MODE=false
 TARGET_DIR=""
@@ -75,11 +78,77 @@ echo "  Target project: $TARGET_DIR"
 echo ""
 
 # ============================================================
+# Phase 0.5: Brain Repo — Clone/connect external brain repository
+# ============================================================
+info "Phase 0.5: Brain Repo — Setting up external brain repository..."
+
+# Resolve brain config
+resolve_brain_dir "$HARNESS_ROOT"
+
+if [ -n "$BRAIN_REPO_REMOTE" ]; then
+    if [ -d "$BRAIN_REPO_LOCAL/.git" ]; then
+        ok "Brain repo already cloned at: $BRAIN_REPO_LOCAL"
+        # Pull latest
+        info "Pulling latest brain data..."
+        sync_brain_repo
+        ok "Brain repo synced."
+    else
+        info "Cloning brain repo: $BRAIN_REPO_REMOTE"
+        info "  → $BRAIN_REPO_LOCAL"
+        if clone_brain_repo "$HARNESS_ROOT"; then
+            ok "Brain repo cloned successfully."
+        else
+            warn "Failed to clone brain repo. Will use local brain/ directory as fallback."
+            warn "You can manually clone later: git clone $BRAIN_REPO_REMOTE $BRAIN_REPO_LOCAL"
+        fi
+    fi
+
+    # Re-resolve after potential clone
+    resolve_brain_dir "$HARNESS_ROOT"
+
+    # Create symlink: harness/brain/ → brain repo
+    if [ "$BRAIN_IS_EXTERNAL" = "true" ]; then
+        BRAIN_LINK="$HARNESS_ROOT/brain"
+        if [ -L "$BRAIN_LINK" ]; then
+            EXISTING_BRAIN_TARGET="$(readlink "$BRAIN_LINK")"
+            if [ "$EXISTING_BRAIN_TARGET" = "$BRAIN_REPO_LOCAL" ]; then
+                ok "brain/ symlink already points to brain repo. (idempotent)"
+            else
+                warn "brain/ symlink points to: $EXISTING_BRAIN_TARGET"
+                warn "Updating to point to: $BRAIN_REPO_LOCAL"
+                rm "$BRAIN_LINK"
+                ln -s "$BRAIN_REPO_LOCAL" "$BRAIN_LINK"
+                ok "brain/ symlink updated."
+            fi
+        elif [ -d "$BRAIN_LINK" ]; then
+            # brain/ is a real directory — migrate data then replace with symlink
+            local_brain_files=$(find "$BRAIN_LINK" -type f -not -name '.gitkeep' 2>/dev/null | wc -l | tr -d ' ')
+            if [ "$local_brain_files" -gt 0 ]; then
+                warn "brain/ directory contains $local_brain_files file(s). Backing up to brain.local.bak/"
+                mv "$BRAIN_LINK" "${BRAIN_LINK}.local.bak"
+            else
+                rm -rf "$BRAIN_LINK"
+            fi
+            ln -s "$BRAIN_REPO_LOCAL" "$BRAIN_LINK"
+            ok "brain/ replaced with symlink → $BRAIN_REPO_LOCAL"
+        else
+            ln -s "$BRAIN_REPO_LOCAL" "$BRAIN_LINK"
+            ok "brain/ symlink created → $BRAIN_REPO_LOCAL"
+        fi
+    fi
+else
+    info "No brain_repo.remote configured. Using local brain/ directory."
+    ok "Local brain mode (single-repo)."
+fi
+
+echo ""
+
+# ============================================================
 # Phase 0: Owner Detection — Detect fork user & auto-reset brain
 # ============================================================
 info "Phase 0: Owner Detection — Checking brain ownership..."
 
-BRAIN_OWNER_FILE="$HARNESS_ROOT/.brain-owner"
+BRAIN_OWNER_FILE="$BRAIN_DIR/.brain-owner"
 
 # Extract current Git remote owner from harness repo
 detect_current_owner() {
@@ -120,19 +189,19 @@ reset_brain_for_new_owner() {
 
     # 1. Clear sessions (personal conversation digests)
     info "  Clearing brain/sessions/..."
-    find "$HARNESS_ROOT/brain/sessions" -mindepth 1 -not -name '.gitkeep' -exec rm -rf {} + 2>/dev/null || true
-    touch "$HARNESS_ROOT/brain/sessions/.gitkeep"
+    find "$BRAIN_DIR/sessions" -mindepth 1 -not -name '.gitkeep' -exec rm -rf {} + 2>/dev/null || true
+    touch "$BRAIN_DIR/sessions/.gitkeep"
     ok "  Sessions cleared."
 
     # 2. Clear projects (project-specific memories)
     info "  Clearing brain/projects/..."
-    find "$HARNESS_ROOT/brain/projects" -mindepth 1 -not -name '.gitkeep' -exec rm -rf {} + 2>/dev/null || true
-    touch "$HARNESS_ROOT/brain/projects/.gitkeep"
+    find "$BRAIN_DIR/projects" -mindepth 1 -not -name '.gitkeep' -exec rm -rf {} + 2>/dev/null || true
+    touch "$BRAIN_DIR/projects/.gitkeep"
     ok "  Projects cleared."
 
     # 3. Reset global memory files to empty templates
     info "  Resetting brain/global/ to empty templates..."
-    cat << 'PREF_EOF' > "$HARNESS_ROOT/brain/global/preferences.md"
+    cat << 'PREF_EOF' > "$BRAIN_DIR/global/preferences.md"
 # Global Preferences (跨项目通用偏好)
 
 ## 🎨 Coding Style
@@ -148,7 +217,7 @@ reset_brain_for_new_owner() {
 <!-- Record your cross-project architecture preferences -->
 PREF_EOF
 
-    cat << 'GOTCHA_EOF' > "$HARNESS_ROOT/brain/global/gotchas.md"
+    cat << 'GOTCHA_EOF' > "$BRAIN_DIR/global/gotchas.md"
 # Global Gotchas (跨项目踩坑记录)
 
 ## ⚠️ Tool & Environment Pitfalls
@@ -164,7 +233,7 @@ GOTCHA_EOF
 
     # 4. Reset MEMORY.md to fresh template
     info "  Resetting MEMORY.md..."
-    cat << 'MEM_EOF' > "$HARNESS_ROOT/MEMORY.md"
+    cat << 'MEM_EOF' > "$BRAIN_DIR/MEMORY.md"
 # 项目记忆与经验库 (Memory & Learnings)
 
 ## 🏗️ 架构决策记录 (ADR)
@@ -178,7 +247,12 @@ GOTCHA_EOF
 MEM_EOF
     ok "  MEMORY.md reset to fresh template."
 
-    # 5. Note: .brain-owner is updated by the caller (record_owner function)
+    # 5. Commit brain reset if external repo
+    if [ "$BRAIN_IS_EXTERNAL" = "true" ]; then
+        commit_brain_changes "brain: reset for new owner $new_owner" false
+    fi
+
+    # 6. Note: .brain-owner is updated by the caller (record_owner function)
     ok "  Brain data cleared. Owner file will be updated next."
 
     echo ""
@@ -204,7 +278,7 @@ read_recorded_system_user() {
 brain_has_data() {
     local data_count=0
     # Count non-.gitkeep files in brain/
-    data_count=$(find "$HARNESS_ROOT/brain" -type f -not -name '.gitkeep' -not -name '*.archive*' 2>/dev/null | wc -l | tr -d ' ')
+    data_count=$(find "$BRAIN_DIR" -type f -not -name '.gitkeep' -not -name '*.archive*' -not -name '.brain-owner' 2>/dev/null | wc -l | tr -d ' ')
     [ "$data_count" -gt 2 ]  # More than just the 2 empty template files
 }
 
@@ -221,6 +295,9 @@ record_owner() {
         new_repo=$(echo "$remote_url" | sed -E 's|git@[^:]+:[^/]+/([^/.]+).*|\1|')
     fi
     [ -z "$new_repo" ] && new_repo="unknown"
+
+    # Ensure brain directory structure exists
+    mkdir -p "$BRAIN_DIR/global" "$BRAIN_DIR/projects" "$BRAIN_DIR/sessions"
 
     cat << OWNER_EOF > "$BRAIN_OWNER_FILE"
 # Brain Owner Identity
@@ -350,7 +427,7 @@ echo ""
 # ============================================================
 # Phase 1: Load — Create symlink .harness/ → harness repo
 # ============================================================
-info "Phase 1/4: Load — Creating .harness/ symlink..."
+info "Phase 1/5: Load — Creating .harness/ symlink..."
 
 HARNESS_LINK="$TARGET_DIR/.harness"
 
@@ -377,7 +454,7 @@ fi
 # ============================================================
 # Phase 2: Inject — Symlink key files + multi-IDE rule injection
 # ============================================================
-info "Phase 2/4: Inject — Symlinking key files + injecting IDE rules..."
+info "Phase 2/5: Inject — Symlinking key files + injecting IDE rules..."
 
 # --- Helper: Inject brain rules into an IDE rule file ---
 # Appends brain auto-write rules from template if not already present
@@ -476,7 +553,7 @@ fi
 # ============================================================
 # Phase 3: Activate — Ensure .gitignore isolates harness files
 # ============================================================
-info "Phase 3/4: Activate — Ensuring .gitignore isolation..."
+info "Phase 3/5: Activate — Ensuring .gitignore isolation..."
 
 GITIGNORE="$TARGET_DIR/.gitignore"
 IGNORE_ENTRIES=(".harness/" ".harness" ".cursorrules" ".prompts/" ".prompts")
@@ -505,7 +582,7 @@ fi
 # ============================================================
 # Phase 4: Verify — Run brain-check to confirm everything works
 # ============================================================
-info "Phase 4/4: Verify — Running brain check..."
+info "Phase 4/5: Verify — Running brain check..."
 echo ""
 
 BRAIN_CHECK="$HARNESS_ROOT/brain-check.sh"
@@ -530,6 +607,10 @@ echo "  Next steps:"
 echo "  1. Start coding in your project — AI will follow your harness rules."
 echo "  2. Use 'brain push' to write learnings back to the brain."
 echo "  3. Use 'brain search <keyword>' to search your memory."
+if [ "$BRAIN_IS_EXTERNAL" = "true" ]; then
+    echo ""
+    echo "  🧠 Brain repo: $BRAIN_REPO_LOCAL (synced to $BRAIN_REPO_REMOTE)"
+fi
 echo ""
 echo "  💡 If you cloned this from someone else, and brain wasn't auto-reset,"
 echo "     run: $0 --fresh $TARGET_DIR"

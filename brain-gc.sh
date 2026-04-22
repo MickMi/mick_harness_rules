@@ -36,13 +36,17 @@ header(){ echo -e "${BOLD}${MAGENTA}$1${NC}"; }
 
 # --- Resolve harness repo root ---
 HARNESS_ROOT="$(cd "$(dirname "$0")" && pwd)"
-BRAIN_DIR="$HARNESS_ROOT/brain"
+
+# --- Source shared brain resolver ---
+source "$HARNESS_ROOT/brain-resolve.sh"
+resolve_brain_dir "$HARNESS_ROOT"
+
 ARCHIVE_DIR="$BRAIN_DIR/.archive"
 
 # --- Configuration defaults (can be overridden by .brain-config.yaml) ---
 SESSION_TTL_DAYS=90
 MEMORY_MAX_LINES=200
-MEMORY_FILE="$HARNESS_ROOT/MEMORY.md"
+MEMORY_FILE="$BRAIN_DIR/MEMORY.md"
 
 # --- Try to read config from .brain-config.yaml ---
 BRAIN_CONFIG="$HARNESS_ROOT/.brain-config.yaml"
@@ -392,7 +396,7 @@ trim_memory() {
 
     # Strategy: Keep the header (first section) and most recent entries.
     # Archive older entries to MEMORY.archive.md
-    local archive_file="$HARNESS_ROOT/MEMORY.archive.md"
+    local archive_file="$BRAIN_DIR/MEMORY.archive.md"
 
     if [ "$DRY_RUN" = true ]; then
         echo -e "  ${YELLOW}[DRY RUN]${NC} Would move oldest ~$excess lines to MEMORY.archive.md"
@@ -533,23 +537,17 @@ esac
 if [ "$DRY_RUN" = false ] && { [ "$ARCHIVED_COUNT" -gt 0 ] || [ "$MEMORY_TRIMMED" = true ]; }; then
     echo ""
     info "Committing cleanup results..."
-    cd "$HARNESS_ROOT"
 
-    if [ -d ".git" ]; then
-        git add -A 2>/dev/null
+    local commit_parts=()
+    [ "$ARCHIVED_COUNT" -gt 0 ] && commit_parts+=("archived $ARCHIVED_COUNT session(s)")
+    [ "$MEMORY_TRIMMED" = true ] && commit_parts+=("trimmed MEMORY.md")
 
-        local commit_parts=()
-        [ "$ARCHIVED_COUNT" -gt 0 ] && commit_parts+=("archived $ARCHIVED_COUNT session(s)")
-        [ "$MEMORY_TRIMMED" = true ] && commit_parts+=("trimmed MEMORY.md")
+    local commit_msg="brain: gc — $(IFS=', '; echo "${commit_parts[*]}")"
 
-        local commit_msg="brain: gc — $(IFS=', '; echo "${commit_parts[*]}")"
-
-        git commit -m "$commit_msg" --quiet 2>/dev/null || true
-        ok "Committed: $commit_msg"
-
-        if git remote get-url origin &>/dev/null; then
-            git push --quiet 2>/dev/null && ok "Synced to remote." || warn "Push failed. Changes committed locally."
-        fi
+    if commit_brain_changes "$commit_msg" false; then
+        ok "Committed and synced: $commit_msg"
+    else
+        warn "Push failed. Changes committed locally."
     fi
 fi
 

@@ -25,6 +25,10 @@ fail()  { echo -e "${RED}❌ $1${NC}"; }
 # --- Resolve harness repo root (where this script lives) ---
 HARNESS_ROOT="$(cd "$(dirname "$0")" && pwd)"
 
+# --- Source shared brain resolver ---
+source "$HARNESS_ROOT/brain-resolve.sh"
+resolve_brain_dir "$HARNESS_ROOT"
+
 # --- Default values ---
 LAYER="session"
 CATEGORY=""
@@ -152,7 +156,7 @@ if [ -z "$MESSAGE" ]; then
     # If project layer, ask for project slug
     if [ "$LAYER" = "project" ]; then
         # List existing projects
-        EXISTING_PROJECTS=$(find "$HARNESS_ROOT/brain/projects" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null | sort)
+        EXISTING_PROJECTS=$(find "$BRAIN_DIR/projects" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null | sort)
         if [ -n "$EXISTING_PROJECTS" ]; then
             echo ""
             echo "Existing projects:"
@@ -225,7 +229,7 @@ case "$LAYER" in
     global)
         # Default category is preferences
         CATEGORY="${CATEGORY:-preferences}"
-        TARGET_FILE="$HARNESS_ROOT/brain/global/${CATEGORY}.md"
+        TARGET_FILE="$BRAIN_DIR/global/${CATEGORY}.md"
 
         # If the file doesn't exist, create it with a header
         if [ ! -f "$TARGET_FILE" ]; then
@@ -236,7 +240,7 @@ case "$LAYER" in
         fi
         ;;
     project)
-        PROJECT_DIR="$HARNESS_ROOT/brain/projects/$PROJECT_SLUG"
+        PROJECT_DIR="$BRAIN_DIR/projects/$PROJECT_SLUG"
         TARGET_FILE="$PROJECT_DIR/learnings.md"
 
         # Create project directory and file if needed
@@ -251,7 +255,7 @@ case "$LAYER" in
         fi
         ;;
     session)
-        SESSION_DIR="$HARNESS_ROOT/brain/sessions/$TODAY"
+        SESSION_DIR="$BRAIN_DIR/sessions/$TODAY"
         TARGET_FILE="$SESSION_DIR/${SOURCE}.md"
 
         # Create session date directory and file if needed
@@ -272,41 +276,28 @@ ENTRY="- [$TIMESTAMP] (source: $SOURCE) $MESSAGE"
 echo "$ENTRY" >> "$TARGET_FILE"
 
 echo ""
-ok "Memory written to: ${TARGET_FILE#$HARNESS_ROOT/}"
+ok "Memory written to: ${TARGET_FILE#$BRAIN_DIR/}"
 echo -e "  ${CYAN}Layer${NC}:    $LAYER"
 echo -e "  ${CYAN}Source${NC}:   $SOURCE"
 echo -e "  ${CYAN}Entry${NC}:    $ENTRY"
 
-# --- Git commit in harness repo ---
-cd "$HARNESS_ROOT"
+# --- Git commit in brain repo (or harness repo fallback) ---
+COMMIT_MSG="brain: push to $LAYER"
+case "$LAYER" in
+    global)  COMMIT_MSG="brain: push to global/$CATEGORY (source: $SOURCE)" ;;
+    project) COMMIT_MSG="brain: push to project/$PROJECT_SLUG (source: $SOURCE)" ;;
+    session) COMMIT_MSG="brain: push to session/$TODAY (source: $SOURCE)" ;;
+esac
 
-# Check if we're in a git repo
-if [ -d ".git" ]; then
-    RELATIVE_PATH="${TARGET_FILE#$HARNESS_ROOT/}"
-    git add "$RELATIVE_PATH" 2>/dev/null
-
-    COMMIT_MSG="brain: push to $LAYER"
-    case "$LAYER" in
-        global)  COMMIT_MSG="brain: push to global/$CATEGORY (source: $SOURCE)" ;;
-        project) COMMIT_MSG="brain: push to project/$PROJECT_SLUG (source: $SOURCE)" ;;
-        session) COMMIT_MSG="brain: push to session/$TODAY (source: $SOURCE)" ;;
-    esac
-
-    git commit -m "$COMMIT_MSG" --quiet 2>/dev/null || true
-    ok "Committed to local git."
-
-    # Sync to remote unless --no-sync
-    if [ "$NO_SYNC" = false ]; then
-        if git remote get-url origin &>/dev/null; then
-            git push --quiet 2>/dev/null && ok "Synced to remote." || warn "Push failed. Changes are committed locally."
-        else
-            warn "No remote configured. Changes are committed locally only."
-        fi
-    else
-        info "Skipping remote sync (--no-sync)."
-    fi
+if [ "$NO_SYNC" = true ]; then
+    commit_brain_changes "$COMMIT_MSG" true
+    ok "Committed locally (--no-sync)."
 else
-    warn "Not a git repository. Memory written to file but not committed."
+    if commit_brain_changes "$COMMIT_MSG" false; then
+        ok "Committed and synced."
+    else
+        warn "Push failed. Changes are committed locally."
+    fi
 fi
 
 echo ""

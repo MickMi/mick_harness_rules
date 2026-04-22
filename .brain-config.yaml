@@ -1,13 +1,23 @@
 # Git Brain Configuration
 # This file controls the behavior of the Brain memory system.
 
-version: "0.1.0"
+version: "0.2.0"
+
+# --- Brain Repository (Dual-Repo Model) ---
+# The brain data lives in a separate private repository.
+# This keeps personal memories isolated from the public harness repo.
+brain_repo:
+  # Git remote URL for the brain repository
+  remote: "https://github.com/MickMi/mick_brain.git"
+  # Local clone path (default: ~/.mick-brain)
+  local_path: "~/.mick-brain"
 
 # --- Directory Layout ---
+# These paths are relative to the brain repo root (not harness root).
 paths:
-  global: "brain/global"
-  projects: "brain/projects"
-  sessions: "brain/sessions"
+  global: "global"
+  projects: "projects"
+  sessions: "sessions"
 
 # --- Retention Policy ---
 retention:

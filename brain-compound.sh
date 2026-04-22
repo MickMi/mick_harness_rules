@@ -36,7 +36,10 @@ header(){ echo -e "${BOLD}${MAGENTA}$1${NC}"; }
 
 # --- Resolve harness repo root ---
 HARNESS_ROOT="$(cd "$(dirname "$0")" && pwd)"
-BRAIN_DIR="$HARNESS_ROOT/brain"
+
+# --- Source shared brain resolver ---
+source "$HARNESS_ROOT/brain-resolve.sh"
+resolve_brain_dir "$HARNESS_ROOT"
 
 # --- Configuration defaults ---
 SESSION_ENTRY_THRESHOLD=5       # Min entries in session to trigger daily compound
@@ -370,7 +373,7 @@ run_daily_compound() {
     # Write report
     if [ "$DRY_RUN" = false ]; then
         echo "$report_content" > "$report_file"
-        ok "Distillation report saved: ${report_file#$HARNESS_ROOT/}"
+        ok "Distillation report saved: ${report_file#$BRAIN_DIR/}"
 
         # Mark sessions as distilled
         for session_dir in "${session_dirs[@]}"; do
@@ -609,25 +612,19 @@ esac
 if [ "$DRY_RUN" = false ] && [ "$((DAILY_WRITTEN + WEEKLY_WRITTEN))" -gt 0 ]; then
     echo ""
     info "Committing distillation results..."
-    cd "$HARNESS_ROOT"
 
-    if [ -d ".git" ]; then
-        git add brain/ 2>/dev/null
+    local commit_msg="brain: compound distillation"
+    case "$MODE" in
+        daily)  commit_msg="brain: daily compound (session→project, $DAILY_WRITTEN entries)" ;;
+        weekly) commit_msg="brain: weekly compound (project→global, $WEEKLY_WRITTEN entries)" ;;
+        all)    commit_msg="brain: full compound (daily:$DAILY_WRITTEN + weekly:$WEEKLY_WRITTEN entries)" ;;
+        auto)   commit_msg="brain: auto compound (daily:$DAILY_WRITTEN + weekly:$WEEKLY_WRITTEN entries)" ;;
+    esac
 
-        local commit_msg="brain: compound distillation"
-        case "$MODE" in
-            daily)  commit_msg="brain: daily compound (session→project, $DAILY_WRITTEN entries)" ;;
-            weekly) commit_msg="brain: weekly compound (project→global, $WEEKLY_WRITTEN entries)" ;;
-            all)    commit_msg="brain: full compound (daily:$DAILY_WRITTEN + weekly:$WEEKLY_WRITTEN entries)" ;;
-            auto)   commit_msg="brain: auto compound (daily:$DAILY_WRITTEN + weekly:$WEEKLY_WRITTEN entries)" ;;
-        esac
-
-        git commit -m "$commit_msg" --quiet 2>/dev/null || true
-        ok "Committed: $commit_msg"
-
-        if git remote get-url origin &>/dev/null; then
-            git push --quiet 2>/dev/null && ok "Synced to remote." || warn "Push failed. Changes committed locally."
-        fi
+    if commit_brain_changes "$commit_msg" false; then
+        ok "Committed and synced: $commit_msg"
+    else
+        warn "Push failed. Changes committed locally."
     fi
 fi
 

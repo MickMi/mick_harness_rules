@@ -101,19 +101,30 @@ flowchart TD
 
 ## 核心架构
 
-这个仓库同时承载两个职能，称为"单仓库双职能"：
+这个项目采用**双仓库模型**（ADR-016）：
 
-| 职能 | 回答的问题 | 对应内容 |
-|------|-----------|---------|
-| **Harness** | "怎么做" | `.cursorrules`、`.prompts/`、`docs/` |
-| **Brain** | "知道什么" | `brain/global/`、`brain/projects/`、`brain/sessions/` |
+| 仓库 | 可见性 | 回答的问题 | 对应内容 |
+|------|--------|-----------|----------|
+| **Harness**（`mick_harness_rules`） | 公开 | "怎么做" | `.cursorrules`、`.prompts/`、`docs/`、脚本工具 |
+| **Brain**（`mick_brain`） | 私有 | "知道什么" | `global/`、`projects/`、`sessions/`、`MEMORY.md` |
 
 挂载方式：
 
+- Brain 仓库 clone 到 `~/.mick-brain/`，harness 中的 `brain/` 通过 symlink 指向它
 - 通过 symlink（`.harness/`、`.cursorrules`、`.prompts/`）引入到目标项目，不复制文件
 - `.gitignore` 自动隔离，所有脚手架内容不会出现在项目的 Git 历史中
 - 独立于任何业务项目的发布节奏
 
+```
+mick_harness_rules/ (公开)         ~/.mick-brain/ (私有)
+├── .cursorrules                   ├── global/preferences.md
+├── .prompts/                      ├── global/gotchas.md
+├── brain-init.sh                  ├── projects/<slug>/learnings.md
+├── brain-push.sh                  ├── sessions/YYYY-MM-DD/
+├── brain-resolve.sh               ├── MEMORY.md
+├── brain/ → symlink               ├── .brain-owner
+└── ...                            └── .gitkeep
+```
 ## 三层记忆
 
 ### Session 层
@@ -186,21 +197,18 @@ Global（跨项目通用经验）
 ```
 mick_harness_rules/
 ├── .cursorrules              # 全局编码规范 + 智能角色路由 + Brain 自动写入协议
-├── .brain-config.yaml        # Brain 配置（保留策略、搜索引擎、写入源）
+├── .brain-config.yaml        # Brain 配置（仓库地址、保留策略、搜索引擎）
+├── .gitignore                # 忽略 brain 个人数据（双仓库隔离）
 ├── .prompts/                 # Agent 角色模板
 │   ├── orchestration.md      # 角色编排协议
 │   ├── pm_agent.md           # PM 角色（需求审查官）
 │   ├── qa_agent.md           # QA 角色
 │   └── reviewer_agent.md     # Reviewer 角色
-├── brain/                    # 三层记忆存储
-│   ├── global/               # 跨项目通用记忆
-│   │   ├── preferences.md    # 编码偏好
-│   │   └── gotchas.md        # 通用踩坑记录
-│   ├── projects/             # 项目专属记忆
-│   └── sessions/             # 原始对话摘要
+├── brain/                    # → symlink 到 ~/.mick-brain/（私有 brain 仓库）
 ├── brain-init.sh             # 一键挂载 harness + brain 到目标项目
-├── .brain-owner              # Brain 所有权标记（fork 自动检测用）
-├── brain-check.sh            # 验证脚手架完整性（11 项检查）
+├── brain-resolve.sh          # 共享库：解析 brain 数据路径（双仓库/单仓库自动适配）
+├── brain-migrate.sh          # 一次性迁移脚本（单仓库 → 双仓库）
+├── brain-check.sh            # 验证脚手架完整性（12 项检查，含 brain 仓库连接）
 ├── brain-push.sh             # 向 brain 写入记忆（CLI / 剪贴板 / 交互模式）
 ├── brain-search.sh           # 基于 ripgrep 的记忆检索
 ├── brain-compound.sh         # 智能蒸馏（Session → Project → Global）
@@ -211,7 +219,7 @@ mick_harness_rules/
 │   ├── architecture.md       # Harness 自身的系统架构文档
 │   ├── architecture-template.md  # 新项目架构模板（init 时复制到目标项目）
 │   └── ci_cd_templates.md    # CI/CD 模板库
-├── MEMORY.md                 # 项目记忆与架构决策记录（ADR）
+├── MEMORY.md                 # 框架级架构决策记录（ADR）
 └── TODO.md                   # 任务清单与状态流转
 ```
 
@@ -240,13 +248,16 @@ chmod +x ~/mick_harness_rules/*.sh
 ~/mick_harness_rules/brain-init.sh --fresh /path/to/your/project  # 新用户
 ```
 
-`vibe-init.sh` 会自动：
+`brain-init.sh` 会自动：
 
-1. 创建 `docs/` 等目录结构
-2. 部署 CI/CD 模板、MEMORY.md、TODO.md 等项目专属文件
-3. 链式调用 `brain-init.sh`，创建 `.harness/`、`.cursorrules`、`.prompts/` 三个 symlink 并注入 `.gitignore` 隔离
-4. 检测 Cursor / Windsurf / Trae / Copilot 等 IDE 并注入自动写入规则
-5. 运行 `brain-check.sh` 验证完整性（11 项检查，含 brain 所有权验证）
+1. **Phase 0.5**：检测 `.brain-config.yaml` 中的 brain 仓库配置，自动 clone 到 `~/.mick-brain/` 并建立 symlink
+2. **Phase 0**：检测 brain 所有权，fork 用户自动重置
+3. **Phase 1**：创建 `.harness/` symlink
+4. **Phase 2**：注入 `.cursorrules`、`.prompts/` 等 IDE 规则
+5. **Phase 3**：配置 `.gitignore` 隔离
+6. **Phase 4**：运行 `brain-check.sh` 验证完整性（12 项检查）
+
+`vibe-init.sh` 在此基础上额外部署 `docs/`、CI/CD 模板、`MEMORY.md`、`TODO.md` 等项目专属文件。
 
 初始化是非破坏式的。已存在的文件备份为 `.bak`，symlink 不覆盖，重复运行不出错。
 
@@ -312,10 +323,93 @@ AI 会在以下事件发生时自动写入记忆：
 | 原则 | 说明 |
 |------|------|
 | `.env` 模式 | symlink 挂载，`.gitignore` 隔离，**零泄漏**——目标项目 Git 中不含任何脚手架内容 |
-| 单仓库双职能 | Harness + Brain 同一仓库，统一版本管理 |
+| 双仓库隔离 | Harness（公开）+ Brain（私有），fork 时天然不带个人记忆 |
 | 验证闭环 | 加载 → 检查 → 拦截 → 报告 |
 | 检索优先 | 禁止全量读取，优先 ripgrep |
-| 优雅降级 | 有高级工具用高级工具，没有就回退 |
+| 优雅降级 | 有高级工具用高级工具，没有就回退；无 brain 仓库时 fallback 到本地目录 |
 | 幂等挂载 | 重复运行不出错 |
 | 需求先行 | 实质性需求必须经过多轮审查 |
 | Fork 即用 | fork 用户首次 init 自动检测并重置 brain，零手动操作 |
+
+---
+
+## 附录 A：Brain 双仓库模型详解
+
+### 为什么需要双仓库？
+
+Brain 存储的是个人记忆（编码偏好、踩坑记录、项目经验），这些数据：
+- **需要多机同步**：你可能在 MacBook、台式机、公司电脑上工作
+- **不应公开**：fork 你的 harness 仓库的人不应该看到你的个人记忆
+
+单仓库模型无法同时满足这两个需求。双仓库模型将 Harness（公开工具）和 Brain（私有记忆）分离，各自通过 Git 同步。
+
+### Brain 仓库结构
+
+```
+mick_brain/ (私有仓库)
+├── global/
+│   ├── preferences.md    # 跨项目编码偏好
+│   └── gotchas.md        # 跨项目踩坑记录
+├── projects/
+│   └── <slug>/
+│       └── learnings.md  # 项目专属经验
+├── sessions/
+│   └── YYYY-MM-DD/
+│       └── <source>.md   # 原始对话摘要
+├── MEMORY.md             # 个人记忆与 ADR
+├── .brain-owner          # 所有权标记
+└── .gitkeep
+```
+
+### 连接机制
+
+`brain-init.sh` 在 Phase 0.5 自动完成：
+
+1. 读取 `.brain-config.yaml` 中的 `brain_repo.remote` 和 `brain_repo.local_path`
+2. 如果 `~/.mick-brain/` 不存在，自动 `git clone`
+3. 在 harness 仓库中创建 symlink：`brain/` → `~/.mick-brain/`
+4. 所有 brain-*.sh 脚本通过 `brain-resolve.sh` 自动解析正确的路径
+
+### 多机同步流程
+
+```
+机器 A                              机器 B
+├── ~/project-x/                    ├── ~/project-y/
+│   └── .harness/ → harness repo    │   └── .harness/ → harness repo
+├── ~/mick_harness_rules/           ├── ~/mick_harness_rules/
+│   └── brain/ → ~/.mick-brain/     │   └── brain/ → ~/.mick-brain/
+└── ~/.mick-brain/ (git sync)       └── ~/.mick-brain/ (git sync)
+         ↕                                    ↕
+    github.com/MickMi/mick_brain (private)
+```
+
+每次 `brain-push.sh` 写入记忆后，自动 commit + push 到 brain 仓库。
+在另一台机器上运行 `brain-init.sh` 时，自动 pull 最新数据。
+
+### 向后兼容
+
+如果 `.brain-config.yaml` 中没有配置 `brain_repo.remote`，所有脚本自动 fallback 到本地 `brain/` 目录（单仓库模式）。这意味着：
+- Fork 用户不需要创建自己的 brain 仓库也能正常使用
+- 只是记忆不会跨机器同步
+
+### 新机器初始化步骤
+
+在一台新机器上从零开始：
+
+```bash
+# 1. Clone harness 仓库（公开）
+git clone https://github.com/MickMi/mick_harness_rules.git ~/mick_harness_rules
+chmod +x ~/mick_harness_rules/*.sh
+
+# 2. 初始化到你的项目（brain 仓库会自动 clone）
+~/mick_harness_rules/brain-init.sh /path/to/your/project
+
+# brain-init.sh 会自动：
+#   - 读取 .brain-config.yaml 中的 brain_repo 配置
+#   - Clone brain 仓库到 ~/.mick-brain/
+#   - 创建 symlink: brain/ → ~/.mick-brain/
+#   - Pull 最新记忆数据
+#   - 完成所有初始化
+```
+
+你不需要手动 clone brain 仓库，`brain-init.sh` 会自动处理一切。

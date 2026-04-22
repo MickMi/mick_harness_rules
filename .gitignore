@@ -1,0 +1,12 @@
+# Brain data (lives in separate private repo, linked via symlink)
+# The brain/ symlink points to ~/.mick-brain/ (private git repo)
+brain
+
+# Brain migration backup (one-time, safe to delete after migration)
+brain.bak/
+
+# Brain owner identity (personal)
+.brain-owner
+
+# OS files
+.DS_Store

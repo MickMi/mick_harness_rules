@@ -30,6 +30,10 @@ check_fail() { echo -e "  ${RED}❌ FAIL${NC}: $1"; ((FAIL++)); }
 # --- Resolve harness repo root ---
 HARNESS_ROOT="$(cd "$(dirname "$0")" && pwd)"
 
+# --- Source shared brain resolver ---
+source "$HARNESS_ROOT/brain-resolve.sh"
+resolve_brain_dir "$HARNESS_ROOT"
+
 # --- Resolve target project directory ---
 TARGET_DIR="${1:-$(pwd)}"
 if [ ! -d "$TARGET_DIR" ]; then
@@ -123,13 +127,50 @@ else
 fi
 
 # ============================================================
-# Check 5: Brain directory structure is intact
+# Check 5: Brain repository connection (dual-repo model)
 # ============================================================
-echo "📋 Check 5: Brain directory structure"
-BRAIN_DIRS=("brain/global" "brain/projects" "brain/sessions")
+echo "📋 Check 5: Brain repository"
+if [ "$BRAIN_IS_EXTERNAL" = "true" ]; then
+    if [ -d "$BRAIN_REPO_LOCAL/.git" ]; then
+        check_pass "External brain repo connected: $BRAIN_REPO_LOCAL"
+        # Check if brain/ is a symlink to the brain repo
+        BRAIN_LINK="$HARNESS_ROOT/brain"
+        if [ -L "$BRAIN_LINK" ]; then
+            LINK_TARGET="$(readlink "$BRAIN_LINK")"
+            if [ "$LINK_TARGET" = "$BRAIN_REPO_LOCAL" ]; then
+                check_pass "brain/ symlink → $BRAIN_REPO_LOCAL (correct)"
+            else
+                check_warn "brain/ symlink points to $LINK_TARGET (expected $BRAIN_REPO_LOCAL)"
+            fi
+        elif [ -d "$BRAIN_LINK" ]; then
+            check_warn "brain/ is a real directory, not a symlink. Run brain-init.sh to fix."
+        fi
+        # Check remote sync status
+        if git -C "$BRAIN_REPO_LOCAL" remote get-url origin &>/dev/null; then
+            check_pass "Brain repo has remote: $(git -C "$BRAIN_REPO_LOCAL" remote get-url origin 2>/dev/null)"
+        else
+            check_warn "Brain repo has no remote configured."
+        fi
+    else
+        check_fail "Brain repo configured but not cloned at: $BRAIN_REPO_LOCAL"
+        echo -e "         ${YELLOW}Run brain-init.sh to clone it.${NC}"
+    fi
+else
+    if [ -n "$BRAIN_REPO_REMOTE" ]; then
+        check_warn "Brain repo configured ($BRAIN_REPO_REMOTE) but not cloned. Run brain-init.sh."
+    else
+        check_pass "Using local brain/ directory (single-repo mode)"
+    fi
+fi
+
+# ============================================================
+# Check 6: Brain directory structure is intact
+# ============================================================
+echo "📋 Check 6: Brain directory structure"
+BRAIN_DIRS=("global" "projects" "sessions")
 MISSING_DIRS=()
 for dir in "${BRAIN_DIRS[@]}"; do
-    FULL_PATH="$HARNESS_ROOT/$dir"
+    FULL_PATH="$BRAIN_DIR/$dir"
     if [ ! -d "$FULL_PATH" ]; then
         MISSING_DIRS+=("$dir")
     fi
@@ -142,9 +183,9 @@ else
 fi
 
 # ============================================================
-# Check 6: .brain-config.yaml exists
+# Check 7: .brain-config.yaml exists
 # ============================================================
-echo "📋 Check 6: .brain-config.yaml"
+echo "📋 Check 7: .brain-config.yaml"
 BRAIN_CONFIG="$HARNESS_ROOT/.brain-config.yaml"
 if [ -f "$BRAIN_CONFIG" ]; then
     check_pass ".brain-config.yaml exists"
@@ -153,13 +194,13 @@ else
 fi
 
 # ============================================================
-# Check 7: Global memory files exist
+# Check 8: Global memory files exist
 # ============================================================
-echo "📋 Check 7: Global memory files"
-GLOBAL_FILES=("brain/global/preferences.md" "brain/global/gotchas.md")
+echo "📋 Check 8: Global memory files"
+GLOBAL_FILES=("global/preferences.md" "global/gotchas.md")
 MISSING_FILES=()
 for file in "${GLOBAL_FILES[@]}"; do
-    if [ ! -f "$HARNESS_ROOT/$file" ]; then
+    if [ ! -f "$BRAIN_DIR/$file" ]; then
         MISSING_FILES+=("$file")
     fi
 done
@@ -171,9 +212,9 @@ else
 fi
 
 # ============================================================
-# Check 8: pre-commit installed (optional)
+# Check 9: pre-commit installed (optional)
 # ============================================================
-echo "📋 Check 8: pre-commit hooks (optional)"
+echo "📋 Check 9: pre-commit hooks (optional)"
 if [ -d "$TARGET_DIR/.git" ]; then
     if [ -f "$TARGET_DIR/.git/hooks/pre-commit" ]; then
         check_pass "pre-commit hook is installed"
@@ -185,10 +226,10 @@ else
 fi
 
 # ============================================================
-# Check 9: MEMORY.md capacity (optional)
+# Check 10: MEMORY.md capacity (optional)
 # ============================================================
-echo "📋 Check 9: MEMORY.md capacity"
-MEMORY_FILE="$HARNESS_ROOT/MEMORY.md"
+echo "📋 Check 10: MEMORY.md capacity"
+MEMORY_FILE="$BRAIN_DIR/MEMORY.md"
 MEMORY_MAX_LINES=200
 
 # Try to read config
@@ -209,9 +250,9 @@ else
 fi
 
 # ============================================================
-# Check 10: Brain auto-write rules present in .cursorrules
+# Check 11: Brain auto-write rules present in .cursorrules
 # ============================================================
-echo "📋 Check 10: Brain auto-write rules"
+echo "📋 Check 11: Brain auto-write rules"
 if [ -f "$CURSORRULES" ] && grep -q "Brain Auto-Write Protocol" "$CURSORRULES" 2>/dev/null; then
     check_pass "Brain auto-write rules are present in .cursorrules"
 else
@@ -219,10 +260,10 @@ else
 fi
 
 # ============================================================
-# Check 11: Brain ownership (fork detection)
+# Check 12: Brain ownership (fork detection)
 # ============================================================
-echo "📋 Check 11: Brain ownership"
-BRAIN_OWNER_FILE="$HARNESS_ROOT/.brain-owner"
+echo "📋 Check 12: Brain ownership"
+BRAIN_OWNER_FILE="$BRAIN_DIR/.brain-owner"
 if [ -f "$BRAIN_OWNER_FILE" ]; then
     RECORDED_OWNER=$(grep '^owner:' "$BRAIN_OWNER_FILE" 2>/dev/null | awk '{print $2}' | tr -d ' ')
     CURRENT_REMOTE=$(git -C "$HARNESS_ROOT" remote get-url origin 2>/dev/null || echo "")
