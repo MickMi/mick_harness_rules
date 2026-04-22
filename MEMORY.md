@@ -61,9 +61,31 @@
   - 三轮递进式追问：第 1 轮（目标与边界）→ 第 2 轮（技术约束与风险）→ 第 3 轮（结构化确认清单）
   - 执行门禁：用户确认需求清单前，禁止任何 Agent 编写实现代码
   - 落地位置：`.prompts/pm_agent.md`（完整协议）+ `.cursorrules`（门禁规则）+ `.prompts/orchestration.md`（流程图更新）
+- [2026-04-21] ADR-013: Fork 自动检测与 Brain 重置（Fork Auto-Detection & Brain Reset）
+  - 新增 `.brain-owner` 文件记录仓库所有者标识（owner + repo + system_user）
+  - 三层检测机制：`--fresh` 参数（无条件重置）→ Git remote owner 不一致（自动重置）→ 系统用户名不一致（交互确认）
+  - `brain-init.sh` / `vibe-init.sh` 均支持 `--fresh` 参数，新用户一条命令开箱即用
+  - 首次运行 + brain 非空时交互式询问是否清空（防止直接 clone 而非 fork 的场景）
+  - 非交互模式（如 CI/CD）自动选择重置
+  - `brain-check.sh` Check 11 验证 brain 所有权
+  - 设计目标：fork/clone 即开箱即用，最多一次 Y/n 确认
+- [2026-04-22] ADR-014: Architecture 模板与实例分离（Template vs Instance Separation）
+  - `docs/architecture.md` 保留为 Harness 仓库自身的架构文档（填入真实的模块划分、数据模型、数据流）
+  - 新增 `docs/architecture-template.md` 作为新项目的空白架构模板
+  - `vibe-init.sh` harness 模式改为复制 `architecture-template.md` → 目标项目的 `docs/architecture.md`
+  - `vibe-init.sh` inline 模式优先使用 template 文件，fallback 到内联生成
+  - 新项目不再继承 Harness 的业务目标，拿到的是干净的待填写模板
+  - 解决问题：之前 `safe_copy` 会把 Harness 自身的「业务最终目标」复制到新项目，导致 AI 对齐错误的业务方向
+
+- [2026-04-22] ADR-015: Goal Discovery Protocol（业务目标发现协议）
+  - 触发条件：AI 读取 `docs/architecture.md` 时检测到 `<!-- GOAL_PLACEHOLDER -->` 标记或业务目标为空/占位符
+  - 三轮质询流程：第 0 轮（AI 自动扫描仓库结构并输出理解）→ 第 1 轮（核心目标确认）→ 第 2 轮（边界与约束）→ 第 3 轮（结构化输出写入 architecture.md）
+  - 落地位置：`.cursorrules`（触发规则）+ `.prompts/pm_agent.md`（完整协议）+ `docs/architecture-template.md`（占位符标记）
+  - 设计目标：新项目首次对话时 AI 主动引导用户明确业务方向，而非依赖用户手动填写空白模板
+  - 豁免条件：用户明确说"跳过目标设定"、用户已完成过 Goal Discovery、业务目标已填写非占位符内容
+  - 优先级：高于需求审查门禁——目标未锚定时，一切需求审查都无意义
 
 ## ⚠️ 已知天坑与环境限制 (Gotchas)
-*在这里记录导致过 Bug 的环境配置问题、API 限制或特定语言的陷阱。*
 *💡 可检索的详细记忆请查阅 `brain/global/` 目录，本文件侧重于决策日志。*
 
 - [2026-04-09] qmd（语义检索工具）是小众项目，生态风险高，不应强依赖。优先用 ripgrep 做检索，语义检索作为可选增强。

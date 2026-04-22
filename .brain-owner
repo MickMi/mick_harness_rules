@@ -1,0 +1,9 @@
+# Brain Owner Identity
+# This file records who owns this harness + brain instance.
+# When a fork user runs brain-init.sh, the script detects the mismatch
+# and automatically resets brain data to a clean state.
+# DO NOT edit manually — managed by brain-init.sh.
+
+owner: MickMi
+repo: mick_harness_rules
+system_user: mickmi

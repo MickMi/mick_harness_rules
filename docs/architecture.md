@@ -1,4 +1,4 @@
-# 系统架构与业务上下文
+# Mick Harness Rules — 系统架构与业务上下文
 
 ## 🎯 业务最终目标
 一套跨平台、跨主机、跨 AI 的**个人工程基础设施**，采用**单仓库双职能**模型：
@@ -7,27 +7,46 @@
 
 两者合并在同一仓库中，以 `.env` 模式（`.gitignore` 隔离）挂载到任意新项目中，确保 AI 在任何项目中都能遵循你的工程规范并了解你的历史经验。
 
+> **注意**：这是 Harness 仓库自身的架构文档。
+> 新项目初始化时使用的是 `docs/architecture-template.md`（空白模板），不会复制本文件。
+
 ## 🧩 核心模块划分
 | 模块名 | 职责描述 | 对外暴露接口 | 依赖的其他模块 |
 |--------|---------|-------------|---------------|
-| (模块 A) | (描述职责) | (接口列表) | (依赖列表) |
-| (模块 B) | (描述职责) | (接口列表) | (依赖列表) |
+| **Harness Rules** | 编码规范、Agent 角色模板、CI/CD 护栏 | `.cursorrules`、`.prompts/`、`docs/` | — |
+| **Git Brain** | 三层记忆存储（Session/Project/Global） | `brain/` 子目录 | Harness Rules（挂载时一起加载） |
+| **Init Scripts** | 一键初始化 + 挂载 + 验证 | `vibe-init.sh`、`brain-init.sh`、`brain-check.sh` | Harness Rules、Git Brain |
+| **Brain CLI** | 记忆写入、检索、蒸馏、治理 | `brain-push.sh`、`brain-search.sh`、`brain-compound.sh`、`brain-gc.sh` | Git Brain |
 
 ## 🗄️ 核心数据模型
-(描述核心实体及其关系。建议用简单的 ER 描述或 Mermaid 图。)
 
 ```mermaid
 erDiagram
-    ENTITY_A ||--o{ ENTITY_B : "关系描述"
-    ENTITY_A {
-        string id PK
-        string name
-        datetime created_at
+    HARNESS_REPO ||--|| BRAIN : "contains"
+    HARNESS_REPO {
+        file cursorrules "coding rules + role routing"
+        dir prompts "agent role templates"
+        dir docs "architecture + CI templates"
     }
-    ENTITY_B {
-        string id PK
-        string entity_a_id FK
+    BRAIN ||--|{ SESSION : "stores"
+    BRAIN ||--|{ PROJECT : "stores"
+    BRAIN ||--|| GLOBAL : "stores"
+    SESSION {
+        string date "YYYY-MM-DD"
+        string source "cursor/trae/cli/..."
+        text content "raw conversation summary"
     }
+    PROJECT {
+        string slug "project identifier"
+        text decisions "project-specific ADRs"
+        text gotchas "project-specific pitfalls"
+    }
+    GLOBAL {
+        text preferences "cross-project coding prefs"
+        text gotchas "universal pitfalls"
+    }
+    SESSION ||--o| PROJECT : "daily compound"
+    PROJECT ||--o| GLOBAL : "weekly compound"
 ```
 
 ## 🔌 API 契约概览
@@ -37,12 +56,29 @@ erDiagram
 
 > 完整 API 文档请参考: (OpenAPI spec 路径或链接，如有)
 
-## 🔀 核心数据流 / 状态管理
-(简述数据从输入到输出的流转过程。建议用 Mermaid 流程图。)
+## 🔀 核心数据流
 
 ```mermaid
 flowchart LR
-    Input[用户输入] --> Process[核心处理] --> Output[输出/存储]
+    subgraph Input["写入源"]
+        IDE["IDE (Cursor/Trae/Windsurf)"]
+        CLI["brain-push.sh"]
+        WEB["Claude Web / ChatGPT"]
+    end
+    subgraph Brain["三层记忆"]
+        S["Session 层<br/>90 天 TTL"]
+        P["Project 层<br/>项目存续期"]
+        G["Global 层<br/>永久"]
+    end
+    subgraph Output["消费端"]
+        Search["brain-search.sh"]
+        AI["AI Agent (via .cursorrules)"]
+    end
+
+    Input --> S
+    S -->|"daily compound"| P
+    P -->|"weekly compound"| G
+    Brain --> Output
 ```
 
 ## ⚡ 非功能性需求 (NFR)
@@ -55,12 +91,11 @@ flowchart LR
 | **并发用户数** | (例如: 500) | |
 
 ## 🚀 部署拓扑
-(描述部署环境和架构。例如：单体/微服务、容器化方式、CDN 策略等。)
 
-- **环境**: (dev / staging / production)
-- **容器化**: (Docker / K8s / Serverless)
-- **CI/CD**: (GitHub Actions / Jenkins / 其他)
-- **CDN/静态资源**: (CloudFront / Vercel Edge / 其他)
+- **环境**: 纯本地（个人开发机），无服务端
+- **挂载方式**: symlink（`.harness/` → harness 仓库根目录）
+- **版本管理**: Git，独立于业务项目的发布节奏
+- **多 IDE 支持**: Cursor / Windsurf / Trae / GitHub Copilot（自动检测 + 注入规则）
 
 ## 📐 架构决策记录 (ADR) 索引
 | # | 日期 | 决策 | 原因 | 状态 |
@@ -73,5 +108,7 @@ flowchart LR
 | 5 | 2026-04-09 | 全局记忆只放采控记录 | 项目特有技术选型不放全局，只放跨项目通用偏好 | ✅ 生效 |
 | 6 | 2026-04-09 | 检索优先原则 (Search-First) | 避免全量读取浪费 context window | ✅ 生效 |
 | 7 | 2026-04-14 | 多平台写入策略 (IDE/CLI/Webhook) | 支持从 Cursor/Trae/Claude Web/ChatGPT 等多源写入 | ✅ 生效 |
+| 13 | 2026-04-21 | Fork 自动检测与 Brain 重置 | 支持 fork/clone 开箱即用 | ✅ 生效 |
+| 14 | 2026-04-22 | Architecture 模板与实例分离 | 防止 Harness 自身的架构文档污染新项目 | ✅ 生效 |
 
 > 详细决策内容请参考 [MEMORY.md](/MEMORY.md) 中的 ADR 章节。

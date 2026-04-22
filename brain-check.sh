@@ -219,6 +219,32 @@ else
 fi
 
 # ============================================================
+# Check 11: Brain ownership (fork detection)
+# ============================================================
+echo "📋 Check 11: Brain ownership"
+BRAIN_OWNER_FILE="$HARNESS_ROOT/.brain-owner"
+if [ -f "$BRAIN_OWNER_FILE" ]; then
+    RECORDED_OWNER=$(grep '^owner:' "$BRAIN_OWNER_FILE" 2>/dev/null | awk '{print $2}' | tr -d ' ')
+    CURRENT_REMOTE=$(git -C "$HARNESS_ROOT" remote get-url origin 2>/dev/null || echo "")
+    CURRENT_OWNER=""
+    if echo "$CURRENT_REMOTE" | grep -qE '^https?://'; then
+        CURRENT_OWNER=$(echo "$CURRENT_REMOTE" | sed -E 's|https?://[^/]+/([^/]+)/.*|\1|')
+    elif echo "$CURRENT_REMOTE" | grep -qE '^git@'; then
+        CURRENT_OWNER=$(echo "$CURRENT_REMOTE" | sed -E 's|git@[^:]+:([^/]+)/.*|\1|')
+    fi
+
+    if [ -z "$CURRENT_OWNER" ]; then
+        check_warn "Could not detect Git remote owner. Ownership check skipped."
+    elif [ "$CURRENT_OWNER" = "$RECORDED_OWNER" ]; then
+        check_pass "Brain owner verified: $CURRENT_OWNER"
+    else
+        check_fail "Brain owner mismatch! Recorded: $RECORDED_OWNER, Current: $CURRENT_OWNER. Run brain-init.sh to auto-reset."
+    fi
+else
+    check_warn ".brain-owner file not found. Run brain-init.sh to initialize ownership."
+fi
+
+# ============================================================
 # Summary
 # ============================================================
 echo ""

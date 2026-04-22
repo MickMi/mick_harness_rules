@@ -32,11 +32,16 @@ HARNESS_ROOT="$(cd "$(dirname "$0")" && pwd)"
 # --- Parse arguments ---
 MODE="harness"
 TARGET_DIR=""
+FRESH_MODE=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --inline)
             MODE="inline"
+            shift
+            ;;
+        --fresh)
+            FRESH_MODE=true
             shift
             ;;
         --help|-h)
@@ -45,6 +50,7 @@ while [[ $# -gt 0 ]]; do
             echo "Initialize Vibe Coding scaffold in a target project."
             echo ""
             echo "Options:"
+            echo "  --fresh     Start with a clean brain (for new users who cloned/forked this repo)."
             echo "  --inline    Use legacy inline mode (generate files from script)"
             echo "              Default mode loads from harness repo templates."
             echo "  -h, --help  Show this help message"
@@ -52,6 +58,7 @@ while [[ $# -gt 0 ]]; do
             echo "Examples:"
             echo "  vibe-init.sh                    # Init current dir from harness templates"
             echo "  vibe-init.sh /path/to/project   # Init specific project"
+            echo "  vibe-init.sh --fresh /path/to/project  # New user: clean brain + init"
             echo "  vibe-init.sh --inline            # Use legacy inline mode"
             exit 0
             ;;
@@ -203,8 +210,19 @@ TODO_EOF
         ok "TODO.md already exists. Skipping."
     fi
 
-    # docs/architecture.md — from harness template
-    safe_copy "$HARNESS_ROOT/docs/architecture.md" "$TARGET_DIR/docs/architecture.md" "docs/architecture.md"
+    # docs/architecture.md — from blank template (NOT the harness's own architecture doc)
+    # architecture-template.md is a clean slate for the new project to fill in.
+    # The harness's own architecture.md stays in the harness repo and is never copied.
+    if [ ! -f "$TARGET_DIR/docs/architecture.md" ] && [ ! -L "$TARGET_DIR/docs/architecture.md" ]; then
+        if [ -f "$HARNESS_ROOT/docs/architecture-template.md" ]; then
+            cp "$HARNESS_ROOT/docs/architecture-template.md" "$TARGET_DIR/docs/architecture.md"
+            ok "Generated: docs/architecture.md (from template)"
+        else
+            warn "architecture-template.md not found in harness repo. Skipping."
+        fi
+    else
+        ok "docs/architecture.md already exists. Skipping."
+    fi
 
     # Note: .prompts/ is NOT copied here — it will be symlinked by brain-init.sh
     # This ensures Agent role prompts don't leak into the target project's Git history.
@@ -368,8 +386,12 @@ EOF
 EOF
     ok "Generated: TODO.md (inline)"
 
-    # 5. docs/architecture.md (minimal inline version)
-    cat << 'EOF' > "$TARGET_DIR/docs/architecture.md"
+    # 5. docs/architecture.md (from template if available, otherwise minimal inline)
+    if [ -f "$HARNESS_ROOT/docs/architecture-template.md" ]; then
+        cp "$HARNESS_ROOT/docs/architecture-template.md" "$TARGET_DIR/docs/architecture.md"
+        ok "Generated: docs/architecture.md (from template)"
+    else
+        cat << 'EOF' > "$TARGET_DIR/docs/architecture.md"
 # 系统架构与业务上下文
 
 ## 🎯 业务最终目标
@@ -388,7 +410,8 @@ EOF
 |------|------|------|-----------|-----------|------|
 | /api/v1/xxx | POST | (用途) | { ... } | { ... } | (Bearer / API Key / 无) |
 EOF
-    ok "Generated: docs/architecture.md (inline)"
+        ok "Generated: docs/architecture.md (inline fallback)"
+    fi
 
     # 6. .pre-commit-config.yaml
     cat << 'EOF' > "$TARGET_DIR/.pre-commit-config.yaml"
@@ -506,7 +529,11 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 
 BRAIN_INIT="$HARNESS_ROOT/brain-init.sh"
 if [ -x "$BRAIN_INIT" ]; then
-    "$BRAIN_INIT" "$TARGET_DIR"
+    if [ "$FRESH_MODE" = true ]; then
+        "$BRAIN_INIT" --fresh "$TARGET_DIR"
+    else
+        "$BRAIN_INIT" "$TARGET_DIR"
+    fi
     BRAIN_EXIT=$?
 else
     warn "brain-init.sh not found or not executable at: $BRAIN_INIT"
@@ -524,6 +551,7 @@ fi
 echo ""
 echo "  Next steps:"
 echo "  1. Fill in Tech Stack Constraints in .cursorrules"
-echo "  2. Describe your business goal in docs/architecture.md"
-echo "  3. Start Vibe Coding — AI will follow your harness rules + brain memory."
+echo "  2. Start your first AI conversation — it will auto-detect the blank"
+echo "     architecture.md and guide you through Goal Discovery (2-3 rounds)."
+echo "  3. Vibe Coding begins — AI follows your harness rules + brain memory."
 echo ""

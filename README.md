@@ -157,7 +157,8 @@ mick_harness_rules/
 │   ├── projects/             # 项目专属记忆
 │   └── sessions/             # 原始对话摘要
 ├── brain-init.sh             # 一键挂载 harness + brain 到目标项目
-├── brain-check.sh            # 验证脚手架完整性（10 项检查）
+├── .brain-owner              # Brain 所有权标记（fork 自动检测用）
+├── brain-check.sh            # 验证脚手架完整性（11 项检查）
 ├── brain-push.sh             # 向 brain 写入记忆（CLI / 剪贴板 / 交互模式）
 ├── brain-search.sh           # 基于 ripgrep 的记忆检索
 ├── brain-compound.sh         # 智能蒸馏（Session → Project → Global）
@@ -165,11 +166,53 @@ mick_harness_rules/
 ├── brain-rules-template.md   # 多 IDE 通用的自动写入规则模板
 ├── vibe-init.sh              # Vibe Coding 脚手架初始化（自动链式调用 brain-init）
 ├── docs/
-│   ├── architecture.md       # 系统架构模板
+│   ├── architecture.md       # Harness 自身的系统架构文档
+│   ├── architecture-template.md  # 新项目架构模板（init 时复制到目标项目）
 │   └── ci_cd_templates.md    # CI/CD 模板库
 ├── MEMORY.md                 # 项目记忆与架构决策记录（ADR）
 └── TODO.md                   # 任务清单与状态流转
 ```
+
+## 分享给别人用（Fork 即用）
+
+这个仓库支持 **fork 即开箱即用**。别人 fork 或 clone 你的仓库后，不需要手动清空 brain 数据或修改任何配置：
+
+### 方式 A：Fork（推荐）
+
+```bash
+# 1. Fork 仓库到自己的 GitHub 账号
+# 2. Clone 自己的 fork
+git clone https://github.com/YOUR_NAME/mick_harness_rules.git ~/mick_harness_rules
+chmod +x ~/mick_harness_rules/*.sh
+
+# 3. 初始化到自己的项目（自动检测 fork 并重置 brain）
+~/mick_harness_rules/vibe-init.sh /path/to/your/project
+```
+
+### 方式 B：直接 Clone + `--fresh`
+
+如果不想 fork，直接 clone 原仓库也可以。用 `--fresh` 参数一键清空别人的记忆：
+
+```bash
+git clone https://github.com/MickMi/mick_harness_rules.git ~/mick_harness_rules
+chmod +x ~/mick_harness_rules/*.sh
+
+# --fresh 会无条件清空 brain 数据，给你一个干净的起点
+~/mick_harness_rules/vibe-init.sh --fresh /path/to/your/project
+```
+
+### 自动检测机制
+
+`brain-init.sh` 使用三层检测确保新用户拿到干净的 brain：
+
+| 检测维度 | 触发条件 | 行为 |
+|----------|----------|------|
+| **`--fresh` 参数** | 用户显式传入 | 无条件清空 brain，记录新 owner |
+| **Git remote owner** | `.brain-owner` 中的 owner 与当前 Git remote 不一致 | 自动清空 brain |
+| **系统用户名** | `.brain-owner` 中的 system_user 与当前 `whoami` 不一致 | 交互式询问是否清空 |
+| **首次运行 + 非空 brain** | 无 `.brain-owner` 但 brain 中有数据 | 交互式询问是否清空 |
+
+整个过程零手动操作（或最多一次 Y/n 确认）。新用户拿到的是完整的 Harness 规范 + 干净的 Brain，可以立即开始积累自己的记忆。
 
 ## 快速开始
 
@@ -186,8 +229,12 @@ chmod +x ~/mick_harness_rules/*.sh
 # 完整初始化（Vibe 脚手架 + Brain 挂载）
 ~/mick_harness_rules/vibe-init.sh /path/to/your/project
 
+# 新用户：清空原作者的 brain 数据 + 初始化
+~/mick_harness_rules/vibe-init.sh --fresh /path/to/your/project
+
 # 或者只挂载 Brain（项目已有自己的规范）
 ~/mick_harness_rules/brain-init.sh /path/to/your/project
+~/mick_harness_rules/brain-init.sh --fresh /path/to/your/project  # 新用户
 ```
 
 `vibe-init.sh` 会自动：
@@ -196,7 +243,7 @@ chmod +x ~/mick_harness_rules/*.sh
 2. 部署 CI/CD 模板、MEMORY.md、TODO.md 等项目专属文件
 3. 链式调用 `brain-init.sh`，创建 `.harness/`、`.cursorrules`、`.prompts/` 三个 symlink 并注入 `.gitignore` 隔离
 4. 检测 Cursor / Windsurf / Trae / Copilot 等 IDE 并注入自动写入规则
-5. 运行 `brain-check.sh` 验证完整性（10 项检查）
+5. 运行 `brain-check.sh` 验证完整性（11 项检查，含 brain 所有权验证）
 
 初始化是非破坏式的。已存在的文件备份为 `.bak`，symlink 不覆盖，重复运行不出错。
 
@@ -268,3 +315,4 @@ AI 会在以下事件发生时自动写入记忆：
 | 优雅降级 | 有高级工具用高级工具，没有就回退 |
 | 幂等挂载 | 重复运行不出错 |
 | 需求先行 | 实质性需求必须经过多轮审查 |
+| Fork 即用 | fork 用户首次 init 自动检测并重置 brain，零手动操作 |
