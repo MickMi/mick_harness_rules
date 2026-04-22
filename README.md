@@ -27,31 +27,51 @@
 - **Harness 解决 1 和 3** — 通过规则文件和 Agent 角色模板，强制 AI 遵循编码规范和协作流程
 - **Brain 解决 2** — 通过三层记忆模型，让经验跨对话、跨项目持久化
 
-## Fork 即用
+## 快速开始（一行命令）
 
-这个仓库支持 **fork 即开箱即用**。 fork 或 clone 到你的仓库，不需要手动清空 brain 数据或修改任何配置：
-
-### 方式 A：Fork（推荐）
+在你的项目根目录执行：
 
 ```bash
-# 1. Fork 仓库到自己的 GitHub 账号
-# 2. Clone 自己的 fork
-git clone https://github.com/YOUR_NAME/mick_harness_rules.git ~/mick_harness_rules
-chmod +x ~/mick_harness_rules/*.sh
-
-# 3. 初始化到自己的项目（自动检测 fork 并重置 brain）
-~/mick_harness_rules/vibe-init.sh /path/to/your/project
+git clone https://github.com/MickMi/mick_harness_rules.git .harness && .harness/setup.sh
 ```
 
-### 方式 B：直接 Clone + `--fresh`
+就这样。`setup.sh` 会自动完成所有初始化：
 
-如果不想 fork，直接 clone 原仓库也可以。用 `--fresh` 参数一键清空别人的记忆：
+1. 检测当前项目结构，已有文件跳过，不存在则生成模板
+2. 创建 `.cursorrules`、`.prompts/` 的 symlink
+3. 配置 `.gitignore` 隔离（harness 文件不会出现在项目 Git 中）
+4. 尝试拉取 Brain 记忆仓库（失败则 fallback 到本地目录）
+5. 运行完整性检查
+
+> **Fork 用户**：首次运行会自动检测 fork 并重置 brain 数据。也可以显式传入 `--fresh`：
+> ```bash
+> .harness/setup.sh --fresh
+> ```
+
+> **只要 Brain 不要 Vibe 脚手架**：如果项目已有自己的 MEMORY.md / TODO.md / docs/，可以跳过：
+> ```bash
+> .harness/setup.sh --no-vibe
+> ```
+
+### 更新 Harness 版本
 
 ```bash
+cd .harness && git pull
+```
+
+### 传统方式（全局仓库 + symlink）
+
+如果你更喜欢把 harness 放在全局位置，通过 symlink 挂载到多个项目：
+
+```bash
+# Clone 到全局位置
 git clone https://github.com/MickMi/mick_harness_rules.git ~/mick_harness_rules
 chmod +x ~/mick_harness_rules/*.sh
 
-# --fresh 会无条件清空 brain 数据，给你一个干净的起点
+# 初始化到目标项目
+~/mick_harness_rules/vibe-init.sh /path/to/your/project
+
+# 新用户加 --fresh
 ~/mick_harness_rules/vibe-init.sh --fresh /path/to/your/project
 ```
 
@@ -205,7 +225,8 @@ mick_harness_rules/
 │   ├── qa_agent.md           # QA 角色
 │   └── reviewer_agent.md     # Reviewer 角色
 ├── brain/                    # → symlink 到 ~/.mick-brain/（私有 brain 仓库）
-├── brain-init.sh             # 一键挂载 harness + brain 到目标项目
+├── setup.sh                  # ⭐ 一键初始化（项目内 clone 模式，推荐）
+├── brain-init.sh             # 挂载 harness + brain（全局仓库 symlink 模式）
 ├── brain-resolve.sh          # 共享库：解析 brain 数据路径（双仓库/单仓库自动适配）
 ├── brain-migrate.sh          # 一次性迁移脚本（单仓库 → 双仓库）
 ├── brain-check.sh            # 验证脚手架完整性（12 项检查，含 brain 仓库连接）
@@ -225,45 +246,7 @@ mick_harness_rules/
 
 
 
-## 快速开始
-
-### 1. 克隆仓库
-
-```bash
-git clone https://github.com/MickMi/mick_harness_rules.git ~/mick_harness_rules
-chmod +x ~/mick_harness_rules/*.sh
-```
-
-### 2. 初始化目标项目
-
-```bash
-# 完整初始化（Vibe 脚手架 + Brain 挂载）
-~/mick_harness_rules/vibe-init.sh /path/to/your/project
-
-# 新用户：清空原作者的 brain 数据 + 初始化
-~/mick_harness_rules/vibe-init.sh --fresh /path/to/your/project
-
-# 或者只挂载 Brain（项目已有自己的规范）
-~/mick_harness_rules/brain-init.sh /path/to/your/project
-~/mick_harness_rules/brain-init.sh --fresh /path/to/your/project  # 新用户
-```
-
-`brain-init.sh` 会自动：
-
-1. **Phase 0.5**：检测 `.brain-config.yaml` 中的 brain 仓库配置，自动 clone 到 `~/.mick-brain/` 并建立 symlink
-2. **Phase 0**：检测 brain 所有权，fork 用户自动重置
-3. **Phase 1**：创建 `.harness/` symlink
-4. **Phase 2**：注入 `.cursorrules`、`.prompts/` 等 IDE 规则
-5. **Phase 3**：配置 `.gitignore` 隔离
-6. **Phase 4**：运行 `brain-check.sh` 验证完整性（12 项检查）
-
-`vibe-init.sh` 在此基础上额外部署 `docs/`、CI/CD 模板、`MEMORY.md`、`TODO.md` 等项目专属文件。
-
-初始化是非破坏式的。已存在的文件备份为 `.bak`，symlink 不覆盖，重复运行不出错。
-
-> **安全设计**：`.cursorrules`、`.prompts/` 等包含 Agent prompt 的文件全部通过 symlink 引用，并被 `.gitignore` 隔离。目标项目发布到 Git 时，不会携带任何脚手架内容。
-
-### 3. 日常使用
+## 日常使用
 
 ```bash
 # 搜索记忆
@@ -397,19 +380,30 @@ mick_brain/ (私有仓库)
 在一台新机器上从零开始：
 
 ```bash
-# 1. Clone harness 仓库（公开）
-git clone https://github.com/MickMi/mick_harness_rules.git ~/mick_harness_rules
-chmod +x ~/mick_harness_rules/*.sh
+# 进入你的项目目录
+cd /path/to/your/project
 
-# 2. 初始化到你的项目（brain 仓库会自动 clone）
-~/mick_harness_rules/brain-init.sh /path/to/your/project
+# 一行命令完成所有初始化
+git clone https://github.com/MickMi/mick_harness_rules.git .harness && .harness/setup.sh
 
-# brain-init.sh 会自动：
+# setup.sh 会自动：
+#   - 创建 .cursorrules / .prompts/ symlink
+#   - 配置 .gitignore 隔离
+#   - 部署 Vibe 脚手架文件（已有则跳过）
 #   - 读取 .brain-config.yaml 中的 brain_repo 配置
 #   - Clone brain 仓库到 ~/.mick-brain/
-#   - 创建 symlink: brain/ → ~/.mick-brain/
 #   - Pull 最新记忆数据
-#   - 完成所有初始化
+#   - 运行完整性检查
 ```
 
-你不需要手动 clone brain 仓库，`brain-init.sh` 会自动处理一切。
+你不需要手动 clone brain 仓库或执行任何额外操作。
+
+#### 传统方式（全局仓库）
+
+如果你更喜欢全局仓库 + symlink 模式：
+
+```bash
+git clone https://github.com/MickMi/mick_harness_rules.git ~/mick_harness_rules
+chmod +x ~/mick_harness_rules/*.sh
+~/mick_harness_rules/brain-init.sh /path/to/your/project
+```

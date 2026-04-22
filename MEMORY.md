@@ -95,6 +95,16 @@
   - 向后兼容：未配置 brain_repo 时，所有脚本 fallback 到本地 `brain/` 目录
   - 变更原因：需要对外分享 harness 仓库，但个人记忆不应公开；多机同步需要 Git，本地存储不够
 
+- [2026-04-22] ADR-017: 一键初始化模式 — setup.sh（One-Step Bootstrap）
+  - 新增 `setup.sh` 脚本，支持"项目内 clone"模式：`git clone <url> .harness && .harness/setup.sh`
+  - 自动检测 parent 目录为目标项目，无需传参
+  - 智能文件策略：已有文件跳过（不覆盖），不存在则从模板生成
+  - 自动尝试拉取 Brain 仓库，失败则 fallback 到本地目录
+  - 支持 `--fresh`（清空 brain）和 `--no-vibe`（跳过脚手架文件）参数
+  - 与 `brain-init.sh` / `vibe-init.sh` 共存：setup.sh 是"项目内 clone 模式"入口，后者是"全局仓库 symlink 模式"入口
+  - 更新 harness 版本只需 `cd .harness && git pull`
+  - 设计目标：开箱即用，一行命令完成所有初始化，降低使用门槛
+
 ## ⚠️ 已知天坑与环境限制 (Gotchas)
 *💡 可检索的详细记忆请查阅 `brain/global/` 目录，本文件侧重于决策日志。*
 
