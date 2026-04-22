@@ -27,6 +27,48 @@
 - **Harness 解决 1 和 3** — 通过规则文件和 Agent 角色模板，强制 AI 遵循编码规范和协作流程
 - **Brain 解决 2** — 通过三层记忆模型，让经验跨对话、跨项目持久化
 
+## Fork 即用
+
+这个仓库支持 **fork 即开箱即用**。 fork 或 clone 到你的仓库，不需要手动清空 brain 数据或修改任何配置：
+
+### 方式 A：Fork（推荐）
+
+```bash
+# 1. Fork 仓库到自己的 GitHub 账号
+# 2. Clone 自己的 fork
+git clone https://github.com/YOUR_NAME/mick_harness_rules.git ~/mick_harness_rules
+chmod +x ~/mick_harness_rules/*.sh
+
+# 3. 初始化到自己的项目（自动检测 fork 并重置 brain）
+~/mick_harness_rules/vibe-init.sh /path/to/your/project
+```
+
+### 方式 B：直接 Clone + `--fresh`
+
+如果不想 fork，直接 clone 原仓库也可以。用 `--fresh` 参数一键清空别人的记忆：
+
+```bash
+git clone https://github.com/MickMi/mick_harness_rules.git ~/mick_harness_rules
+chmod +x ~/mick_harness_rules/*.sh
+
+# --fresh 会无条件清空 brain 数据，给你一个干净的起点
+~/mick_harness_rules/vibe-init.sh --fresh /path/to/your/project
+```
+
+### 自动检测机制
+
+`brain-init.sh` 使用三层检测确保新用户拿到干净的 brain：
+
+| 检测维度 | 触发条件 | 行为 |
+|----------|----------|------|
+| **`--fresh` 参数** | 用户显式传入 | 无条件清空 brain，记录新 owner |
+| **Git remote owner** | `.brain-owner` 中的 owner 与当前 Git remote 不一致 | 自动清空 brain |
+| **系统用户名** | `.brain-owner` 中的 system_user 与当前 `whoami` 不一致 | 交互式询问是否清空 |
+| **首次运行 + 非空 brain** | 无 `.brain-owner` 但 brain 中有数据 | 交互式询问是否清空 |
+
+整个过程零手动操作（或最多一次 Y/n 确认）。新用户拿到的是完整的 Harness 规范 + 干净的 Brain，可以立即开始积累自己的记忆。
+
+
 ## 一图看懂
 
 ```mermaid
@@ -173,46 +215,7 @@ mick_harness_rules/
 └── TODO.md                   # 任务清单与状态流转
 ```
 
-## 分享给别人用（Fork 即用）
 
-这个仓库支持 **fork 即开箱即用**。别人 fork 或 clone 你的仓库后，不需要手动清空 brain 数据或修改任何配置：
-
-### 方式 A：Fork（推荐）
-
-```bash
-# 1. Fork 仓库到自己的 GitHub 账号
-# 2. Clone 自己的 fork
-git clone https://github.com/YOUR_NAME/mick_harness_rules.git ~/mick_harness_rules
-chmod +x ~/mick_harness_rules/*.sh
-
-# 3. 初始化到自己的项目（自动检测 fork 并重置 brain）
-~/mick_harness_rules/vibe-init.sh /path/to/your/project
-```
-
-### 方式 B：直接 Clone + `--fresh`
-
-如果不想 fork，直接 clone 原仓库也可以。用 `--fresh` 参数一键清空别人的记忆：
-
-```bash
-git clone https://github.com/MickMi/mick_harness_rules.git ~/mick_harness_rules
-chmod +x ~/mick_harness_rules/*.sh
-
-# --fresh 会无条件清空 brain 数据，给你一个干净的起点
-~/mick_harness_rules/vibe-init.sh --fresh /path/to/your/project
-```
-
-### 自动检测机制
-
-`brain-init.sh` 使用三层检测确保新用户拿到干净的 brain：
-
-| 检测维度 | 触发条件 | 行为 |
-|----------|----------|------|
-| **`--fresh` 参数** | 用户显式传入 | 无条件清空 brain，记录新 owner |
-| **Git remote owner** | `.brain-owner` 中的 owner 与当前 Git remote 不一致 | 自动清空 brain |
-| **系统用户名** | `.brain-owner` 中的 system_user 与当前 `whoami` 不一致 | 交互式询问是否清空 |
-| **首次运行 + 非空 brain** | 无 `.brain-owner` 但 brain 中有数据 | 交互式询问是否清空 |
-
-整个过程零手动操作（或最多一次 Y/n 确认）。新用户拿到的是完整的 Harness 规范 + 干净的 Brain，可以立即开始积累自己的记忆。
 
 ## 快速开始
 
