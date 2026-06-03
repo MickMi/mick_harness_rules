@@ -104,6 +104,20 @@
   - 与 `brain-init.sh` / `vibe-init.sh` 共存：setup.sh 是"项目内 clone 模式"入口，后者是"全局仓库 symlink 模式"入口
   - 更新 harness 版本只需 `cd .harness && git pull`
   - 设计目标：开箱即用，一行命令完成所有初始化，降低使用门槛
+- [2026-06-03] ADR-018: 状态驱动的角色调度（State-Driven Orchestration v2）
+  - **痛点**：v1 把"调度"责任放在用户身上（orchestration.md 第 4 行明确说"用户作为唯一调度者"），导致用户每次提问前都得先想清楚"找谁"，沟通断点频出。
+  - **决策**：调度依据从「关键词匹配」升级为「读 `docs/STATE.md` + 看用户意图」两段式。STATE.md 是 single source of truth，AI 读它自动激活角色。
+  - **核心改动**：
+    - 新增 `.prompts/designer_agent.md`（v1 缺失，README/orchestration 引用却找不到内容）
+    - Designer 产物从 `design_tokens.json` 改为**自包含 HTML 视觉稿**（与下游 Dev 自然衔接）
+    - 新增 `docs/STATE.template.md`（流程状态机模板）
+    - PRD 拆出独立文件 `docs/PRD-<feature>.md`，不再混在 architecture.md 中
+    - 每个 Agent 输出末尾必须输出**机器可读的交接块**（Handoff Block）
+    - `.cursorrules` 路由规则改造：先读 STATE.md，跨阶段意图必须显式反问
+    - QA / Reviewer 输入从 architecture.md 改为 PRD-<feature>.md
+  - **跨阶段反问话术模板**已固化在 orchestration.md 与 .cursorrules 中
+  - **向后兼容**：旧项目缺 STATE.md 时，AI 会 fallback 到 v1 的关键词路由
+  - 设计目标：消除"每次提问都得先想清楚找谁"的认知负担，让 AI 主动承担分类工作。
 
 ## ⚠️ 已知天坑与环境限制 (Gotchas)
 *💡 可检索的详细记忆请查阅 `brain/global/` 目录，本文件侧重于决策日志。*

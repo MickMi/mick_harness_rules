@@ -190,15 +190,18 @@ Global（跨项目通用经验）
 
 ## Agent 角色
 
-内置 5 个 Agent 角色，通过 `.cursorrules` 中的智能路由自动匹配：
+内置 5 个 Agent 角色，通过 **`docs/STATE.md` 状态驱动调度**自动激活（v2，详见 `.prompts/orchestration.md`）：
 
-| 角色 | 文件 | 职责 |
-|------|------|------|
-| **PM Agent** | `.prompts/pm_agent.md` | 需求审查、三轮追问、输出确认清单 |
-| **Designer Agent** | `.prompts/designer_agent.md` | UI/UX 设计、设计代币、组件规格 |
-| **QA Agent** | `.prompts/qa_agent.md` | 测试策略、用例矩阵、质量门禁 |
-| **Reviewer Agent** | `.prompts/reviewer_agent.md` | 代码审查、逻辑完备性、安全审计 |
-| **Dev Agent** | `.cursorrules` | 编码实现、调试、架构设计（默认角色） |
+| 角色 | 文件 | 职责 | 主要产物 |
+|------|------|------|---------|
+| **PM Agent** | `.prompts/pm_agent.md` | 需求审查、三轮追问、输出 PRD | `docs/PRD-<feature>.md` |
+| **Designer Agent** | `.prompts/designer_agent.md` | UI/UX 设计、视觉稿、交互流程 | `docs/design/<feature>-mockup.html` + 设计说明 |
+| **QA Agent** | `.prompts/qa_agent.md` | 测试策略、用例矩阵、质量门禁 | `docs/test_strategy-<feature>.md` + `test_cases-<feature>.md` |
+| **Reviewer Agent** | `.prompts/reviewer_agent.md` | 代码审查、逻辑完备性、安全审计 | `docs/reviews/<feature>-<date>.md` |
+| **Dev Agent** | `.cursorrules` | 编码实现、调试、架构设计（默认角色） | 源代码 + 单元测试 |
+
+> **v2 调度原则**：AI 在每次回复前先读 `docs/STATE.md`，找出 `**当前阶段**` 标记决定激活哪个角色。
+> 你不再需要每次手动喊"找谁"——意图明显跨阶段时，AI 会显式反问而不是默默走偏。
 
 ### 需求审查门禁
 
@@ -216,14 +219,17 @@ Global（跨项目通用经验）
 
 ```
 mick_harness_rules/
-├── .cursorrules              # 全局编码规范 + 智能角色路由 + Brain 自动写入协议
+├── .cursorrules              # 全局编码规范 + 状态驱动角色调度 + Brain 自动写入协议
 ├── .brain-config.yaml        # Brain 配置（仓库地址、保留策略、搜索引擎）
 ├── .gitignore                # 忽略 brain 个人数据（双仓库隔离）
 ├── .prompts/                 # Agent 角色模板
-│   ├── orchestration.md      # 角色编排协议
-│   ├── pm_agent.md           # PM 角色（需求审查官）
+│   ├── orchestration.md      # 角色编排协议 v2（状态驱动）
+│   ├── pm_agent.md           # PM 角色（需求审查官，输出 PRD-<feature>.md）
+│   ├── designer_agent.md     # Designer 角色（输出 HTML 视觉稿）
 │   ├── qa_agent.md           # QA 角色
 │   └── reviewer_agent.md     # Reviewer 角色
+├── docs/
+│   └── STATE.template.md     # 流程状态机模板（v2 新增，调度的 single source of truth）
 ├── brain/                    # → symlink 到 ~/.mick-brain/（私有 brain 仓库）
 ├── setup.sh                  # ⭐ 一键初始化（项目内 clone 模式，推荐）
 ├── brain-init.sh             # 挂载 harness + brain（全局仓库 symlink 模式）
