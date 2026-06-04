@@ -15,7 +15,9 @@
 # ============================================================
 
 # Prevent double-sourcing
-if [ -n "$BRAIN_RESOLVE_LOADED" ]; then
+# Use ${VAR:-} pattern: callers set -u (nounset), so a bare $BRAIN_RESOLVE_LOADED
+# would error out the first time this file is sourced.
+if [ -n "${BRAIN_RESOLVE_LOADED:-}" ]; then
     return 0 2>/dev/null || true
 fi
 BRAIN_RESOLVE_LOADED=true
