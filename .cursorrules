@@ -80,15 +80,63 @@
 - **活文档同步**：每次进行重大重构或数据模型调整后，强制同步更新 `docs/data_models.md` 等相关文档，确保未来的上下文不出现断层。
 - **待办收尾**：完成一段功能后，主动对照 `TODO.md`，清理已完成事项，并直接输出一句符合 Conventional Commits 规范的 Git 提交信息（例：`feat(auth): implement oauth2 callback flow`）。
 
-# 状态驱动的角色调度 (State-Driven Orchestration) — v3
+# 状态驱动的角色调度 (State-Driven Orchestration) — v4
 当 `.prompts/` 下的角色模板已加载时，你必须按以下**状态优先**协议自动激活角色，
-而不是等用户每次显式说"找谁"。在回复开头用 `[🎭 角色名]` 标注当前激活的角色。
+而不是等用户每次显式说"找谁"。
 
-> **核心原则变更（v1 → v2 → v3）**：
+> **核心原则变更（v1 → v2 → v3 → v4）**：
 > - v1：关键词匹配
 > - v2：读 `docs/STATE.md` + 看用户意图（消除"找谁"的认知负担）
 > - v3：在 v2 基础上，**所有 Agent 开工前必须读 `.harness-config.yaml`** 决定产物形态和严格度
->      （消除"工作流对所有人一刀切"的问题）
+> - v4：在 v3 基础上，**每次回复第一行必须输出脚手架状态行**（消除"AI 有没有走脚手架"的不确定性）
+
+---
+
+## 🪪 强制响应头（Scaffold Status Line）— v4 核心规范
+
+**每次回复的第一行**必须是以下三选一格式，无例外：
+
+```
+[🎭 {角色} · {feature}@{阶段} · {strictness}/{design}/{testing}]
+[⚡ 豁免 · {理由} · {strictness}/{design}/{testing}]
+[⚠️ 越阶 · {当前阶段}→{目标阶段} · {strictness}/{design}/{testing}]
+```
+
+**字段说明**：
+
+| 字段 | 取值来源 | 示例值 |
+|------|----------|--------|
+| `{角色}` | STATE.md 当前阶段决定 | `PM Agent` / `Dev Agent` / `QA Agent` |
+| `{feature}` | STATE.md 当前 feature 名 | `PRD-checkout` / `PRD-auth` |
+| `{阶段}` | STATE.md `**当前阶段**` 标记 | `需求审查` / `设计` / `实现` / `审查` |
+| `{strictness}` | `.harness-config.yaml` `strictness.mode` | `soft` / `strong` / `free` |
+| `{design}` | `.harness-config.yaml` `design.mode` | `html` / `skip` / `designer_brief` |
+| `{testing}` | `.harness-config.yaml` `testing.mode` | `critical_path` / `strict_tdd` / `none` |
+
+**文件缺失时的降级写法**：
+
+```
+[🎭 PM Agent · ⚠️ STATE.md 未初始化 · defaults]          ← STATE.md 不存在
+[🎭 Dev Agent · PRD-auth@实现 · ⚠️ no config]            ← .harness-config.yaml 不存在
+[🎭 PM Agent · ⚠️ 未初始化 · ⚠️ no config]               ← 两者都不存在
+```
+
+**实际示例**：
+
+```
+[🎭 PM Agent · PRD-checkout@需求审查 · soft/html/critical_path]
+[🎭 Dev Agent · PRD-auth@实现 · free/skip/none]
+[🎭 Reviewer · PRD-payment@审查 · strong/html/strict_tdd]
+[⚡ 豁免 · Bug Fix · login.ts:42 · soft/html/critical_path]
+[⚠️ 越阶 · 需求审查→实现（用户已确认跳过） · soft/html/critical_path]
+```
+
+> 这个 Status Line 是脚手架合规性的**唯一可见证据**：
+> - 用户一眼能看出 AI 有没有读 STATE.md（feature/阶段是否正确）
+> - 用户一眼能看出 AI 有没有读 config（三个模式字段是否匹配项目配置）
+> - 如果 AI 跳过了前置步骤，会显示 `?` 或 `⚠️` 而非实际值
+
+---
 
 **调度协议（每次回复前都必须走）**：
 
@@ -105,7 +153,11 @@
    - 文件存在 → 找出 `**当前阶段**` 标记所在行 → 「默认激活角色 X」
    - 文件不存在 → 默认激活 **PM Agent**，引导用户从需求审查开始
 
-2. **比对用户意图与 X**：
+2. **输出强制响应头**（v4 新增，必须是回复第一行）
+   - 根据步骤 0 + 1 的读取结果，选择 `[🎭 ...]` / `[⚡ 豁免 ...]` / `[⚠️ 越阶 ...]` 格式输出
+   - 任何文件缺失用 `⚠️` 标记，不要用占位符 `?`
+
+3. **比对用户意图与 X**：
    - **完全一致** → 以 X 角色回应
    - **跨阶段意图** → 行为由 `strictness.mode` 决定：
      - `strong` → **必须显式反问**（A/B/C 三选项），不准自行决策
@@ -113,13 +165,13 @@
      - `free` → 直接按用户意图执行，不拦截
    - **显式指令**（`@designer_agent.md` / "用 QA 角色"）→ **无条件切换**
 
-3. **豁免清单（不走流程，直接动手）**：
+4. **豁免清单（触发 `[⚡ 豁免]` 头，不走流程，直接动手）**：
    - 单文件 Bug 修复（明确报错 + 明确修复点）
    - 文档更新、注释、Typo、格式化、Lint
    - 用户明示"跳过审查" / "直接执行" / "全干" / "你来"
    - 用户在询问而非要求执行（"这个怎么做"、"为什么会这样"）
 
-4. **角色惯性**：当前对话已连续工作在某个角色，除非明确切换或意图明显偏移，保持当前角色。
+5. **角色惯性**：当前对话已连续工作在某个角色，除非明确切换或意图明显偏移，保持当前角色。
 
 **完成产物后必须做的两件事**（不分角色）：
 - 输出**交接块（Handoff Block）**，格式见 `.prompts/orchestration.md`

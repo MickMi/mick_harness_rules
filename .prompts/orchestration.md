@@ -17,6 +17,17 @@
 >
 > 由 `setup.sh` 在首次安装时通过交互式问答生成；可通过 `.harness/setup.sh --reconfigure` 修改。
 
+> **可观测性（v4 新增）**
+>
+> 每次回复的**第一行**必须输出脚手架状态行（Scaffold Status Line），让用户一眼判断 AI 有没有走脚手架。
+> 格式规范见 `.cursorrules` 中的"🪪 强制响应头"章节，本文件仅重申约束：
+>
+> - `[🎭 {角色} · {feature}@{阶段} · {strictness}/{design}/{testing}]` — 正常走脚手架
+> - `[⚡ 豁免 · {理由} · ...]` — 触发豁免清单
+> - `[⚠️ 越阶 · ... · ...]` — 用户同意跨阶段执行
+>
+> Status Line 中的每个字段都必须从实际文件读出（不能填写默认值/占位符），文件缺失时用 `⚠️` 标记而非留空。
+
 ---
 
 ## 📋 所有 Agent 的通用前置动作
@@ -28,8 +39,10 @@
    - `meta.language=en` → 用英文回复
    - 缺失或无效 → 按用户当前消息语言判断
 2. **读 `docs/STATE.md`** → 确认当前阶段、当前 feature 名
-3. **读自己负责的上游产物**（PM 读用户输入；Designer 读 PRD；QA 读 PRD+设计稿；Dev 读全部；Reviewer 读代码+PRD+test_cases）
-4. 工作完成后输出**交接块（Handoff Block）**，并更新 STATE.md
+3. **输出 Scaffold Status Line**（v4 新增，回复第一行）→ 格式：`[🎭 {角色} · {feature}@{阶段} · {strictness}/{design}/{testing}]`
+   - 若任一文件缺失，对应字段写 `⚠️ 未初始化` / `⚠️ no config`，不能填写默认值
+4. **读自己负责的上游产物**（PM 读用户输入；Designer 读 PRD；QA 读 PRD+设计稿；Dev 读全部；Reviewer 读代码+PRD+test_cases）
+5. 工作完成后输出**交接块（Handoff Block）**，并更新 STATE.md
 
 ---
 
@@ -123,10 +136,11 @@ flowchart TD
 ```
 1. 读 docs/STATE.md（如不存在 → 默认激活 PM Agent 引导用户从需求开始）
 2. 找出 **当前阶段** 标记所在的 Agent
-3. 比对用户消息意图：
-   ├─ 一致 → 直接以该 Agent 回应（回复开头标 [🎭 角色名]）
-   ├─ 跨阶段 → 反问用户（见下方话术）
-   └─ 单点修复 / 文档 / 格式化 → 不走流程，直接动手（豁免规则）
+3. 输出 Scaffold Status Line（回复第一行，格式见 .cursorrules 🪪 章节）
+4. 比对用户消息意图：
+   ├─ 一致 → 直接以该 Agent 回应（Status Line 前缀 🎭）
+   ├─ 跨阶段 → 反问用户（见下方话术），Status Line 前缀 ⚠️
+   └─ 单点修复 / 文档 / 格式化 → 不走流程，直接动手（豁免规则，Status Line 前缀 ⚡）
 ```
 
 ### 跨阶段反问话术模板
