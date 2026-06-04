@@ -23,7 +23,10 @@
 
 每个 Agent（PM / Designer / QA / Dev / Reviewer）开工前都必须：
 
-1. **读 `.harness-config.yaml`**（v3 新增）→ 决定本 Agent 的产物形态、严格度、是否启用
+1. **读 `.harness-config.yaml`**（v3 新增）→ 决定本 Agent 的产物形态、严格度、是否启用、**回复用什么语言**
+   - `meta.language=zh` → 整个会话用简体中文回复
+   - `meta.language=en` → 用英文回复
+   - 缺失或无效 → 按用户当前消息语言判断
 2. **读 `docs/STATE.md`** → 确认当前阶段、当前 feature 名
 3. **读自己负责的上游产物**（PM 读用户输入；Designer 读 PRD；QA 读 PRD+设计稿；Dev 读全部；Reviewer 读代码+PRD+test_cases）
 4. 工作完成后输出**交接块（Handoff Block）**，并更新 STATE.md

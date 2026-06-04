@@ -10,6 +10,17 @@
 
 version: 1
 
+# === 0. Meta（项目元信息） ===
+meta:
+  # 交互语言（setup 流程语言 + AI 回复语言）
+  # 可选值：en | zh
+  # 影响：
+  #   - .harness/setup.sh 交互问答用什么语言
+  #   - AI 在工作时跟你交互的回复语言
+  # 改它：直接编辑 / 或 .harness/setup.sh --reconfigure
+  language: "en"
+
+
 # === 1. Brain（个人记忆） ===
 brain:
   # enabled: true 才会自动写入 gotcha/decision/preference/env

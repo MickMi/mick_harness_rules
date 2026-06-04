@@ -93,9 +93,10 @@
 **调度协议（每次回复前都必须走）**：
 
 0. **读 `.harness-config.yaml`**（v3 新增，所有 Agent 通用前置）
-   - 文件存在 → 解析 `brain.enabled` / `design.mode` / `dev.scope` / `testing.mode` / `strictness.mode` 字段
+   - 文件存在 → 解析 `meta.language` / `brain.enabled` / `design.mode` / `dev.scope` / `testing.mode` / `strictness.mode` 字段
    - 文件不存在 → 按各 Agent 模板的 default 运行（不报错），并在第一次回复时**温和提示**用户运行 `setup.sh` 初始化配置
    - 这一步决定后续行为，例如：
+     - `meta.language=zh` → AI 用简体中文回复；`meta.language=en` → 用英文回复（缺失时按用户当前消息语言判断）
      - `design.mode=skip` → STATE.md 不应包含 Designer 阶段
      - `testing.mode=none` → 不主动激活 QA Agent
      - `strictness.mode=free` → 跨阶段意图不再反问，直接执行
