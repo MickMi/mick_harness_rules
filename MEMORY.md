@@ -118,6 +118,21 @@
   - **跨阶段反问话术模板**已固化在 orchestration.md 与 .cursorrules 中
   - **向后兼容**：旧项目缺 STATE.md 时，AI 会 fallback 到 v1 的关键词路由
   - 设计目标：消除"每次提问都得先想清楚找谁"的认知负担，让 AI 主动承担分类工作。
+- [2026-06-04] ADR-019: 工作流配置参数化（Setup Interactive Configuration v3）
+  - **痛点**：v2 把工作流串通了，但 Agent 模板里的产物契约对所有用户写死（如 Designer 总是出 HTML），与"用户用 Figma Maker / 有专职设计师 / 纯后端"等真实场景不匹配，导致工作流仍然不契合。
+  - **决策**：在 v2 基础上加一层"项目级工作流配置"。setup.sh 首次运行通过**5 题交互式问答**生成 `.harness-config.yaml`；Agent 模板改为**内嵌多分支** + **runtime 读 config** 决定走哪个分支。
+  - **核心改动**：
+    - 新增 `.harness-config.template.yaml`：5 个配置维度（brain / design / dev / testing / strictness）
+    - 改造 `setup.sh`：新增 Phase 4「Workflow Configuration」交互式问答；新增 `--reconfigure` / `--non-interactive` / `--profile FILE` 参数；现有 phase 编号从 6 个调整为 7 个
+    - 改造 `.prompts/designer_agent.md`：内嵌 4 种 mode（html / ai_tool_spec / designer_brief / skip），AI 按 `design.mode` 字段决定走哪个
+    - 改造 `.cursorrules`：所有 Agent 开工前必须先读 `.harness-config.yaml`；`strictness.mode` 决定跨阶段是否拦截
+    - 改造 `.prompts/orchestration.md`：v3 加入"通用前置动作"指引
+  - **关键产品决策**：
+    - 配置文件应 **commit 到项目**（不走 .gitignore），跨机器/跨成员一致
+    - 实施风格选 B（模板内嵌分支）而非 A（生成定制 prompt），代价是 prompt 变长，好处是改 mode 不必重跑 setup
+    - 支持 `--reconfigure` 覆盖现有 config，应对项目演化（如纯后端 → 加了管理后台）
+  - **向后兼容**：缺失 `.harness-config.yaml` 时所有 Agent 走默认行为（等同于 v2），不报错。
+  - 设计目标：让工作流从"对所有人一刀切"升级为"按用户工具栈自适应"。
 
 ## ⚠️ 已知天坑与环境限制 (Gotchas)
 *💡 可检索的详细记忆请查阅 `brain/global/` 目录，本文件侧重于决策日志。*

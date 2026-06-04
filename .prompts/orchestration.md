@@ -9,6 +9,25 @@
 >
 > 这一变更是为了消除"每次提问都得先想清楚找谁"的认知负担。
 
+> **工具栈适配（v3 新增）**
+>
+> 项目根目录的 `.harness-config.yaml` 描述本项目的工作流偏好（设计模式、测试投入、流程严格度等）。
+> **所有 Agent 在动手前必须先读这个文件**，根据其中的字段调整自身行为。
+> 缺失则按各 Agent 模板中的 default 值运行。
+>
+> 由 `setup.sh` 在首次安装时通过交互式问答生成；可通过 `.harness/setup.sh --reconfigure` 修改。
+
+---
+
+## 📋 所有 Agent 的通用前置动作
+
+每个 Agent（PM / Designer / QA / Dev / Reviewer）开工前都必须：
+
+1. **读 `.harness-config.yaml`**（v3 新增）→ 决定本 Agent 的产物形态、严格度、是否启用
+2. **读 `docs/STATE.md`** → 确认当前阶段、当前 feature 名
+3. **读自己负责的上游产物**（PM 读用户输入；Designer 读 PRD；QA 读 PRD+设计稿；Dev 读全部；Reviewer 读代码+PRD+test_cases）
+4. 工作完成后输出**交接块（Handoff Block）**，并更新 STATE.md
+
 ---
 
 ## 🔀 标准协作流程
@@ -178,22 +197,23 @@ C) 推翻当前流程，从需求重新审查
 ```
 project-root/
 ├── .cursorrules              # Dev Agent 全局规则 + 路由（含状态调度）
+├── .harness-config.yaml      # ✨ v3 新增：项目级工作流配置（commit 到项目）
 ├── .prompts/                 # Agent 角色模板
-│   ├── orchestration.md      # 本文档（编排协议 v2）
+│   ├── orchestration.md      # 本文档（编排协议 v3）
 │   ├── pm_agent.md           # PM
-│   ├── designer_agent.md     # Designer ✨ v2 新增
+│   ├── designer_agent.md     # Designer（支持 4 种 mode，由 .harness-config.yaml 决定）
 │   ├── qa_agent.md           # QA
 │   └── reviewer_agent.md     # Reviewer
 ├── docs/
-│   ├── STATE.md              # ✨ v2 新增：流程状态机（single source of truth）
-│   ├── PRD-<feature>.md      # ✨ v2 新增：单需求 PRD（PM 输出）
+│   ├── STATE.md              # ✨ v2：流程状态机
+│   ├── PRD-<feature>.md      # ✨ v2：单需求 PRD（PM 输出）
 │   ├── architecture.md       # 系统架构（仅架构级变更才动）
-│   ├── design/
-│   │   ├── <feature>-mockup.html       # ✨ v2 改：HTML 视觉稿（Designer 输出）
-│   │   ├── <feature>-design-notes.md   # 设计说明（Designer 输出）
-│   │   ├── design_tokens.json          # （可选）跨需求复用的 token
-│   │   └── components.md               # （可选）组件库索引
-│   ├── test_strategy-<feature>.md  # 测试策略（QA 输出）
+│   ├── design/               # Designer 产物（具体形态由 design.mode 决定）
+│   │   ├── <feature>-mockup.html        # design.mode=html
+│   │   ├── <feature>-design-spec.json   # design.mode=ai_tool_spec
+│   │   ├── <feature>-design-brief.md    # 模式 B/C 的人读版
+│   │   └── <feature>-design-notes.md    # 模式 A 的设计说明
+│   ├── test_strategy-<feature>.md  # 测试策略（QA 输出，仅 testing.mode != none）
 │   ├── test_cases-<feature>.md     # 测试用例（QA 输出）
 │   └── reviews/<feature>-<date>.md # 审查报告（Reviewer 输出）
 ├── MEMORY.md                 # 项目记忆（全员可追加）

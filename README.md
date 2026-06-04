@@ -35,13 +35,23 @@
 git clone https://github.com/MickMi/mick_harness_rules.git .harness && .harness/setup.sh
 ```
 
-就这样。`setup.sh` 会自动完成所有初始化：
+`setup.sh` 会通过 **5 题交互式问答**（v3 新增）问清楚你的工作流偏好：
 
-1. 检测当前项目结构，已有文件跳过，不存在则生成模板
-2. 创建 `.cursorrules`、`.prompts/` 的 symlink
-3. 配置 `.gitignore` 隔离（harness 文件不会出现在项目 Git 中）
-4. 尝试拉取 Brain 记忆仓库（失败则 fallback 到本地目录）
-5. 运行完整性检查
+1. **Brain（个人记忆）**：是否启用跨对话记忆
+2. **Design（设计工作方式）**：AI 出 HTML / 出 spec.json 给 Figma Maker / 出 brief 给真人设计师 / 跳过
+3. **Dev（开发栈范围）**：全栈 / 纯后端 / 纯前端 / 客户端 / CLI
+4. **Testing（测试投入）**：严格 TDD / 关键路径 / 仅冒烟 / 不写测试
+5. **Strictness（流程严格度）**：强门禁 / 软提示 / 自由
+
+答案写入 `.harness-config.yaml`（commit 到项目，跨机器/跨成员一致）。AI 在工作时会读这个文件决定行为，不再对所有项目一刀切。
+
+后续运行非交互式 / CI 用：
+
+```bash
+.harness/setup.sh --non-interactive          # 全部用默认值
+.harness/setup.sh --profile profiles/web.yaml # 用预设 profile
+.harness/setup.sh --reconfigure              # 项目演化时重新问一遍
+```
 
 > **Fork 用户**：首次运行会自动检测 fork 并重置 brain 数据。也可以显式传入 `--fresh`：
 > ```bash
@@ -190,18 +200,18 @@ Global（跨项目通用经验）
 
 ## Agent 角色
 
-内置 5 个 Agent 角色，通过 **`docs/STATE.md` 状态驱动调度**自动激活（v2，详见 `.prompts/orchestration.md`）：
+内置 5 个 Agent 角色，通过 **`docs/STATE.md` 状态驱动调度** + **`.harness-config.yaml` 工具栈适配**自动激活（v3，详见 `.prompts/orchestration.md`）：
 
-| 角色 | 文件 | 职责 | 主要产物 |
+| 角色 | 文件 | 职责 | 主要产物（受 config 影响） |
 |------|------|------|---------|
 | **PM Agent** | `.prompts/pm_agent.md` | 需求审查、三轮追问、输出 PRD | `docs/PRD-<feature>.md` |
-| **Designer Agent** | `.prompts/designer_agent.md` | UI/UX 设计、视觉稿、交互流程 | `docs/design/<feature>-mockup.html` + 设计说明 |
-| **QA Agent** | `.prompts/qa_agent.md` | 测试策略、用例矩阵、质量门禁 | `docs/test_strategy-<feature>.md` + `test_cases-<feature>.md` |
-| **Reviewer Agent** | `.prompts/reviewer_agent.md` | 代码审查、逻辑完备性、安全审计 | `docs/reviews/<feature>-<date>.md` |
-| **Dev Agent** | `.cursorrules` | 编码实现、调试、架构设计（默认角色） | 源代码 + 单元测试 |
+| **Designer Agent** | `.prompts/designer_agent.md` | UI/UX 设计 | 由 `design.mode` 决定：HTML / spec.json / brief / 跳过 |
+| **QA Agent** | `.prompts/qa_agent.md` | 测试策略、用例矩阵 | 由 `testing.mode` 决定严格度，`none` 时跳过 |
+| **Reviewer Agent** | `.prompts/reviewer_agent.md` | 代码审查 | `docs/reviews/<feature>-<date>.md` |
+| **Dev Agent** | `.cursorrules` | 编码实现（默认角色） | 源代码 + 测试（按 `dev.scope` 边界） |
 
-> **v2 调度原则**：AI 在每次回复前先读 `docs/STATE.md`，找出 `**当前阶段**` 标记决定激活哪个角色。
-> 你不再需要每次手动喊"找谁"——意图明显跨阶段时，AI 会显式反问而不是默默走偏。
+> **v3 调度原则**：AI 在每次回复前先读 `.harness-config.yaml`（决定**怎么做**）+ `docs/STATE.md`（决定**当前在哪一步**），然后激活对应角色。
+> 你不再需要每次手动喊"找谁"——意图明显跨阶段时，AI 按 `strictness.mode` 决定是否反问。
 
 ### 需求审查门禁
 
@@ -220,18 +230,19 @@ Global（跨项目通用经验）
 ```
 mick_harness_rules/
 ├── .cursorrules              # 全局编码规范 + 状态驱动角色调度 + Brain 自动写入协议
+├── .harness-config.template.yaml  # ✨ v3：项目级工作流配置模板（5 维度）
 ├── .brain-config.yaml        # Brain 配置（仓库地址、保留策略、搜索引擎）
 ├── .gitignore                # 忽略 brain 个人数据（双仓库隔离）
 ├── .prompts/                 # Agent 角色模板
-│   ├── orchestration.md      # 角色编排协议 v2（状态驱动）
+│   ├── orchestration.md      # 角色编排协议 v3（状态驱动 + config 适配）
 │   ├── pm_agent.md           # PM 角色（需求审查官，输出 PRD-<feature>.md）
-│   ├── designer_agent.md     # Designer 角色（输出 HTML 视觉稿）
+│   ├── designer_agent.md     # Designer 角色（v3：4 种 mode，由 config 决定）
 │   ├── qa_agent.md           # QA 角色
 │   └── reviewer_agent.md     # Reviewer 角色
 ├── docs/
 │   └── STATE.template.md     # 流程状态机模板（v2 新增，调度的 single source of truth）
 ├── brain/                    # → symlink 到 ~/.mick-brain/（私有 brain 仓库）
-├── setup.sh                  # ⭐ 一键初始化（项目内 clone 模式，推荐）
+├── setup.sh                  # ⭐ 一键初始化（含交互式问答 + --reconfigure）
 ├── brain-init.sh             # 挂载 harness + brain（全局仓库 symlink 模式）
 ├── brain-resolve.sh          # 共享库：解析 brain 数据路径（双仓库/单仓库自动适配）
 ├── brain-migrate.sh          # 一次性迁移脚本（单仓库 → 双仓库）

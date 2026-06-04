@@ -1,0 +1,88 @@
+# .harness-config.yaml — 项目级工作流配置
+#
+# 这个文件由 setup.sh 生成（首次运行或 --reconfigure 时），
+# 描述本项目想用什么样的工作流。AI 在每次工作前必须读它来决定行为。
+#
+# ✅ 应该 commit 到项目仓库（团队共享 / 跨机器一致）
+# ❌ 不要写入隐私（个人 brain 偏好走 ~/.mick-brain/，不走这里）
+#
+# 字段说明用 # 注释。所有字段都有 default，确保旧项目升级时不报错。
+
+version: 1
+
+# === 1. Brain（个人记忆） ===
+brain:
+  # enabled: true 才会自动写入 gotcha/decision/preference/env
+  # disabled 时 .cursorrules 中的 Brain Auto-Write Protocol 整段失效
+  enabled: true
+
+  # 私有 brain 仓库的位置（绝对路径或 ~ 开头）
+  # setup.sh 会自动 clone 到这里，不存在则按 .brain-config.yaml 中的 remote 拉
+  path: "~/.mick-brain"
+
+
+# === 2. Design（设计工作方式）✨ 核心字段 ===
+design:
+  # mode 决定 Designer Agent 的产物形态。AI 必须读这个字段。
+  #
+  # html         — AI 直接出自包含 HTML 视觉稿（个人/小团队，无专职设计）
+  #                 → 产物：docs/design/<feature>-mockup.html
+  #
+  # ai_tool_spec — 输出能被 Figma Maker / OpenDesign / ClaudeIsland 等
+  #                 AI 设计工具直接吃的结构化 spec
+  #                 → 产物：docs/design/<feature>-design-spec.json
+  #                 → 同时出一份 docs/design/<feature>-design-brief.md 作为人读版
+  #
+  # designer_brief — 你有专职设计师在 Figma 工作，AI 只出"设计简报"，不出图
+  #                 → 产物：docs/design/<feature>-design-brief.md
+  #
+  # skip         — 纯后端项目，跳过 Designer 阶段
+  #                 → STATE.md 不包含 Designer 阶段
+  mode: "html"
+
+  # 当 mode=ai_tool_spec 时，告诉 AI 你具体在用哪个工具，spec 格式微调
+  # 可选值：figma_maker | open_design | claude_island | generic
+  # 当 mode 不是 ai_tool_spec 时，本字段被忽略
+  ai_tool: "generic"
+
+
+# === 3. Dev（开发栈范围） ===
+dev:
+  # scope 决定 Dev Agent 的关注边界，也影响是否启用 Designer 角色
+  # 可选值：fullstack | backend_only | frontend_only | mobile | cli_lib
+  scope: "fullstack"
+
+  # tech_stack 是给 Dev Agent 的硬约束（对应 .cursorrules 中的 Tech Stack Constraints）
+  # 留空则让 AI 在第一次开工时主动询问
+  tech_stack:
+    language: ""        # 例如：TypeScript 5.x / Python 3.12 / Swift 5
+    framework: ""       # 例如：Next.js 14 / FastAPI / SwiftUI
+    database: ""        # 例如：PostgreSQL 16 / SQLite / 无
+    package_manager: "" # 例如：pnpm / uv / SPM
+
+
+# === 4. Testing（测试投入） ===
+testing:
+  # mode 决定 QA Agent 是否启用、产物的细致度、Reviewer 的"必须修复"严格度
+  #
+  # strict_tdd      — 严格 TDD：测试先行，覆盖率 ≥ 80%，QA 全力运行
+  # critical_path   — 关键路径覆盖：仅 P0 用例必测，覆盖率 ≥ 50%（推荐默认）
+  # smoke_only      — 仅冒烟：核心场景手测即可，QA Agent 退化为快速 checklist
+  # none            — 不写测试：QA Agent 跳过，Reviewer 不检查测试覆盖
+  mode: "critical_path"
+
+  # 覆盖率阈值（仅 strict_tdd / critical_path 模式下生效）
+  coverage_threshold: 50
+
+
+# === 5. Strictness（流程严格度） ===
+strictness:
+  # mode 决定 orchestration 的拦截行为
+  #
+  # strong  — 强门禁：PRD 不锁定不让动代码，跨阶段必须显式批准
+  # soft    — 软提示：提醒但允许跳过（默认，体验最自然）
+  # free    — 自由：完全由用户主导，AI 不主动拦截
+  mode: "soft"
+
+  # 当 PM 阶段超过 N 轮追问还没确认 PRD 时，AI 主动建议简化或暂停
+  pm_max_rounds: 3

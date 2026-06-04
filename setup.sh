@@ -14,17 +14,22 @@ set -euo pipefail
 # performs all initialization in one step.
 #
 # Options:
-#   --fresh     Start with a clean brain (for fork/clone users)
-#   --no-vibe   Skip Vibe scaffold files (MEMORY.md, TODO.md, docs/)
-#   -h, --help  Show this help message
+#   --fresh           Start with a clean brain (for fork/clone users)
+#   --no-vibe         Skip Vibe scaffold files (MEMORY.md, TODO.md, docs/)
+#   --reconfigure     Re-run interactive workflow configuration (overwrites .harness-config.yaml)
+#   --non-interactive Skip interactive questions, use defaults (or values from --profile)
+#   --profile FILE    Load answers from a YAML profile file (for CI / repeatable setup)
+#   -h, --help        Show this help message
 #
 # What it does:
 #   1. Detect parent directory as target project
 #   2. Symlink .cursorrules and .prompts/ into project root
 #   3. Configure .gitignore to isolate harness files
 #   4. Deploy Vibe scaffold files (skip if already exist)
-#   5. Clone/connect brain repo (fallback to local if unavailable)
-#   6. Run brain-check to verify integrity
+#   5. ✨ Interactive workflow configuration → .harness-config.yaml
+#   6. Inject multi-IDE rules
+#   7. Clone/connect brain repo (fallback to local if unavailable)
+#   8. Run brain-check to verify integrity
 # ============================================================
 
 # --- Color helpers ---
@@ -46,6 +51,9 @@ HARNESS_ROOT="$(cd "$(dirname "$0")" && pwd)"
 # --- Parse arguments ---
 FRESH_MODE=false
 SKIP_VIBE=false
+RECONFIGURE=false
+NON_INTERACTIVE=false
+PROFILE_FILE=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -57,6 +65,23 @@ while [[ $# -gt 0 ]]; do
             SKIP_VIBE=true
             shift
             ;;
+        --reconfigure)
+            RECONFIGURE=true
+            shift
+            ;;
+        --non-interactive)
+            NON_INTERACTIVE=true
+            shift
+            ;;
+        --profile)
+            shift
+            PROFILE_FILE="${1:-}"
+            if [ -z "$PROFILE_FILE" ]; then
+                fail "--profile requires a file path argument"
+                exit 1
+            fi
+            shift
+            ;;
         --help|-h)
             echo "Usage: .harness/setup.sh [OPTIONS]"
             echo ""
@@ -64,9 +89,12 @@ while [[ $# -gt 0 ]]; do
             echo "the harness repo as .harness/ subdirectory."
             echo ""
             echo "Options:"
-            echo "  --fresh     Start with a clean brain (for new users who cloned/forked)"
-            echo "  --no-vibe   Skip Vibe scaffold files (MEMORY.md, TODO.md, docs/)"
-            echo "  -h, --help  Show this help message"
+            echo "  --fresh             Start with a clean brain (for new users who cloned/forked)"
+            echo "  --no-vibe           Skip Vibe scaffold files (MEMORY.md, TODO.md, docs/)"
+            echo "  --reconfigure       Re-run interactive workflow configuration (overwrites .harness-config.yaml)"
+            echo "  --non-interactive   Skip interactive questions, use defaults"
+            echo "  --profile FILE      Load answers from a YAML profile file"
+            echo "  -h, --help          Show this help message"
             echo ""
             echo "Quick start:"
             echo "  git clone https://github.com/MickMi/mick_harness_rules.git .harness"
@@ -126,6 +154,9 @@ echo "  Harness location: $HARNESS_ROOT"
 echo "  Target project  : $TARGET_DIR"
 echo "  Fresh mode      : $FRESH_MODE"
 echo "  Skip vibe files : $SKIP_VIBE"
+echo "  Reconfigure     : $RECONFIGURE"
+echo "  Non-interactive : $NON_INTERACTIVE"
+[ -n "$PROFILE_FILE" ] && echo "  Profile file    : $PROFILE_FILE"
 echo ""
 
 # --- Make all scripts executable ---
@@ -137,7 +168,7 @@ echo ""
 # ============================================================
 # Phase 1: Symlink key files into project root
 # ============================================================
-info "Phase 1/6: Symlinking key files into project root..."
+info "Phase 1/7: Symlinking key files into project root..."
 
 # .cursorrules → .harness/.cursorrules
 CURSORRULES_LINK="$TARGET_DIR/.cursorrules"
@@ -167,7 +198,7 @@ echo ""
 # ============================================================
 # Phase 2: Configure .gitignore isolation
 # ============================================================
-info "Phase 2/6: Configuring .gitignore isolation..."
+info "Phase 2/7: Configuring .gitignore isolation..."
 
 GITIGNORE="$TARGET_DIR/.gitignore"
 IGNORE_ENTRIES=(".harness/" ".harness" ".cursorrules" ".prompts/" ".prompts")
@@ -197,7 +228,7 @@ echo ""
 # Phase 3: Deploy Vibe scaffold files (skip if exist)
 # ============================================================
 if [ "$SKIP_VIBE" = false ]; then
-    info "Phase 3/6: Deploying Vibe scaffold files (skip if already exist)..."
+    info "Phase 3/7: Deploying Vibe scaffold files (skip if already exist)..."
 
     # Create directory structure
     mkdir -p "$TARGET_DIR/docs"
@@ -256,14 +287,214 @@ TODO_EOF
 
     echo ""
 else
-    info "Phase 3/6: Skipped (--no-vibe flag)."
+    info "Phase 3/7: Skipped (--no-vibe flag)."
     echo ""
 fi
 
 # ============================================================
+# Phase 4: Workflow Configuration (interactive Q&A)
+# ============================================================
+info "Phase 4/7: Workflow configuration..."
+
+CONFIG_FILE="$TARGET_DIR/.harness-config.yaml"
+TEMPLATE_FILE="$HARNESS_ROOT/.harness-config.template.yaml"
+
+# --- Helper: ask a single-choice question ---
+# Usage: ask_choice "Question?" "default_value" "label1:value1" "label2:value2" ...
+# Sets global variable ASK_RESULT
+ask_choice() {
+    local question="$1"
+    local default="$2"
+    shift 2
+    local -a labels=()
+    local -a values=()
+    for pair in "$@"; do
+        labels+=("${pair%%:*}")
+        values+=("${pair#*:}")
+    done
+
+    echo ""
+    echo -e "${BOLD}❓ $question${NC}"
+    local i=1
+    local default_idx=1
+    for ((j=0; j<${#labels[@]}; j++)); do
+        local marker="  "
+        if [ "${values[$j]}" = "$default" ]; then
+            marker=" ▶"
+            default_idx=$((j+1))
+        fi
+        echo "  $marker [$((j+1))] ${labels[$j]}"
+    done
+    echo ""
+    echo -n "  Choose [1-${#labels[@]}, default=$default_idx]: "
+
+    if [ "$NON_INTERACTIVE" = true ] || [ ! -t 0 ]; then
+        echo "$default_idx (non-interactive default)"
+        ASK_RESULT="$default"
+        return
+    fi
+
+    local input
+    read -r input
+    input="${input:-$default_idx}"
+
+    if [[ ! "$input" =~ ^[0-9]+$ ]] || [ "$input" -lt 1 ] || [ "$input" -gt "${#labels[@]}" ]; then
+        warn "Invalid input '$input', using default."
+        ASK_RESULT="$default"
+        return
+    fi
+
+    ASK_RESULT="${values[$((input-1))]}"
+}
+
+# --- Helper: ask a free-text question (with default) ---
+ask_text() {
+    local question="$1"
+    local default="$2"
+    echo ""
+    echo -e "${BOLD}❓ $question${NC}"
+    if [ -n "$default" ]; then
+        echo -n "  Answer [default: $default]: "
+    else
+        echo -n "  Answer (leave blank to skip): "
+    fi
+
+    if [ "$NON_INTERACTIVE" = true ] || [ ! -t 0 ]; then
+        echo "$default (non-interactive)"
+        ASK_RESULT="$default"
+        return
+    fi
+
+    local input
+    read -r input
+    ASK_RESULT="${input:-$default}"
+}
+
+# --- Decide whether to run the Q&A ---
+RUN_INTERACTIVE_CONFIG=false
+if [ ! -f "$CONFIG_FILE" ]; then
+    info "No .harness-config.yaml found. Running first-time configuration..."
+    RUN_INTERACTIVE_CONFIG=true
+elif [ "$RECONFIGURE" = true ]; then
+    info "--reconfigure specified. Re-running workflow configuration..."
+    RUN_INTERACTIVE_CONFIG=true
+else
+    ok ".harness-config.yaml already exists. Use --reconfigure to change. (idempotent)"
+fi
+
+if [ "$RUN_INTERACTIVE_CONFIG" = true ]; then
+    # --- Profile file (CI / repeatable setup) ---
+    if [ -n "$PROFILE_FILE" ] && [ -f "$PROFILE_FILE" ]; then
+        info "Loading answers from profile: $PROFILE_FILE"
+        cp "$PROFILE_FILE" "$CONFIG_FILE"
+        ok "Generated: .harness-config.yaml (from profile)"
+    else
+        echo ""
+        echo "━━━ Workflow Configuration (5 questions) ━━━"
+        echo "  Skip with Enter to accept defaults; --non-interactive uses all defaults."
+        echo ""
+
+        # Q1: Brain
+        ask_choice "1/5 Use Brain (cross-conversation memory)?" "true" \
+            "Yes (recommended) — auto-record gotchas / decisions:true" \
+            "No — disable Brain for this project:false"
+        BRAIN_ENABLED="$ASK_RESULT"
+
+        # Q2: Design mode
+        ask_choice "2/5 How is your design work done?" "html" \
+            "AI outputs HTML mockup (no separate designer):html" \
+            "AI outputs spec.json for Figma Maker / OpenDesign / ClaudeIsland etc.:ai_tool_spec" \
+            "AI outputs design brief for a human designer (Figma):designer_brief" \
+            "Pure backend / CLI — skip design phase:skip"
+        DESIGN_MODE="$ASK_RESULT"
+
+        DESIGN_AI_TOOL="generic"
+        if [ "$DESIGN_MODE" = "ai_tool_spec" ]; then
+            ask_choice "  └─ Which AI design tool?" "generic" \
+                "Generic (most compatible):generic" \
+                "Figma Maker:figma_maker" \
+                "OpenDesign:open_design" \
+                "ClaudeIsland:claude_island"
+            DESIGN_AI_TOOL="$ASK_RESULT"
+        fi
+
+        # Q3: Dev scope
+        ask_choice "3/5 Dev scope?" "fullstack" \
+            "Full-stack (backend + frontend):fullstack" \
+            "Backend only:backend_only" \
+            "Frontend only:frontend_only" \
+            "Mobile / desktop client (Swift / Kotlin / RN / Flutter):mobile" \
+            "CLI / library:cli_lib"
+        DEV_SCOPE="$ASK_RESULT"
+
+        # Q4: Testing
+        ask_choice "4/5 Testing strictness?" "critical_path" \
+            "Strict TDD (≥80% coverage, tests-first):strict_tdd" \
+            "Critical path only (≥50% coverage, P0 cases):critical_path" \
+            "Smoke only (manual key flows):smoke_only" \
+            "No tests (skip QA Agent):none"
+        TESTING_MODE="$ASK_RESULT"
+
+        # Q5: Strictness
+        ask_choice "5/5 Workflow strictness?" "soft" \
+            "Strong gate (PRD must be locked before any code):strong" \
+            "Soft hint (recommended — warn but allow override):soft" \
+            "Free (user-driven, AI never blocks):free"
+        STRICTNESS_MODE="$ASK_RESULT"
+
+        # --- Render config from template ---
+        if [ -f "$TEMPLATE_FILE" ]; then
+            cp "$TEMPLATE_FILE" "$CONFIG_FILE"
+            # Patch the answers in (sed in-place; macOS-compatible)
+            SED_INPLACE=(-i '')
+            if sed --version >/dev/null 2>&1; then
+                SED_INPLACE=(-i)
+            fi
+            sed "${SED_INPLACE[@]}" -E "s/^(  enabled:) .*/\\1 ${BRAIN_ENABLED}/" "$CONFIG_FILE"
+            sed "${SED_INPLACE[@]}" -E "s/^(  mode:) \"html\".*/\\1 \"${DESIGN_MODE}\"/" "$CONFIG_FILE"
+            sed "${SED_INPLACE[@]}" -E "s/^(  ai_tool:) \"generic\".*/\\1 \"${DESIGN_AI_TOOL}\"/" "$CONFIG_FILE"
+            sed "${SED_INPLACE[@]}" -E "s/^(  scope:) \"fullstack\".*/\\1 \"${DEV_SCOPE}\"/" "$CONFIG_FILE"
+            sed "${SED_INPLACE[@]}" -E "s/^(  mode:) \"critical_path\".*/\\1 \"${TESTING_MODE}\"/" "$CONFIG_FILE"
+            sed "${SED_INPLACE[@]}" -E "s/^(  mode:) \"soft\".*/\\1 \"${STRICTNESS_MODE}\"/" "$CONFIG_FILE"
+            ok "Generated: .harness-config.yaml"
+        else
+            warn ".harness-config.template.yaml not found. Writing minimal config..."
+            cat > "$CONFIG_FILE" <<EOF
+version: 1
+brain: { enabled: ${BRAIN_ENABLED}, path: "~/.mick-brain" }
+design: { mode: "${DESIGN_MODE}", ai_tool: "${DESIGN_AI_TOOL}" }
+dev: { scope: "${DEV_SCOPE}", tech_stack: { language: "", framework: "", database: "", package_manager: "" } }
+testing: { mode: "${TESTING_MODE}", coverage_threshold: 50 }
+strictness: { mode: "${STRICTNESS_MODE}", pm_max_rounds: 3 }
+EOF
+            ok "Generated: .harness-config.yaml (minimal)"
+        fi
+
+        # --- Update STATE.md if design.mode = skip ---
+        STATE_FILE="$TARGET_DIR/docs/STATE.md"
+        if [ "$DESIGN_MODE" = "skip" ] && [ -f "$STATE_FILE" ]; then
+            info "design.mode=skip → reminder: review docs/STATE.md and remove the Designer line"
+        fi
+
+        echo ""
+        echo "  📋 Configuration summary:"
+        echo "    brain.enabled    = ${BRAIN_ENABLED}"
+        echo "    design.mode      = ${DESIGN_MODE} (${DESIGN_AI_TOOL})"
+        echo "    dev.scope        = ${DEV_SCOPE}"
+        echo "    testing.mode     = ${TESTING_MODE}"
+        echo "    strictness.mode  = ${STRICTNESS_MODE}"
+        echo ""
+        echo "  💡 Edit anytime: \$EDITOR .harness-config.yaml"
+        echo "  💡 Re-run Q&A:   .harness/setup.sh --reconfigure"
+    fi
+fi
+
+echo ""
+
+# ============================================================
 # Phase 4: Multi-IDE rule injection
 # ============================================================
-info "Phase 4/6: Detecting and injecting multi-IDE rules..."
+info "Phase 5/7: Detecting and injecting multi-IDE rules..."
 
 inject_brain_rules() {
     local target_file="$1"
@@ -328,7 +559,7 @@ echo ""
 # ============================================================
 # Phase 5: Brain repo — clone/connect
 # ============================================================
-info "Phase 5/6: Setting up Brain repository..."
+info "Phase 6/7: Setting up Brain repository..."
 
 # Source the shared brain resolver
 source "$HARNESS_ROOT/brain-resolve.sh"
@@ -574,7 +805,7 @@ echo ""
 # ============================================================
 # Phase 6: Verify — Run brain-check
 # ============================================================
-info "Phase 6/6: Running integrity check..."
+info "Phase 7/7: Running integrity check..."
 echo ""
 
 BRAIN_CHECK="$HARNESS_ROOT/brain-check.sh"
@@ -601,6 +832,9 @@ echo "    ✅ .gitignore   updated (harness files isolated from project Git)"
 if [ "$SKIP_VIBE" = false ]; then
     echo "    ✅ MEMORY.md, TODO.md, docs/architecture.md deployed"
 fi
+if [ -f "$CONFIG_FILE" ]; then
+    echo "    ✅ .harness-config.yaml ready (workflow config — commit to project)"
+fi
 if [ "$BRAIN_IS_EXTERNAL" = "true" ]; then
     echo "    ✅ Brain repo connected: $BRAIN_REPO_LOCAL"
 else
@@ -608,11 +842,10 @@ else
 fi
 echo ""
 echo "  Next steps:"
-echo "    1. Fill in Tech Stack Constraints in .cursorrules"
-echo "    2. Start your first AI conversation — it will auto-detect the blank"
-echo "       architecture.md and guide you through Goal Discovery."
-echo "    3. Use '.harness/brain-push.sh' to write learnings."
-echo "    4. Use '.harness/brain-search.sh <keyword>' to search memory."
+echo "    1. Review .harness-config.yaml (or run --reconfigure to redo Q&A)"
+echo "    2. Fill in Tech Stack Constraints in .cursorrules (or in config's dev.tech_stack)"
+echo "    3. Start your first AI conversation — it will read STATE.md + config."
+echo "    4. Use '.harness/brain-push.sh' to write learnings."
 echo ""
 echo "  Update harness:"
 echo "    cd .harness && git pull"
