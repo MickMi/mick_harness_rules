@@ -286,6 +286,27 @@ else
 fi
 
 # ============================================================
+# Check 13: Single-source rule generation (dist/ sync)
+# ============================================================
+echo "📋 Check 13: Single-source rule generation"
+GENERATE="$HARNESS_ROOT/generate.sh"
+if [ -x "$GENERATE" ]; then
+    if "$GENERATE" --check >/dev/null 2>&1; then
+        check_pass "dist/ rule files are up to date with rules/core.md + extended.md"
+    else
+        check_warn "dist/ is out of date. Run '.harness/generate.sh' to regenerate."
+    fi
+    # AGENTS.md is the primary cross-tool output — verify it's mounted
+    if [ -L "$TARGET_DIR/AGENTS.md" ] || [ -f "$TARGET_DIR/AGENTS.md" ]; then
+        check_pass "AGENTS.md is mounted in project root"
+    else
+        check_warn "AGENTS.md not mounted. Run setup.sh to symlink generated rule files."
+    fi
+else
+    check_warn "generate.sh not found. Single-source generation unavailable."
+fi
+
+# ============================================================
 # Summary
 # ============================================================
 echo ""

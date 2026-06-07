@@ -8,5 +8,9 @@ brain.bak/
 # Brain owner identity (personal)
 .brain-owner
 
+# Generated rule files — always rebuilt from rules/core.md + extended.md by
+# generate.sh (run automatically in setup.sh / brain-init.sh before mounting).
+dist/
+
 # OS files
 .DS_Store

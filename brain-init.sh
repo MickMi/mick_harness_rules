@@ -22,8 +22,9 @@ fail()  { echo -e "${RED}❌ $1${NC}"; }
 # --- Resolve harness repo root (where this script lives) ---
 HARNESS_ROOT="$(cd "$(dirname "$0")" && pwd)"
 
-# --- Source shared brain resolver ---
+# --- Source shared brain resolver + rule-mounting library ---
 source "$HARNESS_ROOT/brain-resolve.sh"
+source "$HARNESS_ROOT/lib-mount-rules.sh"
 
 # --- Parse arguments ---
 FRESH_MODE=false
@@ -452,103 +453,11 @@ else
 fi
 
 # ============================================================
-# Phase 2: Inject — Symlink key files + multi-IDE rule injection
+# Phase 2: Inject — Generate + symlink rule files (shared lib)
 # ============================================================
-info "Phase 2/5: Inject — Symlinking key files + injecting IDE rules..."
-
-# --- Helper: Inject brain rules into an IDE rule file ---
-# Appends brain auto-write rules from template if not already present
-inject_brain_rules() {
-    local target_file="$1"
-    local ide_name="$2"
-
-    # Check if brain rules already injected
-    if grep -q "Brain Auto-Write Protocol" "$target_file" 2>/dev/null; then
-        ok "$ide_name rules: Brain auto-write rules already present. (idempotent)"
-        return
-    fi
-
-    local template="$HARNESS_ROOT/brain-rules-template.md"
-    if [ ! -f "$template" ]; then
-        warn "brain-rules-template.md not found. Skipping brain rules injection for $ide_name."
-        return
-    fi
-
-    # Replace <ide> placeholder with actual IDE name
-    echo "" >> "$target_file"
-    sed "s/<ide>/$ide_name/g" "$template" >> "$target_file"
-    ok "$ide_name rules: Brain auto-write rules injected."
-}
-
-# .cursorrules — Cursor IDE only reads from project root
-CURSORRULES_LINK="$TARGET_DIR/.cursorrules"
-if [ -L "$CURSORRULES_LINK" ]; then
-    ok ".cursorrules symlink already exists. (idempotent)"
-elif [ -f "$CURSORRULES_LINK" ]; then
-    warn ".cursorrules already exists as a regular file. Backing up to .cursorrules.bak"
-    mv "$CURSORRULES_LINK" "$CURSORRULES_LINK.bak"
-    ln -s "$HARNESS_ROOT/.cursorrules" "$CURSORRULES_LINK"
-    ok ".cursorrules symlinked (original backed up to .cursorrules.bak)"
-else
-    ln -s "$HARNESS_ROOT/.cursorrules" "$CURSORRULES_LINK"
-    ok ".cursorrules symlinked to project root."
-fi
-
-# .prompts/ — Symlink entire directory so Agent role templates are never copied
-PROMPTS_LINK="$TARGET_DIR/.prompts"
-if [ -L "$PROMPTS_LINK" ]; then
-    ok ".prompts/ symlink already exists. (idempotent)"
-elif [ -d "$PROMPTS_LINK" ]; then
-    warn ".prompts/ already exists as a regular directory. Backing up to .prompts.bak/"
-    mv "$PROMPTS_LINK" "${PROMPTS_LINK}.bak"
-    ln -s "$HARNESS_ROOT/.prompts" "$PROMPTS_LINK"
-    ok ".prompts/ symlinked (original backed up to .prompts.bak/)"
-else
-    ln -s "$HARNESS_ROOT/.prompts" "$PROMPTS_LINK"
-    ok ".prompts/ symlinked to project root."
-fi
-
-# --- Multi-IDE Rule Injection ---
-# Detect and inject brain rules into other IDE rule files
-
-# Windsurf: .windsurfrules
-WINDSURF_RULES="$TARGET_DIR/.windsurfrules"
-if [ -f "$WINDSURF_RULES" ]; then
-    inject_brain_rules "$WINDSURF_RULES" "windsurf"
-fi
-
-# Trae: .trae/rules or .trae/rules.md
-TRAE_RULES_DIR="$TARGET_DIR/.trae"
-if [ -d "$TRAE_RULES_DIR" ]; then
-    for trae_file in "$TRAE_RULES_DIR/rules" "$TRAE_RULES_DIR/rules.md"; do
-        if [ -f "$trae_file" ]; then
-            inject_brain_rules "$trae_file" "trae"
-            break
-        fi
-    done
-fi
-
-# VS Code Copilot: .github/copilot-instructions.md
-COPILOT_INSTRUCTIONS="$TARGET_DIR/.github/copilot-instructions.md"
-if [ -f "$COPILOT_INSTRUCTIONS" ]; then
-    inject_brain_rules "$COPILOT_INSTRUCTIONS" "copilot"
-fi
-
-# Add IDE rule files to .gitignore if they exist
-EXTRA_IGNORE_ENTRIES=()
-[ -f "$WINDSURF_RULES" ] && EXTRA_IGNORE_ENTRIES+=(".windsurfrules")
-[ -d "$TRAE_RULES_DIR" ] && EXTRA_IGNORE_ENTRIES+=(".trae/")
-
-if [ ${#EXTRA_IGNORE_ENTRIES[@]} -gt 0 ]; then
-    GITIGNORE="$TARGET_DIR/.gitignore"
-    [ ! -f "$GITIGNORE" ] && touch "$GITIGNORE"
-    for entry in "${EXTRA_IGNORE_ENTRIES[@]}"; do
-        if ! grep -qxF "$entry" "$GITIGNORE" 2>/dev/null; then
-            echo "$entry" >> "$GITIGNORE"
-            info "Added $entry to .gitignore"
-        fi
-    done
-fi
+info "Phase 2/5: Inject — Generating + symlinking rule files..."
+regenerate_rules "$HARNESS_ROOT"
+mount_rule_files "$HARNESS_ROOT" "$TARGET_DIR"
 
 # ============================================================
 # Phase 3: Activate — Ensure .gitignore isolates harness files
@@ -556,7 +465,10 @@ fi
 info "Phase 3/5: Activate — Ensuring .gitignore isolation..."
 
 GITIGNORE="$TARGET_DIR/.gitignore"
-IGNORE_ENTRIES=(".harness/" ".harness" ".cursorrules" ".prompts/" ".prompts")
+# Always isolate harness mount + role projection; add per-rule-file entries
+# only for files the harness actually owns (never a project's own committed file).
+IGNORE_ENTRIES=(".harness/" ".harness" ".prompts/" ".prompts")
+IGNORE_ENTRIES+=("${HARNESS_OWNED_FILES[@]}")
 
 # Create .gitignore if it doesn't exist
 if [ ! -f "$GITIGNORE" ]; then

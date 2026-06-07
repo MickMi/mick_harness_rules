@@ -165,34 +165,21 @@ chmod +x "$HARNESS_ROOT"/*.sh 2>/dev/null || true
 ok "Scripts are executable."
 echo ""
 
+# --- Source shared rule-mounting library ---
+source "$HARNESS_ROOT/lib-mount-rules.sh"
+
 # ============================================================
-# Phase 1: Symlink key files into project root
+# Phase 0.5: Regenerate rule files from single source
 # ============================================================
-info "Phase 1/7: Symlinking key files into project root..."
+info "Phase 0.5: Generating rule files from single source (rules/core.md + extended.md)..."
+regenerate_rules "$HARNESS_ROOT"
+echo ""
 
-# .cursorrules → .harness/.cursorrules
-CURSORRULES_LINK="$TARGET_DIR/.cursorrules"
-if [ -L "$CURSORRULES_LINK" ]; then
-    ok ".cursorrules symlink already exists. (idempotent)"
-elif [ -f "$CURSORRULES_LINK" ]; then
-    warn ".cursorrules already exists as a regular file. Keeping project's own version."
-    warn "  (To use harness rules, remove it and re-run setup.sh)"
-else
-    ln -s "$HARNESS_ROOT/.cursorrules" "$CURSORRULES_LINK"
-    ok ".cursorrules → .harness/.cursorrules"
-fi
-
-# .prompts/ → .harness/.prompts/
-PROMPTS_LINK="$TARGET_DIR/.prompts"
-if [ -L "$PROMPTS_LINK" ]; then
-    ok ".prompts/ symlink already exists. (idempotent)"
-elif [ -d "$PROMPTS_LINK" ]; then
-    warn ".prompts/ already exists as a real directory. Keeping project's own version."
-else
-    ln -s "$HARNESS_ROOT/.prompts" "$PROMPTS_LINK"
-    ok ".prompts/ → .harness/.prompts/"
-fi
-
+# ============================================================
+# Phase 1: Symlink generated rule files into project root
+# ============================================================
+info "Phase 1/6: Symlinking generated rule files into project root..."
+mount_rule_files "$HARNESS_ROOT" "$TARGET_DIR"
 echo ""
 
 # ============================================================
@@ -201,7 +188,10 @@ echo ""
 info "Phase 2/7: Configuring .gitignore isolation..."
 
 GITIGNORE="$TARGET_DIR/.gitignore"
-IGNORE_ENTRIES=(".harness/" ".harness" ".cursorrules" ".prompts/" ".prompts")
+# Always isolate the harness mount + role-template projection. Per-rule-file
+# entries are added dynamically below, only for files the harness actually owns.
+IGNORE_ENTRIES=(".harness/" ".harness" ".prompts/" ".prompts")
+IGNORE_ENTRIES+=("${HARNESS_OWNED_FILES[@]}")
 
 if [ ! -f "$GITIGNORE" ]; then
     touch "$GITIGNORE"
@@ -292,409 +282,11 @@ else
 fi
 
 # ============================================================
-# Phase 4: Workflow Configuration (interactive Q&A)
+# Phase 4: Multi-IDE rules — handled by single-source generator
 # ============================================================
-info "Phase 4/7: Workflow configuration..."
-
-CONFIG_FILE="$TARGET_DIR/.harness-config.yaml"
-TEMPLATE_FILE="$HARNESS_ROOT/.harness-config.template.yaml"
-
-# Setup interaction language (en | zh) — chosen via Q0 below.
-# Resolution order:
-#   1. SETUP_LANG environment variable (highest, for CI / scripted runs)
-#   2. Pre-existing .harness-config.yaml meta.language (so --reconfigure remembers)
-#   3. Q0 interactive prompt
-#   4. Default "en" if all above unavailable (non-interactive mode)
-SETUP_LANG="${SETUP_LANG:-en}"
-if [ -f "$CONFIG_FILE" ] && [ -z "${SETUP_LANG_FROM_ENV:-}" ]; then
-    EXISTING_LANG=$(grep -E '^\s*language:\s*"(en|zh)"' "$CONFIG_FILE" 2>/dev/null | head -1 | sed -E 's/.*"(en|zh)".*/\1/')
-    [ -n "$EXISTING_LANG" ] && SETUP_LANG="$EXISTING_LANG"
-fi
-# Mark whether SETUP_LANG was supplied externally (so Q0 won't override it in NON_INTERACTIVE)
-[ -n "${SETUP_LANG_EXTERNAL:-}" ] || SETUP_LANG_EXTERNAL=false
-if [ -n "${SETUP_LANG_PRESET:-}" ]; then
-    SETUP_LANG="$SETUP_LANG_PRESET"
-    SETUP_LANG_EXTERNAL=true
-fi
-
-# --- i18n helper: pick string based on SETUP_LANG ---
-# Usage: t "english string" "中文字符串"
-t() {
-    if [ "$SETUP_LANG" = "zh" ]; then
-        echo "$2"
-    else
-        echo "$1"
-    fi
-}
-
-# --- Helper: ask language (Q0, bilingual prompt) ---
-ask_language() {
-    # If SETUP_LANG was supplied externally (env var / preset), skip Q0.
-    if [ "$SETUP_LANG_EXTERNAL" = true ]; then
-        info "Language preset: $SETUP_LANG (from environment / preset)"
-        return
-    fi
-
-    echo ""
-    echo -e "${BOLD}🌐 Choose language / 选择语言${NC}"
-    if [ "$SETUP_LANG" = "zh" ]; then
-        echo "     [1] English"
-        echo "   ▶ [2] 中文 (Simplified Chinese)"
-    else
-        echo "   ▶ [1] English"
-        echo "     [2] 中文 (Simplified Chinese)"
-    fi
-    echo ""
-    local default_idx=1
-    [ "$SETUP_LANG" = "zh" ] && default_idx=2
-    echo -n "   Choose / 选择 [1-2, default=$default_idx]: "
-
-    if [ "$NON_INTERACTIVE" = true ] || [ ! -t 0 ]; then
-        echo "$default_idx (default)"
-        return
-    fi
-
-    local input
-    read -r input
-    input="${input:-$default_idx}"
-    case "$input" in
-        2) SETUP_LANG="zh" ;;
-        1) SETUP_LANG="en" ;;
-        *) ;;  # invalid → keep current default
-    esac
-}
-
-# --- Helper: ask a single-choice question ---
-# Usage: ask_choice "Question?" "default_value" "label1:value1" "label2:value2" ...
-# Sets global variable ASK_RESULT
-ask_choice() {
-    local question="$1"
-    local default="$2"
-    shift 2
-    local -a labels=()
-    local -a values=()
-    for pair in "$@"; do
-        labels+=("${pair%%:*}")
-        values+=("${pair#*:}")
-    done
-
-    echo ""
-    echo -e "${BOLD}❓ $question${NC}"
-    local i=1
-    local default_idx=1
-    for ((j=0; j<${#labels[@]}; j++)); do
-        local marker="  "
-        if [ "${values[$j]}" = "$default" ]; then
-            marker=" ▶"
-            default_idx=$((j+1))
-        fi
-        echo "  $marker [$((j+1))] ${labels[$j]}"
-    done
-    echo ""
-    local prompt_choose
-    prompt_choose=$(t "Choose" "选择")
-    local prompt_default
-    prompt_default=$(t "default" "默认")
-    echo -n "  $prompt_choose [1-${#labels[@]}, $prompt_default=$default_idx]: "
-
-    if [ "$NON_INTERACTIVE" = true ] || [ ! -t 0 ]; then
-        echo "$default_idx ($(t 'non-interactive default' '非交互模式默认值'))"
-        ASK_RESULT="$default"
-        return
-    fi
-
-    local input
-    read -r input
-    input="${input:-$default_idx}"
-
-    if [[ ! "$input" =~ ^[0-9]+$ ]] || [ "$input" -lt 1 ] || [ "$input" -gt "${#labels[@]}" ]; then
-        warn "$(t "Invalid input '$input', using default." "无效输入 '$input'，使用默认值。")"
-        ASK_RESULT="$default"
-        return
-    fi
-
-    ASK_RESULT="${values[$((input-1))]}"
-}
-
-# --- Helper: ask a free-text question (with default) ---
-ask_text() {
-    local question="$1"
-    local default="$2"
-    echo ""
-    echo -e "${BOLD}❓ $question${NC}"
-    if [ -n "$default" ]; then
-        echo -n "  $(t 'Answer' '回答') [$(t 'default' '默认'): $default]: "
-    else
-        echo -n "  $(t 'Answer (leave blank to skip)' '回答（留空跳过）'): "
-    fi
-
-    if [ "$NON_INTERACTIVE" = true ] || [ ! -t 0 ]; then
-        echo "$default ($(t 'non-interactive' '非交互'))"
-        ASK_RESULT="$default"
-        return
-    fi
-
-    local input
-    read -r input
-    ASK_RESULT="${input:-$default}"
-}
-
-# --- Decide whether to run the Q&A ---
-RUN_INTERACTIVE_CONFIG=false
-if [ ! -f "$CONFIG_FILE" ]; then
-    info "No .harness-config.yaml found. Running first-time configuration..."
-    RUN_INTERACTIVE_CONFIG=true
-elif [ "$RECONFIGURE" = true ]; then
-    info "--reconfigure specified. Re-running workflow configuration..."
-    RUN_INTERACTIVE_CONFIG=true
-else
-    ok ".harness-config.yaml already exists. Use --reconfigure to change. (idempotent)"
-fi
-
-if [ "$RUN_INTERACTIVE_CONFIG" = true ]; then
-    # --- Profile file (CI / repeatable setup) ---
-    if [ -n "$PROFILE_FILE" ] && [ -f "$PROFILE_FILE" ]; then
-        info "Loading answers from profile: $PROFILE_FILE"
-        cp "$PROFILE_FILE" "$CONFIG_FILE"
-        ok "Generated: .harness-config.yaml (from profile)"
-    else
-        # Q0: language (bilingual prompt — Q0 itself is shown in both languages)
-        ask_language
-
-        echo ""
-        if [ "$SETUP_LANG" = "zh" ]; then
-            echo "━━━ 工作流配置 (5 个问题) ━━━"
-            echo "  按回车键采用默认值；--non-interactive 全部用默认。"
-        else
-            echo "━━━ Workflow Configuration (5 questions) ━━━"
-            echo "  Skip with Enter to accept defaults; --non-interactive uses all defaults."
-        fi
-        echo ""
-
-        # Q1: Brain
-        if [ "$SETUP_LANG" = "zh" ]; then
-            ask_choice "1/5 启用 Brain（跨对话记忆）？" "true" \
-                "是（推荐）— 自动记录踩坑 / 决策:true" \
-                "否 — 在本项目禁用 Brain:false"
-        else
-            ask_choice "1/5 Use Brain (cross-conversation memory)?" "true" \
-                "Yes (recommended) — auto-record gotchas / decisions:true" \
-                "No — disable Brain for this project:false"
-        fi
-        BRAIN_ENABLED="$ASK_RESULT"
-
-        # Q2: Design mode
-        if [ "$SETUP_LANG" = "zh" ]; then
-            ask_choice "2/5 你的设计是怎么做的？" "html" \
-                "AI 出 HTML 视觉稿（无独立设计师）:html" \
-                "AI 出 spec.json 喂给 Figma Maker / OpenDesign / ClaudeIsland 等:ai_tool_spec" \
-                "AI 出设计简报给真人设计师（Figma）:designer_brief" \
-                "纯后端 / CLI — 跳过设计阶段:skip"
-        else
-            ask_choice "2/5 How is your design work done?" "html" \
-                "AI outputs HTML mockup (no separate designer):html" \
-                "AI outputs spec.json for Figma Maker / OpenDesign / ClaudeIsland etc.:ai_tool_spec" \
-                "AI outputs design brief for a human designer (Figma):designer_brief" \
-                "Pure backend / CLI — skip design phase:skip"
-        fi
-        DESIGN_MODE="$ASK_RESULT"
-
-        DESIGN_AI_TOOL="generic"
-        if [ "$DESIGN_MODE" = "ai_tool_spec" ]; then
-            if [ "$SETUP_LANG" = "zh" ]; then
-                ask_choice "  └─ 用哪个 AI 设计工具？" "generic" \
-                    "通用（兼容性最好）:generic" \
-                    "Figma Maker:figma_maker" \
-                    "OpenDesign:open_design" \
-                    "ClaudeIsland:claude_island"
-            else
-                ask_choice "  └─ Which AI design tool?" "generic" \
-                    "Generic (most compatible):generic" \
-                    "Figma Maker:figma_maker" \
-                    "OpenDesign:open_design" \
-                    "ClaudeIsland:claude_island"
-            fi
-            DESIGN_AI_TOOL="$ASK_RESULT"
-        fi
-
-        # Q3: Dev scope
-        if [ "$SETUP_LANG" = "zh" ]; then
-            ask_choice "3/5 开发范围？" "fullstack" \
-                "全栈（后端 + 前端）:fullstack" \
-                "仅后端:backend_only" \
-                "仅前端:frontend_only" \
-                "移动端 / 桌面客户端（Swift / Kotlin / RN / Flutter）:mobile" \
-                "CLI / 库:cli_lib"
-        else
-            ask_choice "3/5 Dev scope?" "fullstack" \
-                "Full-stack (backend + frontend):fullstack" \
-                "Backend only:backend_only" \
-                "Frontend only:frontend_only" \
-                "Mobile / desktop client (Swift / Kotlin / RN / Flutter):mobile" \
-                "CLI / library:cli_lib"
-        fi
-        DEV_SCOPE="$ASK_RESULT"
-
-        # Q4: Testing
-        if [ "$SETUP_LANG" = "zh" ]; then
-            ask_choice "4/5 测试投入？" "critical_path" \
-                "严格 TDD（覆盖率 ≥80%，测试先行）:strict_tdd" \
-                "关键路径覆盖（覆盖率 ≥50%，仅 P0 用例）:critical_path" \
-                "仅冒烟（核心场景手测）:smoke_only" \
-                "不写测试（跳过 QA Agent）:none"
-        else
-            ask_choice "4/5 Testing strictness?" "critical_path" \
-                "Strict TDD (≥80% coverage, tests-first):strict_tdd" \
-                "Critical path only (≥50% coverage, P0 cases):critical_path" \
-                "Smoke only (manual key flows):smoke_only" \
-                "No tests (skip QA Agent):none"
-        fi
-        TESTING_MODE="$ASK_RESULT"
-
-        # Q5: Strictness
-        if [ "$SETUP_LANG" = "zh" ]; then
-            ask_choice "5/5 流程严格度？" "soft" \
-                "强门禁（PRD 不锁定不让动代码）:strong" \
-                "软提示（推荐 — 警告但允许跳过）:soft" \
-                "自由（用户主导，AI 不主动拦截）:free"
-        else
-            ask_choice "5/5 Workflow strictness?" "soft" \
-                "Strong gate (PRD must be locked before any code):strong" \
-                "Soft hint (recommended — warn but allow override):soft" \
-                "Free (user-driven, AI never blocks):free"
-        fi
-        STRICTNESS_MODE="$ASK_RESULT"
-
-        # --- Render config from template ---
-        if [ -f "$TEMPLATE_FILE" ]; then
-            cp "$TEMPLATE_FILE" "$CONFIG_FILE"
-            # Patch the answers in (sed in-place; macOS-compatible)
-            SED_INPLACE=(-i '')
-            if sed --version >/dev/null 2>&1; then
-                SED_INPLACE=(-i)
-            fi
-            sed "${SED_INPLACE[@]}" -E "s/^(  language:) \"en\".*/\\1 \"${SETUP_LANG}\"/" "$CONFIG_FILE"
-            sed "${SED_INPLACE[@]}" -E "s/^(  enabled:) .*/\\1 ${BRAIN_ENABLED}/" "$CONFIG_FILE"
-            sed "${SED_INPLACE[@]}" -E "s/^(  mode:) \"html\".*/\\1 \"${DESIGN_MODE}\"/" "$CONFIG_FILE"
-            sed "${SED_INPLACE[@]}" -E "s/^(  ai_tool:) \"generic\".*/\\1 \"${DESIGN_AI_TOOL}\"/" "$CONFIG_FILE"
-            sed "${SED_INPLACE[@]}" -E "s/^(  scope:) \"fullstack\".*/\\1 \"${DEV_SCOPE}\"/" "$CONFIG_FILE"
-            sed "${SED_INPLACE[@]}" -E "s/^(  mode:) \"critical_path\".*/\\1 \"${TESTING_MODE}\"/" "$CONFIG_FILE"
-            sed "${SED_INPLACE[@]}" -E "s/^(  mode:) \"soft\".*/\\1 \"${STRICTNESS_MODE}\"/" "$CONFIG_FILE"
-            ok "$(t 'Generated: .harness-config.yaml' '生成: .harness-config.yaml')"
-        else
-            warn ".harness-config.template.yaml not found. Writing minimal config..."
-            cat > "$CONFIG_FILE" <<EOF
-version: 1
-meta: { language: "${SETUP_LANG}" }
-brain: { enabled: ${BRAIN_ENABLED}, path: "~/.mick-brain" }
-design: { mode: "${DESIGN_MODE}", ai_tool: "${DESIGN_AI_TOOL}" }
-dev: { scope: "${DEV_SCOPE}", tech_stack: { language: "", framework: "", database: "", package_manager: "" } }
-testing: { mode: "${TESTING_MODE}", coverage_threshold: 50 }
-strictness: { mode: "${STRICTNESS_MODE}", pm_max_rounds: 3 }
-EOF
-            ok "Generated: .harness-config.yaml (minimal)"
-        fi
-
-        # --- Update STATE.md if design.mode = skip ---
-        STATE_FILE="$TARGET_DIR/docs/STATE.md"
-        if [ "$DESIGN_MODE" = "skip" ] && [ -f "$STATE_FILE" ]; then
-            info "$(t 'design.mode=skip → reminder: review docs/STATE.md and remove the Designer line' \
-                       'design.mode=skip → 提醒：请检查 docs/STATE.md 并移除 Designer 阶段那一行')"
-        fi
-
-        echo ""
-        if [ "$SETUP_LANG" = "zh" ]; then
-            echo "  📋 配置概要："
-            echo "    meta.language    = ${SETUP_LANG}"
-            echo "    brain.enabled    = ${BRAIN_ENABLED}"
-            echo "    design.mode      = ${DESIGN_MODE} (${DESIGN_AI_TOOL})"
-            echo "    dev.scope        = ${DEV_SCOPE}"
-            echo "    testing.mode     = ${TESTING_MODE}"
-            echo "    strictness.mode  = ${STRICTNESS_MODE}"
-            echo ""
-            echo "  💡 随时编辑：\$EDITOR .harness-config.yaml"
-            echo "  💡 重跑问答：.harness/setup.sh --reconfigure"
-        else
-            echo "  📋 Configuration summary:"
-            echo "    meta.language    = ${SETUP_LANG}"
-            echo "    brain.enabled    = ${BRAIN_ENABLED}"
-            echo "    design.mode      = ${DESIGN_MODE} (${DESIGN_AI_TOOL})"
-            echo "    dev.scope        = ${DEV_SCOPE}"
-            echo "    testing.mode     = ${TESTING_MODE}"
-            echo "    strictness.mode  = ${STRICTNESS_MODE}"
-            echo ""
-            echo "  💡 Edit anytime: \$EDITOR .harness-config.yaml"
-            echo "  💡 Re-run Q&A:   .harness/setup.sh --reconfigure"
-        fi
-    fi
-fi
-
-echo ""
-
-# ============================================================
-# Phase 4: Multi-IDE rule injection
-# ============================================================
-info "Phase 5/7: Detecting and injecting multi-IDE rules..."
-
-inject_brain_rules() {
-    local target_file="$1"
-    local ide_name="$2"
-
-    if grep -q "Brain Auto-Write Protocol" "$target_file" 2>/dev/null; then
-        ok "$ide_name: Brain auto-write rules already present. (idempotent)"
-        return
-    fi
-
-    local template="$HARNESS_ROOT/brain-rules-template.md"
-    if [ ! -f "$template" ]; then
-        warn "brain-rules-template.md not found. Skipping $ide_name injection."
-        return
-    fi
-
-    echo "" >> "$target_file"
-    sed "s/<ide>/$ide_name/g" "$template" >> "$target_file"
-    ok "$ide_name: Brain auto-write rules injected."
-}
-
-# Windsurf
-WINDSURF_RULES="$TARGET_DIR/.windsurfrules"
-if [ -f "$WINDSURF_RULES" ]; then
-    inject_brain_rules "$WINDSURF_RULES" "windsurf"
-fi
-
-# Trae
-TRAE_RULES_DIR="$TARGET_DIR/.trae"
-if [ -d "$TRAE_RULES_DIR" ]; then
-    for trae_file in "$TRAE_RULES_DIR/rules" "$TRAE_RULES_DIR/rules.md"; do
-        if [ -f "$trae_file" ]; then
-            inject_brain_rules "$trae_file" "trae"
-            break
-        fi
-    done
-fi
-
-# VS Code Copilot
-COPILOT_INSTRUCTIONS="$TARGET_DIR/.github/copilot-instructions.md"
-if [ -f "$COPILOT_INSTRUCTIONS" ]; then
-    inject_brain_rules "$COPILOT_INSTRUCTIONS" "copilot"
-fi
-
-# Add extra IDE files to .gitignore
-EXTRA_IGNORE=()
-[ -f "$WINDSURF_RULES" ] && EXTRA_IGNORE+=(".windsurfrules")
-[ -d "$TRAE_RULES_DIR" ] && EXTRA_IGNORE+=(".trae/")
-
-if [ ${#EXTRA_IGNORE[@]} -gt 0 ]; then
-    for entry in "${EXTRA_IGNORE[@]}"; do
-        if ! grep -qxF "$entry" "$GITIGNORE" 2>/dev/null; then
-            echo "$entry" >> "$GITIGNORE"
-            info "Added $entry to .gitignore"
-        fi
-    done
-fi
-
-ok "Multi-IDE detection complete."
-echo ""
+info "Phase 4/6: Multi-IDE rules..."
+ok "All IDE rule files (Cursor/Windsurf/Cline/Copilot/Trae/AGENTS.md/CLAUDE.md) are"
+ok "  generated from a single source and mounted in Phase 1. Nothing to inject."echo ""
 
 # ============================================================
 # Phase 5: Brain repo — clone/connect
@@ -966,8 +558,10 @@ else
 fi
 echo ""
 echo "  What happened:"
-echo "    ✅ .cursorrules → .harness/.cursorrules (AI coding rules)"
-echo "    ✅ .prompts/    → .harness/.prompts/    (Agent role templates)"
+echo "    ✅ Rule files generated from single source (rules/core.md + extended.md):"
+echo "         AGENTS.md · CLAUDE.md · .cursorrules · .windsurfrules · .clinerules"
+echo "         .github/copilot-instructions.md · .trae/rules.md  (all → .harness/dist/)"
+echo "    ✅ .prompts/    → .harness/rules/roles/  (Agent role templates)"
 echo "    ✅ .gitignore   updated (harness files isolated from project Git)"
 if [ "$SKIP_VIBE" = false ]; then
     echo "    ✅ MEMORY.md, TODO.md, docs/architecture.md deployed"
@@ -982,11 +576,17 @@ else
 fi
 echo ""
 echo "  Next steps:"
-echo "    1. Review .harness-config.yaml (or run --reconfigure to redo Q&A)"
-echo "    2. Fill in Tech Stack Constraints in .cursorrules (or in config's dev.tech_stack)"
-echo "    3. Start your first AI conversation — it will read STATE.md + config."
-echo "    4. Use '.harness/brain-push.sh' to write learnings."
+echo "    1. Fill in Tech Stack Constraints in .harness/rules/extended.md, then"
+echo "       re-run '.harness/generate.sh' to propagate to every tool."
+echo "    2. Start your first AI conversation — it will auto-detect the blank"
+echo "       architecture.md and guide you through Goal Discovery."
+echo "    3. Use '.harness/brain-push.sh' to write learnings."
+echo "    4. Use '.harness/brain-search.sh <keyword>' to search memory."
+echo ""
+echo "  Edit rules once, regenerate everywhere:"
+echo "    vim .harness/rules/core.md   # the 10 core rules (weak-model optimized)"
+echo "    .harness/generate.sh         # rebuild all IDE rule files"
 echo ""
 echo "  Update harness:"
-echo "    cd .harness && git pull"
+echo "    cd .harness && git pull && ./generate.sh"
 echo ""

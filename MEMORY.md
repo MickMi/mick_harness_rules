@@ -134,6 +134,18 @@
   - **向后兼容**：缺失 `.harness-config.yaml` 时所有 Agent 走默认行为（等同于 v2），不报错。
   - 设计目标：让工作流从"对所有人一刀切"升级为"按用户工具栈自适应"。
 
+- [2026-06-08] ADR-018: 单源规则体系 + 弱模型优化（Single-Source Rules / 方向B）
+  - **问题**：旧体系核心规则只维护在一份 `.cursorrules`（Cursor 专有，128 行），其他 IDE 只追加 brain 写入协议、不含编码规范；长指令对弱推理模型（GLM/Qwen/DeepSeek/Trae）遵循率低。
+  - **单一数据源**：`rules/core.md`（10 条铁律，弱模型优化，极短极硬）+ `rules/extended.md`（完整工程深度）。
+  - **生成器 `generate.sh`**：两套 profile —— lean（core 内联 + extended 指针，省 context：AGENTS/CLAUDE/Copilot/Trae）、full（全量内联：Cursor/Windsurf/Cline）。产物落 `dist/`（gitignore，每次 mount 前重生成）。
+  - **AGENTS.md 一等输出**：对接 2025 跨工具标准（Codex/Zed/Aider）。
+  - **共享挂载库 `lib-mount-rules.sh`**：`setup.sh` 与 `brain-init.sh` 都 source 它，避免两入口漂移；只 gitignore harness 真正 symlink 的文件（不误伤项目自有的 AGENTS.md/CLAUDE.md）。
+  - **角色路由简化**：弱模型不做自动路由，改显式点名（extended.md 第 8 节）；`.prompts/` → `rules/roles/`，补齐一直缺失的 `designer.md`。
+  - **Brain 写入下沉**：并入 extended.md 第 9 节，随生成器流入 full-profile 文件，弃用 `brain-rules-template.md` + 各脚本的 inject 逻辑。
+  - **顺带修复**：`brain-resolve.sh` 双源守卫在 `set -u` 下崩溃（`$BRAIN_RESOLVE_LOADED` → `${BRAIN_RESOLVE_LOADED:-}`），此前会让 brain-check 整体失败。
+  - **删除**：根 `.cursorrules`、`brain-rules-template.md`（均被单源取代）。
+  - **新增检查**：brain-check Check 13 验证 dist/ 与单源同步 + AGENTS.md 已挂载。
+
 ## ⚠️ 已知天坑与环境限制 (Gotchas)
 *💡 可检索的详细记忆请查阅 `brain/global/` 目录，本文件侧重于决策日志。*
 

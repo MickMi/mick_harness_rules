@@ -14,9 +14,7 @@
 #   BRAIN_REPO_REMOTE — remote URL of brain repo (if configured)
 # ============================================================
 
-# Prevent double-sourcing
-# Use ${VAR:-} pattern: callers set -u (nounset), so a bare $BRAIN_RESOLVE_LOADED
-# would error out the first time this file is sourced.
+# Prevent double-sourcing (guard against set -u: default to empty if unset)
 if [ -n "${BRAIN_RESOLVE_LOADED:-}" ]; then
     return 0 2>/dev/null || true
 fi

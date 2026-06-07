@@ -5,14 +5,28 @@
 它围绕两个核心能力展开：
 
 - **Harness（工程护栏）**
-  - `.cursorrules` 全局编码规范
+  - **单源规则体系**：`rules/core.md`（10 条铁律，弱模型优化）+ `rules/extended.md`（完整工程规范），一份维护
+  - **多格式生成**：`generate.sh` 自动产出 `AGENTS.md` / `CLAUDE.md` / `.cursorrules` / `.windsurfrules` / `.clinerules` / `copilot-instructions.md` / `.trae/rules.md`
   - 多 Agent 角色协作（PM / Designer / QA / Reviewer / Dev）
   - 强制需求审查门禁
   - Git 工作流 + CI/CD 护栏
 - **Brain（个人记忆）**
   - 三层记忆模型（Global / Project / Session）
   - 自动蒸馏 + 检索优先
-  - 多 IDE 自动写入
+  - 自动写入随生成器流入各 IDE 规则文件
+
+### 为什么是单源 + 弱模型优化
+
+旧版核心规范只活在一份 Cursor 专有的 `.cursorrules` 里，长达上百行——对推理较弱的模型（GLM / Qwen / DeepSeek / Trae 等）指令遵循率会断崖下跌，排在后面的规则几乎不执行。
+
+新版把规则拆成两层：
+
+| 层 | 文件 | 谁读 | 形态 |
+|----|------|------|------|
+| **core** | `rules/core.md` | 所有工具（含弱模型） | 10 条铁律，极短极硬，编号祈使句，最关键的排最前 |
+| **extended** | `rules/extended.md` | 强模型 / 按需读取 | 代码哲学、Git、CI-CD、测试、角色协作、Brain 写入 |
+
+`generate.sh` 用两套 profile 分发：**lean**（弱模型 / AGENTS / Claude / Copilot / Trae —— core 内联 + extended 指针，省 context）和 **full**（Cursor / Windsurf / Cline —— 全量内联）。改一处 `core.md`，跑一次 `generate.sh`，所有工具同步更新。
 
 ## 这个项目解决什么问题
 
@@ -200,18 +214,15 @@ Global（跨项目通用经验）
 
 ## Agent 角色
 
-内置 5 个 Agent 角色，通过 **`docs/STATE.md` 状态驱动调度** + **`.harness-config.yaml` 工具栈适配**自动激活（v3，详见 `.prompts/orchestration.md`）：
+内置 5 个 Agent 角色（源文件在 `rules/roles/`，项目里映射为 `.prompts/`）。弱模型不可靠地自动切换角色，因此改为**显式点名调用**：
 
-| 角色 | 文件 | 职责 | 主要产物（受 config 影响） |
-|------|------|------|---------|
-| **PM Agent** | `.prompts/pm_agent.md` | 需求审查、三轮追问、输出 PRD | `docs/PRD-<feature>.md` |
-| **Designer Agent** | `.prompts/designer_agent.md` | UI/UX 设计 | 由 `design.mode` 决定：HTML / spec.json / brief / 跳过 |
-| **QA Agent** | `.prompts/qa_agent.md` | 测试策略、用例矩阵 | 由 `testing.mode` 决定严格度，`none` 时跳过 |
-| **Reviewer Agent** | `.prompts/reviewer_agent.md` | 代码审查 | `docs/reviews/<feature>-<date>.md` |
-| **Dev Agent** | `.cursorrules` | 编码实现（默认角色） | 源代码 + 测试（按 `dev.scope` 边界） |
-
-> **v3 调度原则**：AI 在每次回复前先读 `.harness-config.yaml`（决定**怎么做**）+ `docs/STATE.md`（决定**当前在哪一步**），然后激活对应角色。
-> 你不再需要每次手动喊"找谁"——意图明显跨阶段时，AI 按 `strictness.mode` 决定是否反问。
+| 角色 | 文件 | 职责 | 唤起 |
+|------|------|------|------|
+| **PM Agent** | `rules/roles/pm.md` | 需求审查、三轮追问、目标发现 | "用 PM 角色评审需求" |
+| **Designer Agent** | `rules/roles/designer.md` | UI/UX 设计、设计代币、组件规格 | "用 Designer 角色出设计" |
+| **QA Agent** | `rules/roles/qa.md` | 测试策略、用例矩阵、质量门禁 | "用 QA 角色制定测试" |
+| **Reviewer Agent** | `rules/roles/reviewer.md` | 代码审查、逻辑完备性、安全审计 | "用 Reviewer 角色审查" |
+| **Dev Agent** | `rules/extended.md` | 编码实现、调试、架构设计（默认角色） | 默认 |
 
 ### 需求审查门禁
 
@@ -229,29 +240,33 @@ Global（跨项目通用经验）
 
 ```
 mick_harness_rules/
-├── .cursorrules              # 全局编码规范 + 状态驱动角色调度 + Brain 自动写入协议
-├── .harness-config.template.yaml  # ✨ v3：项目级工作流配置模板（5 维度）
+├── rules/                    # ⭐ 单一数据源
+│   ├── core.md               #   10 条铁律（弱模型优化，所有工具都读）
+│   ├── extended.md           #   完整工程规范 + 角色协作 + Brain 写入 + Plan-Execute Protocol
+│   └── roles/                #   Agent 角色模板（项目里映射为 .prompts/）
+│       ├── orchestration.md  #     角色编排协议
+│       ├── pm.md             #     PM 角色（需求审查官）
+│       ├── designer.md       #     Designer 角色
+│       ├── qa.md             #     QA 角色
+│       └── reviewer.md       #     Reviewer 角色
+├── generate.sh               # ⭐ 单源 → 多格式生成器（--check 校验同步）
+├── dist/                     # 生成产物（gitignore，每次 mount 前重建）
+│   ├── AGENTS.md  CLAUDE.md  .cursorrules  .windsurfrules  .clinerules
+│   ├── .github/copilot-instructions.md
+│   └── .trae/rules.md
+├── lib-mount-rules.sh        # 共享挂载库（setup.sh / brain-init.sh 共用，防漂移）
 ├── .brain-config.yaml        # Brain 配置（仓库地址、保留策略、搜索引擎）
-├── .gitignore                # 忽略 brain 个人数据（双仓库隔离）
-├── .prompts/                 # Agent 角色模板
-│   ├── orchestration.md      # 角色编排协议 v3（状态驱动 + config 适配）
-│   ├── pm_agent.md           # PM 角色（需求审查官，输出 PRD-<feature>.md）
-│   ├── designer_agent.md     # Designer 角色（v3：4 种 mode，由 config 决定）
-│   ├── qa_agent.md           # QA 角色
-│   └── reviewer_agent.md     # Reviewer 角色
-├── docs/
-│   └── STATE.template.md     # 流程状态机模板（v2 新增，调度的 single source of truth）
+├── .gitignore                # 忽略 brain 个人数据 + dist/
 ├── brain/                    # → symlink 到 ~/.mick-brain/（私有 brain 仓库）
 ├── setup.sh                  # ⭐ 一键初始化（含交互式问答 + --reconfigure）
 ├── brain-init.sh             # 挂载 harness + brain（全局仓库 symlink 模式）
 ├── brain-resolve.sh          # 共享库：解析 brain 数据路径（双仓库/单仓库自动适配）
 ├── brain-migrate.sh          # 一次性迁移脚本（单仓库 → 双仓库）
-├── brain-check.sh            # 验证脚手架完整性（12 项检查，含 brain 仓库连接）
+├── brain-check.sh            # 验证脚手架完整性（13 项检查，含单源同步）
 ├── brain-push.sh             # 向 brain 写入记忆（CLI / 剪贴板 / 交互模式）
 ├── brain-search.sh           # 基于 ripgrep 的记忆检索
 ├── brain-compound.sh         # 智能蒸馏（Session → Project → Global）
 ├── brain-gc.sh               # 容量治理（归档 + 清理）
-├── brain-rules-template.md   # 多 IDE 通用的自动写入规则模板
 ├── vibe-init.sh              # Vibe Coding 脚手架初始化（自动链式调用 brain-init）
 ├── docs/
 │   ├── architecture.md       # Harness 自身的系统架构文档
@@ -284,17 +299,22 @@ mick_harness_rules/
 
 ## 多 IDE 支持
 
-`brain-init.sh` 会自动检测并注入自动写入规则：
+所有规则文件都由 `generate.sh` 从单一数据源产出，再由 `setup.sh` / `brain-init.sh` 以 symlink 挂载到项目（`.gitignore` 隔离，只忽略 harness 真正接管的文件）：
 
-| IDE | 规则文件 | 注入方式 |
-|-----|---------|---------|
-| Cursor | `.cursorrules` | symlink（`.gitignore` 隔离） |
-| Agent Prompts | `.prompts/` | symlink（`.gitignore` 隔离） |
-| Windsurf | `.windsurfrules` | 追加 |
-| Trae | `.trae/rules` | 追加 |
-| VS Code Copilot | `.github/copilot-instructions.md` | 追加 |
+| 工具 | 规则文件 | profile | 内容 |
+|-----|---------|---------|------|
+| Codex / Zed / Aider | `AGENTS.md` | lean | core 内联 + extended 指针 |
+| Claude Code | `CLAUDE.md` | lean | core 内联 + extended 指针 |
+| Cursor | `.cursorrules` | full | core + extended 全量 |
+| Windsurf | `.windsurfrules` | full | core + extended 全量 |
+| Cline / Roo | `.clinerules` | full | core + extended 全量 |
+| VS Code Copilot | `.github/copilot-instructions.md` | lean | core 内联 + extended 指针 |
+| Trae | `.trae/rules.md` | lean | core 内联 + extended 指针 |
+| Agent 角色 | `.prompts/` → `rules/roles/` | — | 显式点名调用 |
 
-AI 会在以下事件发生时自动写入记忆：
+> 改规则只需编辑 `rules/core.md` 或 `rules/extended.md`，再跑 `.harness/generate.sh`，全部工具同步更新。
+
+AI 会在以下事件发生时自动写入记忆（强模型 / 支持 shell 的环境）：
 
 - 🐛 **Gotcha** — 非显而易见的 Bug、API 怪癖、库限制
 - 🏗️ **Decision** — 选择了某个库/方案，做了取舍
