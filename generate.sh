@@ -9,9 +9,10 @@ set -euo pipefail
 #   rules/extended.md  (full engineering depth)
 #
 # Produces IDE/agent-specific rule files into dist/, each assembled
-# under one of two profiles:
-#   lean  → core inline + pointer to extended  (small context; weak models, AGENTS.md, Claude, Copilot, Trae)
-#   full  → core + extended fully inline       (Cursor, Windsurf, Cline)
+# under one of three profiles:
+#   minimal → only project-specific constraints (strong models: Claude Code)
+#   lean    → core inline + pointer to extended (weak models: AGENTS.md, Copilot, Trae)
+#   full    → core + extended fully inline      (medium models: Cursor, Windsurf, Cline)
 #
 # setup.sh symlinks the project-root rule files to dist/<file>, so a
 # single edit to core.md / extended.md propagates everywhere after
@@ -57,7 +58,7 @@ EOF
 }
 
 # Build one target file body to stdout.
-#   $1 = profile (lean|full)
+#   $1 = profile (minimal|lean|full)
 #   $2 = tool display name (for the intro line)
 render() {
     local profile="$1" tool="$2"
@@ -65,28 +66,56 @@ render() {
     echo ""
     echo "# 工程规范 · $tool"
     echo ""
-    echo "> 本项目使用 Mick Harness 单源规则体系。下面的「核心铁律」是最高优先级，任何情况不可违反。"
-    echo ""
-    cat "$CORE"
-    echo ""
-    if [ "$profile" = "full" ]; then
-        echo "---"
+
+    if [ "$profile" = "minimal" ]; then
+        # Minimal profile: only rules the tool DOESN'T enforce natively.
+        # For strong models (Claude Code) that already have built-in:
+        #   - read before edit, plan before act, ask when unclear
+        #   - defensive coding, error analysis, self-review
+        #   - permission system for dangerous ops
+        echo "> 本项目使用 Mick Harness。你的内建能力已覆盖大部分编码规范，以下仅补充你不知道的项目级约束。"
         echo ""
-        cat "$EXTENDED"
-    else
-        echo "---"
+        echo "## 项目级约束"
+        echo ""
+        echo "**⚡ 前置检查**：开始任何任务前，先看 \`.harness/plan.md\` 是否存在。存在则读取它，按其中的步骤逐一执行，每完成一步将 \`[ ]\` 改为 \`[x]\`。不存在则跳过本条，正常工作。"
+        echo ""
+        echo "**锁死技术栈**：不擅自更换语言/框架/库，不擅自引入新依赖。要换先说明原因并等用户确认。"
+        echo ""
+        echo "**收尾格式**：完成后报告「做了什么 / 为什么这么做 / 改了哪些文件」，先说业务结果再说技术细节。"
+        echo ""
+        echo "## 角色协作"
+        echo ""
+        echo "需要需求评审、测试策略、代码审查时，用户会明确点名对应角色。"
+        echo "角色文件见 \`.harness/rules/roles/\`（pm.md / qa.md / reviewer.md / designer.md）。"
         echo ""
         echo "## 详细规范"
         echo ""
-        echo "完整工程规范（代码哲学 / Git / CI-CD / 测试 / 角色协作）见 \`.harness/rules/extended.md\`。"
-        echo "需要时主动读取该文件，不要凭印象编造规范。"
+        echo "完整工程规范（Git / CI-CD / 测试 / Brain 记忆写入 / Plan-Execute Protocol）见 \`.harness/rules/extended.md\`。"
+        echo "需要时主动读取该文件。"
+    else
+        echo "> 本项目使用 Mick Harness 单源规则体系。下面的「核心铁律」是最高优先级，任何情况不可违反。"
+        echo ""
+        cat "$CORE"
+        echo ""
+        if [ "$profile" = "full" ]; then
+            echo "---"
+            echo ""
+            cat "$EXTENDED"
+        else
+            echo "---"
+            echo ""
+            echo "## 详细规范"
+            echo ""
+            echo "完整工程规范（代码哲学 / Git / CI-CD / 测试 / 角色协作）见 \`.harness/rules/extended.md\`。"
+            echo "需要时主动读取该文件，不要凭印象编造规范。"
+        fi
     fi
 }
 
 # target_path | profile | display name
 TARGETS=(
     "AGENTS.md|lean|AGENTS.md 通用标准 (Codex / Zed / Aider)"
-    "CLAUDE.md|lean|Claude Code"
+    "CLAUDE.md|minimal|Claude Code"
     ".cursorrules|full|Cursor"
     ".windsurfrules|full|Windsurf"
     ".clinerules|full|Cline / Roo"
