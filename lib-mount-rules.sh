@@ -44,6 +44,63 @@ regenerate_rules() {
     fi
 }
 
+# --- Marker-based injection for files that already exist ---
+# When a project has its own CLAUDE.md / .cursorrules / etc., we can't symlink.
+# Instead, we inject harness content at the top inside marker comments, and
+# leave the project's own content untouched below.
+HARNESS_MARKER_BEGIN="<!-- HARNESS:BEGIN — auto-injected by .harness, do not edit this block -->"
+HARNESS_MARKER_END="<!-- HARNESS:END -->"
+
+# Inject or update the harness block at the top of an existing file.
+# Idempotent: if markers already exist, replaces the block; otherwise prepends.
+#   $1 = target file path (must exist)
+#   $2 = harness content file (dist/ source)
+inject_harness_block() {
+    local target="$1" source="$2"
+
+    # Build the injection block into a temp file
+    local block
+    block="$(mktemp)"
+    {
+        echo "$HARNESS_MARKER_BEGIN"
+        echo ""
+        cat "$source"
+        echo ""
+        echo "$HARNESS_MARKER_END"
+    } > "$block"
+
+    if grep -qF "HARNESS:BEGIN" "$target" 2>/dev/null; then
+        # Markers exist → strip old block, prepend new one (idempotent update).
+        # awk: skip lines inside markers, then trim leading blank lines from remainder.
+        local stripped
+        stripped="$(mktemp)"
+        awk -v begin="HARNESS:BEGIN" -v end="HARNESS:END" '
+            index($0, begin) { skip=1; next }
+            index($0, end)   { skip=0; next }
+            !skip { print }
+        ' "$target" | sed '/./,$!d' > "$stripped"
+
+        {
+            cat "$block"
+            echo ""
+            cat "$stripped"
+        } > "$target"
+        rm -f "$stripped"
+    else
+        # No markers yet → prepend block, then original content
+        local original
+        original="$(mktemp)"
+        cp "$target" "$original"
+        {
+            cat "$block"
+            echo ""
+            cat "$original"
+        } > "$target"
+        rm -f "$original"
+    fi
+    rm -f "$block"
+}
+
 # Populated by mount_rule_files. Caller reads this after the call.
 HARNESS_OWNED_FILES=()
 
@@ -64,12 +121,15 @@ mount_rule_files() {
         fi
         mkdir -p "$(dirname "$link")"
         if [ -L "$link" ]; then
+            # Already a symlink (pure harness-owned) — nothing to do
             ok "$proj_rel symlink already exists. (idempotent)"
             HARNESS_OWNED_FILES+=("$proj_rel")
         elif [ -e "$link" ]; then
-            warn "$proj_rel already exists as a real file. Keeping project's own version."
-            warn "  (To use harness rules, remove it and re-run setup.)"
+            # Project has its own file → inject harness block at top
+            inject_harness_block "$link" "$src"
+            ok "$proj_rel: harness rules injected into existing project file."
         else
+            # No file exists → clean symlink
             ln -s "$src" "$link"
             ok "$proj_rel → .harness/dist/$dist_rel"
             HARNESS_OWNED_FILES+=("$proj_rel")
