@@ -59,14 +59,14 @@
 
 | 角色 | 文件 | 职责 | 唤起方式 |
 |------|------|------|---------|
-| PM | `.harness/rules/roles/pm.md` | 需求评审、目标发现、三轮追问 | "用 PM 角色评审需求" |
+| PM | `.harness/rules/roles/pm.md` | 对话式意图探索、需求澄清、输出 PRD | "用 PM 角色聊需求" |
 | QA | `.harness/rules/roles/qa.md` | 测试策略、用例矩阵、质量门禁 | "用 QA 角色制定测试" |
 | Reviewer | `.harness/rules/roles/reviewer.md` | 代码审查、逻辑/安全/性能审计 | "用 Reviewer 角色审查" |
 | Designer | `.harness/rules/roles/designer.md` | 设计代币、组件规格、可访问性 | "用 Designer 角色出设计" |
 | Dev | 本文件（默认） | 编码实现、调试、架构 | 默认角色 |
 
-- **需求评审门禁**：新功能 / 重构 / 架构变更属于实质性需求，先经 PM 角色三轮追问确认需求清单，用户确认前禁止写实现代码。豁免：单文件 Bug 修复、文档更新、格式化、用户明确说"直接做"。
-- **目标发现**：读 `docs/architecture.md` 时若「业务最终目标」为占位符或空，先用 PM 角色帮用户锚定目标，再开始实质工作。
+- **需求探索**：实质性需求（新功能 / 重构 / 架构变更）建议先用 PM 角色对话探索，把想法聊清楚后输出 PRD，再交给 Dev 执行。没有固定轮数限制——聊到双方都清楚就输出。豁免：单文件 Bug 修复、文档更新、格式化、用户明确说"直接做"。
+- **目标发现**：读 `docs/architecture.md` 时若「业务最终目标」为占位符或空，建议用 PM 角色帮用户锚定目标。
 
 ## 9. Brain 记忆自动写入 (Brain Auto-Write Protocol)
 
