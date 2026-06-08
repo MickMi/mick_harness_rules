@@ -20,7 +20,7 @@
 > **可观测性（v4 新增）**
 >
 > 每次回复的**第一行**必须输出脚手架状态行（Scaffold Status Line），让用户一眼判断 AI 有没有走脚手架。
-> 格式规范见 `.cursorrules` 中的"🪪 强制响应头"章节，本文件仅重申约束：
+> 格式规范如下（这是单一真相源；之前散落在 `.cursorrules` 中的"🪪 强制响应头"章节已废弃）：
 >
 > - `[🎭 {角色} · {feature}@{阶段} · {strictness}/{design}/{testing}]` — 正常走脚手架
 > - `[⚡ 豁免 · {理由} · ...]` — 触发豁免清单
@@ -66,7 +66,7 @@ flowchart TD
     QA -->|5. 测试策略 + 用例| TestDocs[docs/test_strategy + test_cases]
     TestDocs -->|用户确认| AI
 
-    AI -->|当前阶段=Dev| Dev[⚙️ Dev Agent / .cursorrules]
+    AI -->|当前阶段=Dev| Dev[⚙️ Dev Agent / core.md+extended.md]
     Dev -->|6. 代码实现| Code[源代码]
     Code -->|用户验收| AI
 
@@ -114,7 +114,10 @@ flowchart TD
 | **输出 B** | `docs/test_cases-<feature>.md` | 用例矩阵（正向/边界/异常） |
 | **输出 C** | `TODO.md` 测试任务追加 + STATE.md 状态更新 | 勾选 QA 阶段，激活 Dev |
 
-### Dev Agent (`.cursorrules`)
+### Dev Agent（默认角色，规则源 = `core.md` + `extended.md`）
+
+> 各 IDE 的入口规则文件（`.cursorrules` / `.clinerules` / `.windsurfrules` / `CLAUDE.md` / `AGENTS.md` / `.github/copilot-instructions.md` / `.trae/rules.md`）都是 `generate.sh` 从 `core.md` + `extended.md` 生成的 dist 产物——它们承载 Dev Agent 的规则，但**不是规则本身**。改规则永远改 `rules/*.md`，不要改 dist。
+
 | 方向 | 内容 | 格式 |
 |------|------|------|
 | **输入** | `docs/PRD-<feature>.md` + `docs/design/<feature>-*.html` + `docs/test_cases-<feature>.md` + `MEMORY.md` | Markdown + HTML + JSON |
@@ -136,7 +139,7 @@ flowchart TD
 ```
 1. 读 docs/STATE.md（如不存在 → 默认激活 PM Agent 引导用户从需求开始）
 2. 找出 **当前阶段** 标记所在的 Agent
-3. 输出 Scaffold Status Line（回复第一行，格式见 .cursorrules 🪪 章节）
+3. 输出 Scaffold Status Line（回复第一行，格式见本文件"可观测性 v4"章节）
 4. 比对用户消息意图：
    ├─ 一致 → 直接以该 Agent 回应（Status Line 前缀 🎭）
    ├─ 跨阶段 → 反问用户（见下方话术），Status Line 前缀 ⚠️
@@ -213,7 +216,8 @@ C) 推翻当前流程，从需求重新审查
 
 ```
 project-root/
-├── .cursorrules              # Dev Agent 全局规则 + 路由（含状态调度）
+├── <ide-entry-file>          # Dev Agent 入口（按 IDE 不同：.cursorrules/.clinerules/.windsurfrules/CLAUDE.md/AGENTS.md/.github/copilot-instructions.md/.trae/rules.md）
+│                              # 全部由 .harness/dist/ 软链而来，源在 .harness/rules/{core,extended}.md
 ├── .harness-config.yaml      # ✨ v3 新增：项目级工作流配置（commit 到项目）
 ├── .prompts/                 # Agent 角色模板
 │   ├── orchestration.md      # 本文档（编排协议 v3）
@@ -258,4 +262,4 @@ project-root/
 1. 在 `docs/` 下创建 `STATE.md`（参考 `STATE.template.md`）
 2. 把已有的 `architecture.md` 中的需求段落抽出来，建 `PRD-<feature>.md`
 3. 如果 design 产物是 JSON tokens，**保留**它们作为跨需求复用资产；新需求按 v2 走 HTML mockup
-4. `.cursorrules` 中的"角色路由"段落已升级为"状态调度"，无需手动改动
+4. `core.md` + `extended.md` 中的"角色路由"段落已升级为"状态调度"，无需手动改动（各 IDE 入口文件由 `generate.sh` 自动同步）

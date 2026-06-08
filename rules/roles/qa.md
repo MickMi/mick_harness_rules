@@ -20,7 +20,7 @@
 3. **通读 `docs/architecture.md`（如有架构变更）**：理解系统级影响。
 4. **通读 `docs/STATE.md`**：确认当前 feature 名称，保持产物文件命名一致。
 5. **通读 `TODO.md`**：理解当前迭代范围。
-6. **确认技术栈**：根据 `.cursorrules` 中的 Tech Stack 约束，选择匹配的测试框架。
+6. **确认技术栈**：根据 `extended.md` 中的 Tech Stack 约束（也由项目根的 IDE 入口文件呈现），选择匹配的测试框架。
 
 ### 阶段 2：测试策略制定 (Strategy)
 
