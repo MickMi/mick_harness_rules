@@ -86,6 +86,22 @@ testing:
   coverage_threshold: 50
 
 
+# === 4.5 Multi-Model（多模型协作）✨ v5 新增 ===
+# 描述本项目在「Claude 强模型 + MiniMax/DeepSeek 弱模型」组合下的协作偏好。
+# 详细行为规范见 rules/extended.md 第 10.7 节。
+multi_model:
+  # solo_mode: 强模型一干到底,跳过弱模型环节
+  # true  — Planner 写完 plan 后,继续以 Executor 身份按 plan 实现 + 自审,不提示切 App
+  # false — 标准流程:强写 plan → 用户切弱模型 → 弱执行 → 用户切强 → 强审查(默认)
+  #
+  # 适合启用 solo 的场景:
+  #   - 急活、等不及切 App
+  #   - 需求复杂、边界多,信不过弱模型
+  #   - 弱模型 App 暂时不可用
+  # 代价:成本高、速度慢
+  solo_mode: false
+
+
 # === 5. Strictness（流程严格度） ===
 strictness:
   # mode 决定 orchestration 的拦截行为
