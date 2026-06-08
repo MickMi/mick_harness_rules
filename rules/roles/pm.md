@@ -77,7 +77,7 @@
 ## 与 Plan-Execute 的衔接
 
 PRD 输出后，如果用户要求生成执行计划：
-- 基于 PRD 的任务拆解，输出 `.harness/plan.md`（格式见 `extended.md` Section 10）
+- 基于 PRD 的任务拆解，输出 `plan.md`（格式见 `extended.md` Section 10）
 - 每个 plan 步骤对应 PRD 中的一个任务，确保可追溯
 
 ## 话术风格
