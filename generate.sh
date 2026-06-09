@@ -10,9 +10,9 @@ set -euo pipefail
 #
 # Produces IDE/agent-specific rule files into dist/, each assembled
 # under one of three profiles:
-#   minimal → only project-specific constraints (strong models: Claude Code)
-#   lean    → core inline + pointer to extended (weak models: AGENTS.md, Copilot, Trae)
-#   full    → core + extended fully inline      (medium models: Cursor, Windsurf, Cline)
+#   minimal → only project-specific constraints (Anthropic Claude 原生模型 in Claude Code)
+#   lean    → core inline + pointer to extended (非原生模型 in Claude Code, AGENTS.md, Copilot, Trae)
+#   full    → core + extended fully inline      (Cursor, Windsurf, Cline)
 #
 # setup.sh symlinks the project-root rule files to dist/<file>, so a
 # single edit to core.md / extended.md propagates everywhere after
@@ -115,7 +115,7 @@ render() {
 # target_path | profile | display name
 TARGETS=(
     "AGENTS.md|lean|AGENTS.md 通用标准 (Codex / Zed / Aider)"
-    "CLAUDE.md|minimal|Claude Code"
+    "CLAUDE.md|lean|Claude Code"
     ".cursorrules|full|Cursor"
     ".windsurfrules|full|Windsurf"
     ".clinerules|full|Cline / Roo"
