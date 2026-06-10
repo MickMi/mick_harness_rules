@@ -282,11 +282,49 @@ else
 fi
 
 # ============================================================
+# Phase 3.5: Workflow configuration → .harness-config.yaml
+# ============================================================
+info "Phase 3.5: Workflow configuration..."
+
+CONFIG_FILE="$TARGET_DIR/.harness-config.yaml"
+TEMPLATE_FILE="$HARNESS_ROOT/.harness-config.template.yaml"
+
+if [ -f "$CONFIG_FILE" ] && [ "$RECONFIGURE" = false ]; then
+    ok ".harness-config.yaml already exists. Use --reconfigure to regenerate. (idempotent)"
+else
+    if [ -n "$PROFILE_FILE" ] && [ ! -f "$PROFILE_FILE" ]; then
+        warn "Profile file not found: $PROFILE_FILE. Falling back to template defaults."
+    fi
+    if [ -n "$PROFILE_FILE" ] && [ -f "$PROFILE_FILE" ]; then
+        cp "$PROFILE_FILE" "$CONFIG_FILE"
+        ok "Generated: .harness-config.yaml (from profile: $PROFILE_FILE)"
+    elif [ -f "$TEMPLATE_FILE" ]; then
+        cp "$TEMPLATE_FILE" "$CONFIG_FILE"
+        ok "Generated: .harness-config.yaml (template defaults)"
+        info "Edit anytime: \$EDITOR .harness-config.yaml — or re-run with --reconfigure"
+    else
+        warn ".harness-config.template.yaml not found. Writing minimal config..."
+        cat > "$CONFIG_FILE" <<EOF
+version: 1
+meta: { language: "en" }
+brain: { enabled: true, path: "~/.mick-brain" }
+design: { mode: "html", ai_tool: "generic" }
+dev: { scope: "fullstack", tech_stack: { language: "", framework: "", database: "", package_manager: "" } }
+testing: { mode: "critical_path", coverage_threshold: 50 }
+strictness: { mode: "soft", pm_max_rounds: 3 }
+EOF
+        ok "Generated: .harness-config.yaml (minimal)"
+    fi
+fi
+echo ""
+
+# ============================================================
 # Phase 4: Multi-IDE rules — handled by single-source generator
 # ============================================================
 info "Phase 4/6: Multi-IDE rules..."
 ok "All IDE rule files (Cursor/Windsurf/Cline/Copilot/Trae/AGENTS.md/CLAUDE.md) are"
-ok "  generated from a single source and mounted in Phase 1. Nothing to inject."echo ""
+ok "  generated from a single source and mounted in Phase 1. Nothing to inject."
+echo ""
 
 # ============================================================
 # Phase 5: Brain repo — clone/connect
@@ -566,7 +604,7 @@ echo "    ✅ .gitignore   updated (harness files isolated from project Git)"
 if [ "$SKIP_VIBE" = false ]; then
     echo "    ✅ MEMORY.md, TODO.md, docs/architecture.md deployed"
 fi
-if [ -f "$CONFIG_FILE" ]; then
+if [ -f "${CONFIG_FILE:-}" ]; then
     echo "    ✅ .harness-config.yaml ready (workflow config — commit to project)"
 fi
 if [ "$BRAIN_IS_EXTERNAL" = "true" ]; then
