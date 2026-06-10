@@ -60,6 +60,8 @@
 | 角色 | 文件 | 职责 | 唤起方式 |
 |------|------|------|---------|
 | PM | `.harness/rules/roles/pm.md` | 对话式意图探索、需求澄清、输出 PRD | "用 PM 角色聊需求" |
+| Planner | `.harness/rules/roles/planner.md` | 复杂 feature 的富 plan.md（DDL / API 契约 / 禁止项 / 完成判定） | "用 Planner 角色写 plan" |
+| Executor | `.harness/rules/roles/executor.md` | 严格按 plan.md 翻译成代码，遇缺口回流 | "用 Executor 角色执行" / 弱模型默认 |
 | QA | `.harness/rules/roles/qa.md` | 测试策略、用例矩阵、质量门禁 | "用 QA 角色制定测试" |
 | Reviewer | `.harness/rules/roles/reviewer.md` | 代码审查、逻辑/安全/性能审计 | "用 Reviewer 角色审查" |
 | Designer | `.harness/rules/roles/designer.md` | 设计代币、组件规格、可访问性 | "用 Designer 角色出设计" |
@@ -145,6 +147,12 @@
 8. **关键字段路径用反引号**：如 `built.groups[0].matches[0]`，便于 Executor 字面匹配验证。
 9. **能贴代码就贴代码**：对关键步骤直接给出可抄的代码片段，剥夺弱模型自由发挥空间——这是最有效的对齐手段。
 
+#### 富模板（复杂 feature 时用）
+
+涉及 **DDL 变更 / 新建多个文件 / 破坏性改动 / 跨模块协调**时，在上面标准 section 之外**追加** `## 表结构变更` / `## 文件级 API 契约` / `## 禁止项` / `## 完成判定` / `## 来自 Brain 的相关约束` 段。
+
+弱模型最容易翻车的五个洞——猜函数签名、自造 schema、"顺手优化"、模糊打勾、卡住硬编——靠这五段堵住。完整模板、填写纪律、何时用基础 / 何时用富模板的取舍见 `rules/roles/planner.md`。
+
 ### 10.3 Executor 职责（任意模型，含弱模型）
 
 Executor 的行为已由 `core.md` 前置检查规则触发。
@@ -201,6 +209,8 @@ C. 当前 plan 实际可行，是我误读——请确认
 - 修改 plan 的"目标/约束/步骤/验收标准"内容（只能标完成、加执行备注、写沟通区）
 - 在 plan 范围外做额外改动（除非 plan 中显式说明"完成后可自行优化"）
 - 看到项目里有"脏数据/配置遗漏"就自动切到清理模式——plan 存在时，工作内容由 plan 决定
+
+完整翻译纪律、缺口回流的填写格式、反模式清单见 `rules/roles/executor.md`。
 
 ### 10.4 Plan 生命周期
 
