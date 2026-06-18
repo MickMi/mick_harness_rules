@@ -1,446 +1,129 @@
 # Mick Harness Rules
 
-一套可被 N 个项目复用的 Vibe Coding 脚手架，引入即生效。不侵入项目代码，不污染项目仓库。像 `.env` 一样存在。
+一套可被 N 个项目复用的 AI 编码脚手架。引入即生效，不侵入项目代码，不污染项目仓库。
 
-它围绕两个核心能力展开：
+## 它解决什么问题
 
-- **Harness（工程护栏）**
-  - **单源规则体系**：`rules/core.md`（10 条铁律，弱模型优化）+ `rules/extended.md`（完整工程规范），一份维护
-  - **多格式生成**：`generate.sh` 自动产出 `AGENTS.md` / `CLAUDE.md` / `.cursorrules` / `.windsurfrules` / `.clinerules` / `copilot-instructions.md` / `.trae/rules.md`
-  - 多 Agent 角色协作（PM / Designer / QA / Reviewer / Dev）
-  - 强制需求审查门禁
-  - Git 工作流 + CI/CD 护栏
-- **Brain（个人记忆）**
-  - 三层记忆模型（Global / Project / Session）
-  - 自动蒸馏 + 检索优先
-  - 自动写入随生成器流入各 IDE 规则文件
+| 问题 | 解决方案 |
+|------|---------|
+| AI 写代码没有规范 | **Harness** — 10 条铁律 + 完整工程规范，自动注入 7 种 IDE |
+| 每次对话从零开始 | **Brain** — 三层记忆（Session → Project → Global），跨对话持久化 |
+| 需求模糊就开始写 | **角色协作** — PM / Designer / QA / Reviewer / Planner / Executor |
+| 强弱模型协作混乱 | **Plan-Execute Protocol** — 强模型写计划，弱模型按计划执行，合规可扫描 |
 
-### 为什么是单源 + 弱模型优化
+## 快速开始
 
-旧版核心规范只活在一份 Cursor 专有的 `.cursorrules` 里，长达上百行——对推理较弱的模型（GLM / Qwen / DeepSeek / Trae 等）指令遵循率会断崖下跌，排在后面的规则几乎不执行。
+### 极速安装（推荐，零问题）
 
-新版把规则拆成两层：
+```bash
+cd /path/to/your/project
+git clone https://github.com/MickMi/mick_harness_rules.git .harness && .harness/setup.sh --quick
+```
 
-| 层 | 文件 | 谁读 | 形态 |
-|----|------|------|------|
-| **core** | `rules/core.md` | 所有工具（含弱模型） | 10 条铁律，极短极硬，编号祈使句，最关键的排最前 |
-| **extended** | `rules/extended.md` | 强模型 / 按需读取 | 代码哲学、Git、CI-CD、测试、角色协作、Brain 写入 |
+你会获得：7 种 IDE 的规则文件 + Plan-Execute 协议 + Agent 角色模板。5 秒完成。
 
-`generate.sh` 用两套 profile 分发：**lean**（弱模型 / AGENTS / Claude / Copilot / Trae —— core 内联 + extended 指针，省 context）和 **full**（Cursor / Windsurf / Cline —— 全量内联）。改一处 `core.md`，跑一次 `generate.sh`，所有工具同步更新。
-
-## 这个项目解决什么问题
-
-用 AI 写代码的时候，普遍会遇到三个问题：
-
-1. **没有规范** — AI 写出的代码风格不一致，没有防御性编程，没有 TDD，没有架构约束
-2. **没有记忆** — 每次对话都是从零开始，之前踩过的坑、做过的决策全部丢失
-3. **没有流程** — 需求模糊就直接开始写代码，没有审查，没有角色分工
-
-这个脚手架的设计是：
-
-- **Harness 解决 1 和 3** — 通过规则文件和 Agent 角色模板，强制 AI 遵循编码规范和协作流程
-- **Brain 解决 2** — 通过三层记忆模型，让经验跨对话、跨项目持久化
-
-## 快速开始（一行命令）
-
-在你的项目根目录执行：
+### 完整安装（带 Brain 记忆 + 工作流配置）
 
 ```bash
 git clone https://github.com/MickMi/mick_harness_rules.git .harness && .harness/setup.sh
 ```
 
-`setup.sh` 会通过 **5 题交互式问答**（v3 新增）问清楚你的工作流偏好：
+额外获得：跨对话记忆（Brain）、MEMORY.md / TODO.md / docs/ 脚手架、13 项完整性检查。
 
-1. **Brain（个人记忆）**：是否启用跨对话记忆
-2. **Design（设计工作方式）**：AI 出 HTML / 出 spec.json 给 Figma Maker / 出 brief 给真人设计师 / 跳过
-3. **Dev（开发栈范围）**：全栈 / 纯后端 / 纯前端 / 客户端 / CLI
-4. **Testing（测试投入）**：严格 TDD / 关键路径 / 仅冒烟 / 不写测试
-5. **Strictness（流程严格度）**：强门禁 / 软提示 / 自由
+### 合规扫描
 
-答案写入 `.harness-config.yaml`（commit 到项目，跨机器/跨成员一致）。AI 在工作时会读这个文件决定行为，不再对所有项目一刀切。
-
-后续运行非交互式 / CI 用：
+Executor 完成一轮执行后，扫描 plan.md 检测越权行为：
 
 ```bash
-.harness/setup.sh --non-interactive          # 全部用默认值
-.harness/setup.sh --profile profiles/web.yaml # 用预设 profile
-.harness/setup.sh --reconfigure              # 项目演化时重新问一遍
+.harness/harness-audit.sh --since HEAD~5         # 检查最近 5 个 commit
+.harness/harness-audit.sh --since HEAD~5 --log   # 同时记录到 audit-log.md
 ```
 
-> **Fork 用户**：首次运行会自动检测 fork 并重置 brain 数据。也可以显式传入 `--fresh`：
-> ```bash
-> .harness/setup.sh --fresh
-> ```
-
-> **只要 Brain 不要 Vibe 脚手架**：如果项目已有自己的 MEMORY.md / TODO.md / docs/，可以跳过：
-> ```bash
-> .harness/setup.sh --no-vibe
-> ```
-
-### 更新 Harness 版本
+### 更新
 
 ```bash
-cd .harness && git pull
-```
-
-### 传统方式（全局仓库 + symlink）
-
-如果你更喜欢把 harness 放在全局位置，通过 symlink 挂载到多个项目：
-
-```bash
-# Clone 到全局位置
-git clone https://github.com/MickMi/mick_harness_rules.git ~/mick_harness_rules
-chmod +x ~/mick_harness_rules/*.sh
-
-# 初始化到目标项目
-~/mick_harness_rules/vibe-init.sh /path/to/your/project
-
-# 新用户加 --fresh
-~/mick_harness_rules/vibe-init.sh --fresh /path/to/your/project
-```
-
-### 自动检测机制
-
-`brain-init.sh` 使用三层检测确保新用户拿到干净的 brain：
-
-| 检测维度 | 触发条件 | 行为 |
-|----------|----------|------|
-| **`--fresh` 参数** | 用户显式传入 | 无条件清空 brain，记录新 owner |
-| **Git remote owner** | `.brain-owner` 中的 owner 与当前 Git remote 不一致 | 自动清空 brain |
-| **系统用户名** | `.brain-owner` 中的 system_user 与当前 `whoami` 不一致 | 交互式询问是否清空 |
-| **首次运行 + 非空 brain** | 无 `.brain-owner` 但 brain 中有数据 | 交互式询问是否清空 |
-
-整个过程零手动操作（或最多一次 Y/n 确认）。新用户拿到的是完整的 Harness 规范 + 干净的 Brain，可以立即开始积累自己的记忆。
-
-
-## 一图看懂
-
-```mermaid
-flowchart TD
-    subgraph Harness["🛡️ Harness（工程护栏）"]
-        CR[".cursorrules<br/>编码规范 + 角色路由"]
-        PM[".prompts/pm_agent.md<br/>需求审查门禁"]
-        QA[".prompts/qa_agent.md<br/>测试策略"]
-        RV[".prompts/reviewer_agent.md<br/>代码审查"]
-        OC[".prompts/orchestration.md<br/>角色编排协议"]
-    end
-
-    subgraph Brain["🧠 Brain（个人记忆）"]
-        S["Session 层<br/>原始对话摘要<br/>90 天归档"]
-        P["Project 层<br/>项目专属决策<br/>项目存续期"]
-        G["Global 层<br/>跨项目偏好<br/>永久保留"]
-        S -->|"daily compound"| P
-        P -->|"weekly compound"| G
-    end
-
-    User["👤 用户项目"] -->|"vibe-init.sh"| Init["🚀 一键初始化"]
-    Init -->|"symlink .harness/"| Harness
-    Init -->|"brain-init.sh"| Brain
-
-    CR -->|"AI 遵循规范"| Code["⚙️ 代码实现"]
-    PM -->|"需求审查 2-3 轮"| Code
-    Brain -->|"brain-search.sh"| Code
-    Code -->|"brain-push.sh"| S
+cd .harness && git pull && ./generate.sh
 ```
 
 ## 核心架构
 
-这个项目采用**双仓库模型**（ADR-016）：
-
-| 仓库 | 可见性 | 回答的问题 | 对应内容 |
-|------|--------|-----------|----------|
-| **Harness**（`mick_harness_rules`） | 公开 | "怎么做" | `.cursorrules`、`.prompts/`、`docs/`、脚本工具 |
-| **Brain**（`mick_brain`） | 私有 | "知道什么" | `global/`、`projects/`、`sessions/`、`MEMORY.md` |
-
-挂载方式：
-
-- Brain 仓库 clone 到 `~/.mick-brain/`，harness 中的 `brain/` 通过 symlink 指向它
-- 通过 symlink（`.harness/`、`.cursorrules`、`.prompts/`）引入到目标项目，不复制文件
-- `.gitignore` 自动隔离，所有脚手架内容不会出现在项目的 Git 历史中
-- 独立于任何业务项目的发布节奏
+### 单源规则体系
 
 ```
-mick_harness_rules/ (公开)         ~/.mick-brain/ (私有)
-├── .cursorrules                   ├── global/preferences.md
-├── .prompts/                      ├── global/gotchas.md
-├── brain-init.sh                  ├── projects/<slug>/learnings.md
-├── brain-push.sh                  ├── sessions/YYYY-MM-DD/
-├── brain-resolve.sh               ├── MEMORY.md
-├── brain/ → symlink               ├── .brain-owner
-└── ...                            └── .gitkeep
-```
-## 三层记忆
-
-### Session 层
-
-- 位置：`brain/sessions/YYYY-MM-DD/`
-- 保留：90 天后自动归档
-- 内容：每次 AI 对话中产生的 gotcha、decision、preference、env 记录
-- 写入：AI 自动触发或 `brain-push.sh` 手动写入
-
-### Project 层
-
-- 位置：`brain/projects/<slug>/`
-- 保留：项目存续期
-- 内容：项目专属的技术选型、架构决策、踩坑记录
-- 来源：从 Session 层蒸馏（daily compound）
-
-### Global 层
-
-- 位置：`brain/global/`
-- 保留：永久
-- 内容：跨项目通用的编码偏好、工具链选择、通用踩坑记录
-- 来源：从 Project 层蒸馏（weekly compound）
-
-### 蒸馏
-
-```
-Session（原始素材）
-    ↓ daily compound（≥5 条未蒸馏条目触发）
-Project（项目级精华）
-    ↓ weekly compound（本周 ≥3 条新增触发）
-Global（跨项目通用经验）
+rules/core.md       10 条铁律（弱模型优化，所有工具都读）
+rules/extended.md   完整工程规范 + 角色协作 + Plan-Execute Protocol
+        ↓ generate.sh
+dist/CLAUDE.md      [lean] core 内联 + extended 指针
+dist/AGENTS.md      [lean] 同上（Codex / Zed / Aider）
+dist/.cursorrules   [full] core + extended 全量内联
+dist/.windsurfrules [full] 同上
+dist/.clinerules    [full] 同上
+dist/.github/copilot-instructions.md  [lean]
+dist/.trae/rules.md                   [lean]
 ```
 
-由 `brain-compound.sh` 执行。支持智能触发、相似检测、合并策略、分类路由和 `--dry-run` 预览。
+改一处 `core.md`，跑一次 `generate.sh`，所有工具同步更新。
 
-### 检索
+### Plan-Execute Protocol（强弱模型协作）
 
-不全量读取记忆文件。推荐顺序：
+```
+用户 → Claude（强模型）: "设计用户注册流程的重构"
+Claude: 写 plan.md（步骤、约束、验收标准）
 
-1. `brain-search.sh <keyword>` — ripgrep 精准搜索
-2. 定向读取特定文件片段
-3. 只有前面都不够时，才读完整文件
+用户 → DeepSeek/MiniMax（弱模型）: "执行计划"
+弱模型: 读 plan.md → 逐步执行 → 写结构化自检日志
+
+用户 → Claude: "检查执行情况"
+Claude: 审查代码 + plan.md，追加 Executor 指导
+
+用户: .harness/harness-audit.sh --since HEAD~5
+脚本: 6 项合规检查 → PASS/WARN/FAIL 报告
+```
+
+### Brain（个人记忆，可选）
+
+`--quick` 安装不含 Brain。完整安装会配置三层记忆：
+
+| 层 | 位置 | 保留 | 来源 |
+|----|------|------|------|
+| Session | `brain/sessions/YYYY-MM-DD/` | 90 天 | AI 对话自动写入 |
+| Project | `brain/projects/<slug>/` | 项目存续期 | 从 Session 蒸馏 |
+| Global | `brain/global/` | 永久 | 从 Project 蒸馏 |
+
+Brain 仓库（私有）与 Harness 仓库（公开）分离，fork 时不带个人记忆。
 
 ## Agent 角色
 
-内置 5 个 Agent 角色（源文件在 `rules/roles/`，项目里映射为 `.prompts/`）。弱模型不可靠地自动切换角色，因此改为**显式点名调用**：
+内置 7 个角色（`rules/roles/`，项目中映射为 `.prompts/`），显式点名调用：
 
-| 角色 | 文件 | 职责 | 唤起 |
-|------|------|------|------|
-| **PM Agent** | `rules/roles/pm.md` | 需求审查、三轮追问、目标发现 | "用 PM 角色评审需求" |
-| **Designer Agent** | `rules/roles/designer.md` | UI/UX 设计、设计代币、组件规格 | "用 Designer 角色出设计" |
-| **QA Agent** | `rules/roles/qa.md` | 测试策略、用例矩阵、质量门禁 | "用 QA 角色制定测试" |
-| **Reviewer Agent** | `rules/roles/reviewer.md` | 代码审查、逻辑完备性、安全审计 | "用 Reviewer 角色审查" |
-| **Dev Agent** | `rules/extended.md` | 编码实现、调试、架构设计（默认角色） | 默认 |
+| 角色 | 职责 | 唤起方式 |
+|------|------|---------|
+| PM | 对话式意图探索，输出 PRD | "用 PM 角色评审需求" |
+| Designer | 设计代币、组件规格（OD 适配） | "用 Designer 角色出设计" |
+| QA | 测试策略、用例矩阵 | "用 QA 角色制定测试" |
+| Reviewer | 代码审查、安全审计 | "用 Reviewer 角色审查" |
+| Planner | 写 plan.md，分解任务 | 强模型自动识别 |
+| Executor | 严格按 plan 执行，禁止越权 | 弱模型自动识别 |
+| Dev | 编码实现（默认角色） | 默认 |
 
-### 需求审查门禁
-
-实质性需求（新功能、重构、架构变更）必须先经过 PM 角色的审查：
-
-1. **第 1 轮**：目标与边界
-2. **第 2 轮**：技术约束与风险
-3. **第 3 轮**：输出结构化需求确认清单
-
-用户确认清单前，禁止任何 Agent 编写实现代码。
-
-豁免：单文件 Bug 修复、文档更新、格式化、用户明确说"跳过审查"。
-
-## 仓库内容
-
-```
-mick_harness_rules/
-├── rules/                    # ⭐ 单一数据源
-│   ├── core.md               #   10 条铁律（弱模型优化，所有工具都读）
-│   ├── extended.md           #   完整工程规范 + 角色协作 + Brain 写入 + Plan-Execute Protocol
-│   └── roles/                #   Agent 角色模板（项目里映射为 .prompts/）
-│       ├── orchestration.md  #     角色编排协议
-│       ├── pm.md             #     PM 角色（需求审查官）
-│       ├── designer.md       #     Designer 角色
-│       ├── qa.md             #     QA 角色
-│       └── reviewer.md       #     Reviewer 角色
-├── generate.sh               # ⭐ 单源 → 多格式生成器（--check 校验同步）
-├── dist/                     # 生成产物（gitignore，每次 mount 前重建）
-│   ├── AGENTS.md  CLAUDE.md  .cursorrules  .windsurfrules  .clinerules
-│   ├── .github/copilot-instructions.md
-│   └── .trae/rules.md
-├── lib-mount-rules.sh        # 共享挂载库（setup.sh / brain-init.sh 共用，防漂移）
-├── .brain-config.yaml        # Brain 配置（仓库地址、保留策略、搜索引擎）
-├── .gitignore                # 忽略 brain 个人数据 + dist/
-├── brain/                    # → symlink 到 ~/.mick-brain/（私有 brain 仓库）
-├── setup.sh                  # ⭐ 一键初始化（含交互式问答 + --reconfigure）
-├── brain-init.sh             # 挂载 harness + brain（全局仓库 symlink 模式）
-├── brain-resolve.sh          # 共享库：解析 brain 数据路径（双仓库/单仓库自动适配）
-├── brain-migrate.sh          # 一次性迁移脚本（单仓库 → 双仓库）
-├── brain-check.sh            # 验证脚手架完整性（13 项检查，含单源同步）
-├── brain-push.sh             # 向 brain 写入记忆（CLI / 剪贴板 / 交互模式）
-├── brain-search.sh           # 基于 ripgrep 的记忆检索
-├── brain-compound.sh         # 智能蒸馏（Session → Project → Global）
-├── brain-gc.sh               # 容量治理（归档 + 清理）
-├── vibe-init.sh              # Vibe Coding 脚手架初始化（自动链式调用 brain-init）
-├── docs/
-│   ├── architecture.md       # Harness 自身的系统架构文档
-│   ├── architecture-template.md  # 新项目架构模板（init 时复制到目标项目）
-│   └── ci_cd_templates.md    # CI/CD 模板库
-├── MEMORY.md                 # 框架级架构决策记录（ADR）
-└── TODO.md                   # 任务清单与状态流转
-```
-
-
-
-## 日常使用
+## 日常命令
 
 ```bash
-# 搜索记忆
-.harness/brain-search.sh "ripgrep"
-
-# 写入记忆
-.harness/brain-push.sh --layer session --source cursor "gotcha: xxx"
-
-# 运行蒸馏
-.harness/brain-compound.sh --mode auto
-
-# 容量治理
-.harness/brain-gc.sh --report
-
-# 验证完整性
-.harness/brain-check.sh
+.harness/generate.sh              # 重新生成所有 IDE 规则文件
+.harness/harness-audit.sh         # 扫描 plan.md 合规性
+.harness/brain-search.sh <keyword> # 搜索记忆
+.harness/brain-push.sh            # 写入记忆
+.harness/brain-check.sh           # 验证脚手架完整性
+.harness/setup.sh --reconfigure   # 重新配置工作流
 ```
-
-## 多 IDE 支持
-
-所有规则文件都由 `generate.sh` 从单一数据源产出，再由 `setup.sh` / `brain-init.sh` 以 symlink 挂载到项目（`.gitignore` 隔离，只忽略 harness 真正接管的文件）：
-
-| 工具 | 规则文件 | profile | 内容 |
-|-----|---------|---------|------|
-| Codex / Zed / Aider | `AGENTS.md` | lean | core 内联 + extended 指针 |
-| Claude Code | `CLAUDE.md` | lean | core 内联 + extended 指针 |
-| Cursor | `.cursorrules` | full | core + extended 全量 |
-| Windsurf | `.windsurfrules` | full | core + extended 全量 |
-| Cline / Roo | `.clinerules` | full | core + extended 全量 |
-| VS Code Copilot | `.github/copilot-instructions.md` | lean | core 内联 + extended 指针 |
-| Trae | `.trae/rules.md` | lean | core 内联 + extended 指针 |
-| Agent 角色 | `.prompts/` → `rules/roles/` | — | 显式点名调用 |
-
-> 改规则只需编辑 `rules/core.md` 或 `rules/extended.md`，再跑 `.harness/generate.sh`，全部工具同步更新。
-
-AI 会在以下事件发生时自动写入记忆（强模型 / 支持 shell 的环境）：
-
-- 🐛 **Gotcha** — 非显而易见的 Bug、API 怪癖、库限制
-- 🏗️ **Decision** — 选择了某个库/方案，做了取舍
-- 💡 **Preference** — 用户表达了编码风格、命名约定偏好
-- ⚠️ **Environment** — OS 特定行为、CI/CD 约束、版本兼容问题
-
-## 容量治理
-
-`brain-gc.sh` 防止记忆无限膨胀：
-
-- Session 超过 90 天自动归档到 `.archive/sessions/`
-- MEMORY.md 超过 500 行自动归档旧条目到 `MEMORY.archive.md`
-- `--report` 输出各层文件数、大小、过期状态
-
-## 适合什么场景
-
-- 一套可复用的 AI 编码规范，引入任何项目即生效
-- 跨对话、跨项目的持久化记忆
-- 多 Agent 角色协作，有需求审查门禁
-- 本地优先、文件优先、不依赖云服务
-
-它是一个 **file-first**、**local-first** 的个人基础设施。
 
 ## 设计原则
 
 | 原则 | 说明 |
 |------|------|
-| `.env` 模式 | symlink 挂载，`.gitignore` 隔离，**零泄漏**——目标项目 Git 中不含任何脚手架内容 |
-| 双仓库隔离 | Harness（公开）+ Brain（私有），fork 时天然不带个人记忆 |
-| 验证闭环 | 加载 → 检查 → 拦截 → 报告 |
-| 检索优先 | 禁止全量读取，优先 ripgrep |
-| 优雅降级 | 有高级工具用高级工具，没有就回退；无 brain 仓库时 fallback 到本地目录 |
+| `.env` 模式 | symlink 挂载 + `.gitignore` 隔离，零泄漏 |
+| 单源多发 | 改一处规则，所有 IDE 同步 |
+| 双仓库隔离 | Harness（公开）+ Brain（私有） |
+| 弱模型优化 | 10 条铁律极短极硬，排在前面的最关键 |
 | 幂等挂载 | 重复运行不出错 |
-| 需求先行 | 实质性需求必须经过多轮审查 |
-| Fork 即用 | fork 用户首次 init 自动检测并重置 brain，零手动操作 |
-
----
-
-## 附录 A：Brain 双仓库模型详解
-
-### 为什么需要双仓库？
-
-Brain 存储的是个人记忆（编码偏好、踩坑记录、项目经验），这些数据：
-- **需要多机同步**：你可能在 MacBook、台式机、公司电脑上工作
-- **不应公开**：fork 你的 harness 仓库的人不应该看到你的个人记忆
-
-单仓库模型无法同时满足这两个需求。双仓库模型将 Harness（公开工具）和 Brain（私有记忆）分离，各自通过 Git 同步。
-
-### Brain 仓库结构
-
-```
-mick_brain/ (私有仓库)
-├── global/
-│   ├── preferences.md    # 跨项目编码偏好
-│   └── gotchas.md        # 跨项目踩坑记录
-├── projects/
-│   └── <slug>/
-│       └── learnings.md  # 项目专属经验
-├── sessions/
-│   └── YYYY-MM-DD/
-│       └── <source>.md   # 原始对话摘要
-├── MEMORY.md             # 个人记忆与 ADR
-├── .brain-owner          # 所有权标记
-└── .gitkeep
-```
-
-### 连接机制
-
-`brain-init.sh` 在 Phase 0.5 自动完成：
-
-1. 读取 `.brain-config.yaml` 中的 `brain_repo.remote` 和 `brain_repo.local_path`
-2. 如果 `~/.mick-brain/` 不存在，自动 `git clone`
-3. 在 harness 仓库中创建 symlink：`brain/` → `~/.mick-brain/`
-4. 所有 brain-*.sh 脚本通过 `brain-resolve.sh` 自动解析正确的路径
-
-### 多机同步流程
-
-```
-机器 A                              机器 B
-├── ~/project-x/                    ├── ~/project-y/
-│   └── .harness/ → harness repo    │   └── .harness/ → harness repo
-├── ~/mick_harness_rules/           ├── ~/mick_harness_rules/
-│   └── brain/ → ~/.mick-brain/     │   └── brain/ → ~/.mick-brain/
-└── ~/.mick-brain/ (git sync)       └── ~/.mick-brain/ (git sync)
-         ↕                                    ↕
-    github.com/MickMi/mick_brain (private)
-```
-
-每次 `brain-push.sh` 写入记忆后，自动 commit + push 到 brain 仓库。
-在另一台机器上运行 `brain-init.sh` 时，自动 pull 最新数据。
-
-### 向后兼容
-
-如果 `.brain-config.yaml` 中没有配置 `brain_repo.remote`，所有脚本自动 fallback 到本地 `brain/` 目录（单仓库模式）。这意味着：
-- Fork 用户不需要创建自己的 brain 仓库也能正常使用
-- 只是记忆不会跨机器同步
-
-### 新机器初始化步骤
-
-在一台新机器上从零开始：
-
-```bash
-# 进入你的项目目录
-cd /path/to/your/project
-
-# 一行命令完成所有初始化
-git clone https://github.com/MickMi/mick_harness_rules.git .harness && .harness/setup.sh
-
-# setup.sh 会自动：
-#   - 创建 .cursorrules / .prompts/ symlink
-#   - 配置 .gitignore 隔离
-#   - 部署 Vibe 脚手架文件（已有则跳过）
-#   - 读取 .brain-config.yaml 中的 brain_repo 配置
-#   - Clone brain 仓库到 ~/.mick-brain/
-#   - Pull 最新记忆数据
-#   - 运行完整性检查
-```
-
-你不需要手动 clone brain 仓库或执行任何额外操作。
-
-#### 传统方式（全局仓库）
-
-如果你更喜欢全局仓库 + symlink 模式：
-
-```bash
-git clone https://github.com/MickMi/mick_harness_rules.git ~/mick_harness_rules
-chmod +x ~/mick_harness_rules/*.sh
-~/mick_harness_rules/brain-init.sh /path/to/your/project
-```
+| Fork 即用 | 自动检测 fork 并重置 brain |

@@ -14,6 +14,7 @@ set -euo pipefail
 # performs all initialization in one step.
 #
 # Options:
+#   --quick           Minimal setup: rules + mount + gitignore only. No brain, no scaffold.
 #   --fresh           Start with a clean brain (for fork/clone users)
 #   --no-vibe         Skip Vibe scaffold files (MEMORY.md, TODO.md, docs/)
 #   --reconfigure     Re-run interactive workflow configuration (overwrites .harness-config.yaml)
@@ -51,12 +52,21 @@ HARNESS_ROOT="$(cd "$(dirname "$0")" && pwd)"
 # --- Parse arguments ---
 FRESH_MODE=false
 SKIP_VIBE=false
+SKIP_BRAIN=false
+QUICK_MODE=false
 RECONFIGURE=false
 NON_INTERACTIVE=false
 PROFILE_FILE=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --quick)
+            QUICK_MODE=true
+            SKIP_VIBE=true
+            SKIP_BRAIN=true
+            NON_INTERACTIVE=true
+            shift
+            ;;
         --fresh)
             FRESH_MODE=true
             shift
@@ -89,6 +99,7 @@ while [[ $# -gt 0 ]]; do
             echo "the harness repo as .harness/ subdirectory."
             echo ""
             echo "Options:"
+            echo "  --quick             Minimal setup: generate rules + mount + gitignore. No brain, no scaffold."
             echo "  --fresh             Start with a clean brain (for new users who cloned/forked)"
             echo "  --no-vibe           Skip Vibe scaffold files (MEMORY.md, TODO.md, docs/)"
             echo "  --reconfigure       Re-run interactive workflow configuration (overwrites .harness-config.yaml)"
@@ -96,9 +107,11 @@ while [[ $# -gt 0 ]]; do
             echo "  --profile FILE      Load answers from a YAML profile file"
             echo "  -h, --help          Show this help message"
             echo ""
-            echo "Quick start:"
-            echo "  git clone https://github.com/MickMi/mick_harness_rules.git .harness"
-            echo "  .harness/setup.sh"
+            echo "Quick start (1 minute, zero questions):"
+            echo "  git clone https://github.com/MickMi/mick_harness_rules.git .harness && .harness/setup.sh --quick"
+            echo ""
+            echo "Full setup (with Brain memory + workflow config):"
+            echo "  git clone https://github.com/MickMi/mick_harness_rules.git .harness && .harness/setup.sh"
             exit 0
             ;;
         -*)
@@ -148,22 +161,31 @@ if [ "$TARGET_DIR" = "$HOME" ]; then
 fi
 
 echo ""
-echo -e "${BOLD}🚀 Harness Setup — One-step project bootstrap${NC}"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  Harness location: $HARNESS_ROOT"
-echo "  Target project  : $TARGET_DIR"
-echo "  Fresh mode      : $FRESH_MODE"
-echo "  Skip vibe files : $SKIP_VIBE"
-echo "  Reconfigure     : $RECONFIGURE"
-echo "  Non-interactive : $NON_INTERACTIVE"
-[ -n "$PROFILE_FILE" ] && echo "  Profile file    : $PROFILE_FILE"
-echo ""
+if [ "$QUICK_MODE" = true ]; then
+    echo -e "${BOLD}🚀 Harness Quick Setup${NC}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  Target: $TARGET_DIR"
+    echo ""
+else
+    echo -e "${BOLD}🚀 Harness Setup — One-step project bootstrap${NC}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  Harness location: $HARNESS_ROOT"
+    echo "  Target project  : $TARGET_DIR"
+    echo "  Fresh mode      : $FRESH_MODE"
+    echo "  Skip vibe files : $SKIP_VIBE"
+    echo "  Reconfigure     : $RECONFIGURE"
+    echo "  Non-interactive : $NON_INTERACTIVE"
+    [ -n "$PROFILE_FILE" ] && echo "  Profile file    : $PROFILE_FILE"
+    echo ""
+fi
 
 # --- Make all scripts executable ---
-info "Making harness scripts executable..."
 chmod +x "$HARNESS_ROOT"/*.sh 2>/dev/null || true
-ok "Scripts are executable."
-echo ""
+if [ "$QUICK_MODE" != true ]; then
+    info "Making harness scripts executable..."
+    ok "Scripts are executable."
+    echo ""
+fi
 
 # --- Source shared rule-mounting library ---
 source "$HARNESS_ROOT/lib-mount-rules.sh"
@@ -171,21 +193,35 @@ source "$HARNESS_ROOT/lib-mount-rules.sh"
 # ============================================================
 # Phase 0.5: Regenerate rule files from single source
 # ============================================================
-info "Phase 0.5: Generating rule files from single source (rules/core.md + extended.md)..."
+if [ "$QUICK_MODE" != true ]; then
+    info "Phase 0.5: Generating rule files from single source (rules/core.md + extended.md)..."
+fi
 regenerate_rules "$HARNESS_ROOT"
-echo ""
+if [ "$QUICK_MODE" = true ]; then
+    ok "Rules generated (7 IDE formats)"
+else
+    echo ""
+fi
 
 # ============================================================
 # Phase 1: Symlink generated rule files into project root
 # ============================================================
-info "Phase 1/6: Symlinking generated rule files into project root..."
+if [ "$QUICK_MODE" != true ]; then
+    info "Phase 1/6: Symlinking generated rule files into project root..."
+fi
 mount_rule_files "$HARNESS_ROOT" "$TARGET_DIR"
-echo ""
+if [ "$QUICK_MODE" = true ]; then
+    ok "Rules mounted to project root"
+else
+    echo ""
+fi
 
 # ============================================================
 # Phase 2: Configure .gitignore isolation
 # ============================================================
-info "Phase 2/7: Configuring .gitignore isolation..."
+if [ "$QUICK_MODE" != true ]; then
+    info "Phase 2/7: Configuring .gitignore isolation..."
+fi
 
 GITIGNORE="$TARGET_DIR/.gitignore"
 # Always isolate the harness mount + role-template projection. Per-rule-file
@@ -206,13 +242,17 @@ for entry in "${IGNORE_ENTRIES[@]}"; do
     fi
 done
 
-if [ "$ADDED_COUNT" -gt 0 ]; then
+if [ "$QUICK_MODE" = true ]; then
+    ok ".gitignore updated"
+elif [ "$ADDED_COUNT" -gt 0 ]; then
     ok "Added $ADDED_COUNT entries to .gitignore"
 else
     ok ".gitignore already contains all isolation entries. (idempotent)"
 fi
 
-echo ""
+if [ "$QUICK_MODE" != true ]; then
+    echo ""
+fi
 
 # ============================================================
 # Phase 3: Deploy Vibe scaffold files (skip if exist)
@@ -277,31 +317,43 @@ TODO_EOF
 
     echo ""
 else
-    info "Phase 3/7: Skipped (--no-vibe flag)."
-    echo ""
+    if [ "$QUICK_MODE" != true ]; then
+        info "Phase 3/7: Skipped (--no-vibe flag)."
+        echo ""
+    fi
 fi
 
 # ============================================================
 # Phase 3.5: Workflow configuration → .harness-config.yaml
 # ============================================================
-info "Phase 3.5: Workflow configuration..."
+if [ "$QUICK_MODE" != true ]; then
+    info "Phase 3.5: Workflow configuration..."
+fi
 
 CONFIG_FILE="$TARGET_DIR/.harness-config.yaml"
 TEMPLATE_FILE="$HARNESS_ROOT/.harness-config.template.yaml"
 
 if [ -f "$CONFIG_FILE" ] && [ "$RECONFIGURE" = false ]; then
-    ok ".harness-config.yaml already exists. Use --reconfigure to regenerate. (idempotent)"
+    if [ "$QUICK_MODE" != true ]; then
+        ok ".harness-config.yaml already exists. Use --reconfigure to regenerate. (idempotent)"
+    fi
 else
     if [ -n "$PROFILE_FILE" ] && [ ! -f "$PROFILE_FILE" ]; then
         warn "Profile file not found: $PROFILE_FILE. Falling back to template defaults."
     fi
     if [ -n "$PROFILE_FILE" ] && [ -f "$PROFILE_FILE" ]; then
         cp "$PROFILE_FILE" "$CONFIG_FILE"
-        ok "Generated: .harness-config.yaml (from profile: $PROFILE_FILE)"
+        if [ "$QUICK_MODE" != true ]; then
+            ok "Generated: .harness-config.yaml (from profile: $PROFILE_FILE)"
+        fi
     elif [ -f "$TEMPLATE_FILE" ]; then
         cp "$TEMPLATE_FILE" "$CONFIG_FILE"
-        ok "Generated: .harness-config.yaml (template defaults)"
-        info "Edit anytime: \$EDITOR .harness-config.yaml — or re-run with --reconfigure"
+        if [ "$QUICK_MODE" = true ]; then
+            ok "Config template copied"
+        else
+            ok "Generated: .harness-config.yaml (template defaults)"
+            info "Edit anytime: \$EDITOR .harness-config.yaml — or re-run with --reconfigure"
+        fi
     else
         warn ".harness-config.template.yaml not found. Writing minimal config..."
         cat > "$CONFIG_FILE" <<EOF
@@ -316,15 +368,32 @@ EOF
         ok "Generated: .harness-config.yaml (minimal)"
     fi
 fi
-echo ""
+if [ "$QUICK_MODE" != true ]; then
+    echo ""
+fi
 
 # ============================================================
 # Phase 4: Multi-IDE rules — handled by single-source generator
 # ============================================================
-info "Phase 4/6: Multi-IDE rules..."
-ok "All IDE rule files (Cursor/Windsurf/Cline/Copilot/Trae/AGENTS.md/CLAUDE.md) are"
-ok "  generated from a single source and mounted in Phase 1. Nothing to inject."
-echo ""
+if [ "$QUICK_MODE" != true ]; then
+    info "Phase 4/6: Multi-IDE rules..."
+    ok "All IDE rule files (Cursor/Windsurf/Cline/Copilot/Trae/AGENTS.md/CLAUDE.md) are"
+    ok "  generated from a single source and mounted in Phase 1. Nothing to inject."
+    echo ""
+fi
+
+# ============================================================
+# Quick mode: done here
+# ============================================================
+if [ "$QUICK_MODE" = true ]; then
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo -e "${GREEN}${BOLD}Done.${NC} Rules are active for all 7 IDEs."
+    echo ""
+    echo -e "  Run ${CYAN}.harness/setup.sh${NC} (no flags) for full setup with Brain + config."
+    echo ""
+    exit 0
+fi
 
 # ============================================================
 # Phase 5: Brain repo — clone/connect
