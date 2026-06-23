@@ -21,10 +21,14 @@ set -euo pipefail
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
 PASS_COUNT=0; WARN_COUNT=0; FAIL_COUNT=0
+# Structured findings for the evolution signal: each entry "LEVEL\tTAG\tdetail"
+LOG_ENTRIES=()
 
 pass() { echo -e "  ${GREEN}✅ PASS${NC}: $1"; ((PASS_COUNT++)) || true; }
-warn_check() { echo -e "  ${YELLOW}⚠️  WARN${NC}: $1"; ((WARN_COUNT++)) || true; }
-fail_check() { echo -e "  ${RED}❌ FAIL${NC}: $1"; ((FAIL_COUNT++)) || true; }
+# warn_check / fail_check take a machine TAG first, then the human message.
+# The TAG is what harness-evolve.sh aggregates across projects.
+warn_check() { local tag="$1"; shift; echo -e "  ${YELLOW}⚠️  WARN${NC}: $1"; ((WARN_COUNT++)) || true; LOG_ENTRIES+=("WARN	$tag	$1"); }
+fail_check() { local tag="$1"; shift; echo -e "  ${RED}❌ FAIL${NC}: $1"; ((FAIL_COUNT++)) || true; LOG_ENTRIES+=("FAIL	$tag	$1"); }
 
 # --- Parse arguments ---
 SINCE="HEAD~1"
@@ -39,7 +43,8 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Options:"
             echo "  --since <commit>  Git diff base (default: HEAD~1)"
-            echo "  --log             Append results to .harness/audit-log.md"
+            echo "  --log             Append structured findings to the evolution signal"
+            echo "                    (Brain: global/evolution/audit-trail.md, or per-project fallback)"
             echo "  -h, --help        Show this help"
             exit 0
             ;;
@@ -89,7 +94,7 @@ done
 if [ -z "$MISSING_SECTIONS" ]; then
     pass "Required sections (## 目标, ## 步骤) present"
 else
-    fail_check "Missing required sections:$MISSING_SECTIONS"
+    fail_check "plan-integrity" "Missing required sections:$MISSING_SECTIONS"
 fi
 
 # ============================================================
@@ -104,7 +109,7 @@ elif [ "$SELFCHECK_ENTRIES" -ge "$COMPLETED_STEPS" ]; then
     pass "All $COMPLETED_STEPS completed steps have self-check entries"
 else
     MISSING=$((COMPLETED_STEPS - SELFCHECK_ENTRIES))
-    fail_check "$COMPLETED_STEPS steps completed but only $SELFCHECK_ENTRIES self-check entries (missing $MISSING)"
+    fail_check "missing-selfcheck" "$COMPLETED_STEPS steps completed but only $SELFCHECK_ENTRIES self-check entries (missing $MISSING)"
 fi
 
 # ============================================================
@@ -143,8 +148,8 @@ else
     if [ "$NO_VERIFY" -eq 0 ] && [ "$VAGUE_VERIFY" -eq 0 ]; then
         pass "All self-check entries have meaningful verify evidence"
     else
-        [ "$NO_VERIFY" -gt 0 ] && warn_check "$NO_VERIFY entries missing verify: line"
-        [ "$VAGUE_VERIFY" -gt 0 ] && warn_check "$VAGUE_VERIFY entries have vague verify (just '完成'/'done')"
+        [ "$NO_VERIFY" -gt 0 ] && warn_check "verify-missing" "$NO_VERIFY entries missing verify: line"
+        [ "$VAGUE_VERIFY" -gt 0 ] && warn_check "verify-vague" "$VAGUE_VERIFY entries have vague verify (just '完成'/'done')"
     fi
 fi
 
@@ -174,7 +179,7 @@ else
     if [ "$ORDER_OK" = true ]; then
         pass "Step timestamps are in chronological order"
     else
-        warn_check "Step timestamps are NOT in order — possible out-of-sequence execution"
+        warn_check "step-order" "Step timestamps are NOT in order — possible out-of-sequence execution"
     fi
 fi
 
@@ -215,7 +220,7 @@ else
     if [ -z "$CREEP_FILES" ]; then
         pass "All changed files are mentioned in plan steps"
     else
-        warn_check "Files changed but NOT in any plan step:$CREEP_FILES"
+        warn_check "scope-creep" "Files changed but NOT in any plan step:$CREEP_FILES"
     fi
 fi
 
@@ -242,7 +247,7 @@ else
     if [ "$NO_FILES" -eq 0 ]; then
         pass "All self-check entries have files: lines"
     else
-        warn_check "$NO_FILES self-check entries missing or empty files: line"
+        warn_check "files-missing" "$NO_FILES self-check entries missing or empty files: line"
     fi
 fi
 
@@ -255,18 +260,38 @@ TOTAL=$((PASS_COUNT + WARN_COUNT + FAIL_COUNT))
 echo -e "Summary: ${GREEN}$PASS_COUNT PASS${NC}, ${YELLOW}$WARN_COUNT WARN${NC}, ${RED}$FAIL_COUNT FAIL${NC} ($TOTAL checks)"
 echo ""
 
-# --- Optional: append to audit log ---
+# --- Optional: append structured findings to the evolution signal ---
+# Signal goes to Brain (cross-project, git-synced) so harness-evolve.sh can
+# aggregate patterns across all projects. Falls back to per-project if no Brain.
 if [ "$LOG_MODE" = true ]; then
-    LOG_FILE="$HARNESS_ROOT/audit-log.md"
     PROJECT_NAME=$(basename "$PROJECT_DIR")
+    PLAN_REF=$(git -C "$PROJECT_DIR" rev-parse --short HEAD 2>/dev/null || echo "no-git")
+
+    # Resolve Brain dir if available
+    TRAIL_FILE=""
+    if [ -f "$HARNESS_ROOT/brain-resolve.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$HARNESS_ROOT/brain-resolve.sh"
+        if resolve_brain_dir "$HARNESS_ROOT" 2>/dev/null && [ -n "${BRAIN_DIR:-}" ] && [ -d "$BRAIN_DIR" ]; then
+            mkdir -p "$BRAIN_DIR/global/evolution"
+            TRAIL_FILE="$BRAIN_DIR/global/evolution/audit-trail.md"
+        fi
+    fi
+    # Fallback: per-project log (no cross-project evolution, but still recorded)
+    [ -z "$TRAIL_FILE" ] && TRAIL_FILE="$HARNESS_ROOT/audit-log.md"
+
     {
         echo ""
-        echo "## $(date '+%Y-%m-%d %H:%M') — $PROJECT_NAME"
-        echo "- Plan: $COMPLETED_STEPS/$TOTAL_STEPS steps completed"
-        echo "- Result: $PASS_COUNT PASS, $WARN_COUNT WARN, $FAIL_COUNT FAIL"
-        [ "$FAIL_COUNT" -gt 0 ] && echo "- Issues found (see terminal output for details)"
-    } >> "$LOG_FILE"
-    echo -e "${CYAN}Results appended to .harness/audit-log.md${NC}"
+        echo "## $(date '+%Y-%m-%d %H:%M') · $PROJECT_NAME · plan $PLAN_REF"
+        echo "- summary: $PASS_COUNT PASS, $WARN_COUNT WARN, $FAIL_COUNT FAIL ($COMPLETED_STEPS/$TOTAL_STEPS steps)"
+        for entry in "${LOG_ENTRIES[@]}"; do
+            level="${entry%%	*}"; rest="${entry#*	}"
+            tag="${rest%%	*}"; detail="${rest#*	}"
+            echo "- $level: $tag ($detail)"
+        done
+    } >> "$TRAIL_FILE"
+
+    echo -e "${CYAN}Findings appended to: ${TRAIL_FILE/#$HOME/~}${NC}"
     echo ""
 fi
 

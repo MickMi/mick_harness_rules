@@ -424,3 +424,30 @@ Planner 写 plan.md 时，**第一行**必须是状态行；每次有人推进 p
 | **Reviewer** | 完成 → 跑 audit；或回 Planner（有问题要改 plan） | —（Reviewer 是裁决方，不卡） |
 
 > 一句话：**每张回合卡片的 `➡️` 和 `🆘`，本质就是当前角色在状态机里的正常出边和错误出边。** 角色只要知道自己是谁，就能填对这两行，用户就永远不会失焦。
+
+### 10.9 规则自进化闭环（信号回流）
+
+harness 的规则不是静态的——真实执行产生的信号会回流，提议规则改动，由人工门禁合并。这是一个闭环，**不是自动改规则**（自动应用会导致漂移退化）。
+
+```
+执行 → harness-audit.sh --log → Brain: global/evolution/audit-trail.md（按 tag 记录违规）
+           ↓ 跨项目/跨机器累积（git 同步）
+       harness-evolve.sh → 检测过阈值的模式 → docs/evolution/proposal-YYYY-MM-DD.md
+           ↓ 【人工 review，接受/修改/拒绝】
+       合并进 rules/core.md / extended.md → generate.sh → 7 工具同步
+           ↓
+       下轮执行：同 tag 频次应下降（audit-trail 可验证，这是进化是否有效的唯一指标）
+```
+
+**三条铁律**：
+
+1. **提案不自动应用**——`harness-evolve.sh` 永远只写提案文件，绝不碰 `rules/*.md`。人工是唯一合并门。
+2. **过阈值才进化**——同一信号 tag 默认 ≥3 次才生成提案，防止把一次性错误/噪声固化成永久规则。
+3. **进化含删除**——提案类型包含"删除贬值规则"。某规则长期 0 次触发 + 对应能力已被 Agent 原生覆盖 → 降级或删除。core.md 必须为弱模型保持短，**只加不删 = 规则臃肿到没人遵守**。
+
+**信号源**（都在 Brain，跨项目）：
+- `audit-trail.md`——`harness-audit.sh --log` 自动写入（已就绪）
+- `banned-patterns.md`——Planner review 后把**反复出现的禁止项** brain-push 进来（见 §10.7）
+- `corrections.md`——反复出现的同类 Executor 指导（可选，人工提炼）
+
+> 这是 harness 区别于厂商 Agent 的能力之一：厂商进化模型，只有你能针对**你自己反复犯的错**进化你的规则。

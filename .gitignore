@@ -14,3 +14,5 @@ dist/
 
 # OS files
 .DS_Store
+audit-log.md
+docs/evolution/

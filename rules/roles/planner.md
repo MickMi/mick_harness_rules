@@ -110,6 +110,7 @@ Executor 把 `[x]` 跑出阻塞后切回 Planner。Review 流程见 `extended.md
 - 阻塞和建议**逐条回复**，不删历史
 - 修改步骤时**追加** `> ⚡ 修订：...`，保留原步骤便于追溯
 - 必须写 `## Executor 指导` 段（基于本轮实际犯的错，给后续步骤的针对性约束）
+- **喂自进化信号**（§10.9）：如果本轮写的禁止项是你在别的项目也写过的（反复出现），用 `.harness/brain-push.sh --layer global --category evolution` 把它记到 `global/evolution/banned-patterns.md`，供 `harness-evolve.sh` 提议升为通用规则
 
 ## 回合卡片收尾
 
