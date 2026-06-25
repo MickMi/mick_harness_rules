@@ -41,6 +41,20 @@
 
 ## PRD 输出格式
 
+### ⚠️ 动手前：先读个人 PRD 偏好（双层机制）
+
+输出 PRD 前，**先检索 Brain 的个人 PRD 风格偏好**（若 Brain 启用）：
+
+```bash
+.harness/brain-search.sh "PRD 风格"
+```
+
+命中则**以个人偏好为准**——它定义了 owner 习惯的骨架顺序、必含结构、表达风格。下面的通用模板只是 fallback（Brain 未启用 / 无个人偏好时用）。
+
+> 为什么分层：PRD 风格是 owner 的**个人签名**，放 Brain（私有、跨项目）；harness 公开仓库只留通用骨架，fork 者写自己的偏好，互不污染。
+
+### 通用模板（fallback）
+
 输出到 `docs/PRD-<feature>.md`（文件名取需求核心关键词）：
 
 ```markdown
