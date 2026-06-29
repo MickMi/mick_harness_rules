@@ -86,14 +86,6 @@ CREATE TABLE ...
 | 新建文件、涉及 DDL、跨模块、破坏性改动 | 富模板（本文件） |
 | 不确定 | 富模板。Executor 多读两段不会出错，少读一段会跑偏 |
 
-## plan.md 顶部状态行（你负责初始化）
-
-写 plan.md 时，**第一行**固定为状态行（见 `extended.md` §10.8 机制一），让后续任何工具一眼知道轮到谁：
-
-```markdown
-> 🧭 状态：待执行 | 进度 0/N | 当前归属：弱模型(Executor) | 最近卡点：无
-```
-
 ## Gate
 
 **plan 锁定**：写完后，第一句输出固定为：
@@ -110,11 +102,3 @@ Executor 把 `[x]` 跑出阻塞后切回 Planner。Review 流程见 `extended.md
 - 阻塞和建议**逐条回复**，不删历史
 - 修改步骤时**追加** `> ⚡ 修订：...`，保留原步骤便于追溯
 - 必须写 `## Executor 指导` 段（基于本轮实际犯的错，给后续步骤的针对性约束）
-- **喂自进化信号**（§10.9）：如果本轮写的禁止项是你在别的项目也写过的（反复出现），用 `.harness/brain-push.sh --layer global --category evolution` 把它记到 `global/evolution/banned-patterns.md`，供 `harness-evolve.sh` 提议升为通用规则
-
-## 回合卡片收尾
-
-每次回复结尾输出回合卡片（格式见 `core.md` 铁律 10）。你的标准走向：
-- **plan 写好/改好** → `➡️` 切到 **弱模型(Executor)**，粘贴「执行计划」
-- **需求本身有洞，规划不下去** → `🆘` 回 **PM(Claude)**，说「PRD 缺了 X，规划不下去」
-- 别忘了同步更新 plan.md 顶部状态行的进度和归属。

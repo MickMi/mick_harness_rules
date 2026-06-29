@@ -307,6 +307,30 @@ else
 fi
 
 # ============================================================
+# Check 14: Constitution ↔ Harness staleness
+# ============================================================
+echo "📋 Check 14: Constitution ↔ Harness staleness"
+CONSTITUTION_FILE="$BRAIN_DIR/constitution.md"
+if [ -f "$CONSTITUTION_FILE" ]; then
+    STALE=false
+    for dist_target in "AGENTS.md" ".cursorrules"; do
+        DIST_FILE="$HARNESS_ROOT/dist/$dist_target"
+        [ ! -f "$DIST_FILE" ] && continue
+        if [ "$CONSTITUTION_FILE" -nt "$DIST_FILE" ]; then
+            STALE=true
+            break
+        fi
+    done
+    if [ "$STALE" = true ]; then
+        check_warn "Constitution was updated more recently than dist/ rule files. Run '.harness/generate.sh' to sync."
+    else
+        check_pass "Constitution ↔ dist/ in sync"
+    fi
+else
+    check_pass "No Constitution found (OK for non-Mick users)"
+fi
+
+# ============================================================
 # Summary
 # ============================================================
 echo ""

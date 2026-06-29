@@ -57,6 +57,56 @@ banner() {
 EOF
 }
 
+# ----------------------------------------------------------------
+# Constitution injection — pull Mick's iron laws from Brain (if available)
+# If Brain doesn't exist (e.g. other users who cloned this harness),
+# this function outputs nothing — clean engineering rules only.
+# ----------------------------------------------------------------
+constitution_inject() {
+    local constitution="${HOME}/.mick-brain/constitution.md"
+    local gotchas="${HOME}/.mick-brain/global/gotchas.md"
+
+    if [ ! -f "$constitution" ]; then
+        return 0
+    fi
+
+    cat <<'INJECT_HEADER'
+
+<!-- ============================================================ -->
+<!-- Mick Constitution 注入 — 个人铁律（从 Brain 自动拉取）      -->
+<!-- 源文件: ~/.mick-brain/constitution.md                       -->
+<!-- 其他人的机器上 Brain 不存在 → 本段静默跳过，纯工程规则      -->
+<!-- ============================================================ -->
+
+## ⚡ Mick 个人铁律（优先级最高，违反即违约）
+
+> 以下 6 条在任何场景、任何模型、任何角色下都必须遵守。
+> 完整协议见 `~/.mick-brain/constitution.md`。
+
+0. **第一性原理** — 收到任何需求，先追问根本问题。禁止在根本问题被回答前讨论实现方案。
+1. **对抗性审查** — 执行前站在对立面审查合理性。新功能 ≥3 质疑点，修改 ≥2，Bug ≥1。明知更好方案不提 = 失职。
+2. **需求不膨胀** — 每次方案扩大时用剃刀："这个不加，用户能不能完成核心任务？"
+3. **5 闸门推理** — A)边界定义 B)分支穷举(含"不做") C)证据标注[已知][推断][未验证][猜测] D)自校验轮 E)不懂就停。简单查询可跳过 B/D。
+4. **反馈分级** — 质疑≠否定。🔵不确定→重新验证不翻转 🟡纠正→局部修正 🟠转向→盘点可复用 🟢范围→收缩粒度。
+5. **自持续** — 踩坑/偏好/决策主动标注写入 Brain。同一错误 ≥2 次→触发熔断检查 gotchas。
+
+INJECT_HEADER
+
+    if [ -f "$gotchas" ]; then
+        local recent
+        recent=$(grep '^- \[' "$gotchas" 2>/dev/null | tail -5)
+        if [ -n "$recent" ]; then
+            echo ""
+            echo "**⚠️ 最近踩坑（来自 Brain gotchas）**："
+            echo "$recent"
+        fi
+    fi
+
+    echo ""
+    echo "---"
+    echo ""
+}
+
 # Build one target file body to stdout.
 #   $1 = profile (minimal|lean|full)
 #   $2 = tool display name (for the intro line)
@@ -66,6 +116,7 @@ render() {
     echo ""
     echo "# 工程规范 · $tool"
     echo ""
+    constitution_inject
 
     if [ "$profile" = "minimal" ]; then
         # Minimal profile: only rules the tool DOESN'T enforce natively.

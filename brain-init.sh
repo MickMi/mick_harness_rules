@@ -428,7 +428,7 @@ echo ""
 # ============================================================
 # Phase 1: Load — Create symlink .harness/ → harness repo
 # ============================================================
-info "Phase 1/5: Load — Creating .harness/ symlink..."
+info "Phase 1/6: Load — Creating .harness/ symlink..."
 
 HARNESS_LINK="$TARGET_DIR/.harness"
 
@@ -455,14 +455,14 @@ fi
 # ============================================================
 # Phase 2: Inject — Generate + symlink rule files (shared lib)
 # ============================================================
-info "Phase 2/5: Inject — Generating + symlinking rule files..."
+info "Phase 2/6: Inject — Generating + symlinking rule files..."
 regenerate_rules "$HARNESS_ROOT"
 mount_rule_files "$HARNESS_ROOT" "$TARGET_DIR"
 
 # ============================================================
 # Phase 3: Activate — Ensure .gitignore isolates harness files
 # ============================================================
-info "Phase 3/5: Activate — Ensuring .gitignore isolation..."
+info "Phase 3/6: Activate — Ensuring .gitignore isolation..."
 
 GITIGNORE="$TARGET_DIR/.gitignore"
 # Always isolate harness mount + role projection; add per-rule-file entries
@@ -494,7 +494,7 @@ fi
 # ============================================================
 # Phase 4: Verify — Run brain-check to confirm everything works
 # ============================================================
-info "Phase 4/5: Verify — Running brain check..."
+info "Phase 4/6: Verify — Running brain check..."
 echo ""
 
 BRAIN_CHECK="$HARNESS_ROOT/brain-check.sh"
@@ -505,6 +505,55 @@ else
     warn "brain-check.sh not found or not executable. Skipping verification."
     warn "Run 'chmod +x $BRAIN_CHECK' to enable verification."
     CHECK_EXIT=0
+fi
+
+# ============================================================
+# Phase 5: Register — Project registry + Brain auto-sync hooks
+# ============================================================
+info "Phase 5/6: Register — Registering project + deploying Brain hooks..."
+
+REGISTRY="$BRAIN_DIR/.harness-projects"
+
+# Register this project path in Brain registry
+if [ ! -f "$REGISTRY" ]; then
+    touch "$REGISTRY"
+fi
+if ! grep -qxF "$TARGET_DIR" "$REGISTRY" 2>/dev/null; then
+    echo "$TARGET_DIR" >> "$REGISTRY"
+    ok "Project registered in Brain registry ($(wc -l < "$REGISTRY" | tr -d ' ') project(s) total)"
+else
+    ok "Project already registered in Brain registry"
+fi
+
+# Deploy post-commit + post-merge hooks to Brain repo
+# These fire on: git commit / git pull (merge) → auto-regenerate harness rules for ALL registered projects
+if [ "$BRAIN_IS_EXTERNAL" = "true" ] && [ -d "$BRAIN_REPO_LOCAL/.git" ]; then
+    HOOKS_DIR="$BRAIN_REPO_LOCAL/.git/hooks"
+    mkdir -p "$HOOKS_DIR"
+
+    for hook_name in post-commit post-merge; do
+        HOOK_PATH="$HOOKS_DIR/$hook_name"
+        cat <<'HOOK_EOF' > "$HOOK_PATH"
+#!/bin/bash
+# Auto-deployed by brain-init.sh
+# Trigger: git commit / git pull (merge) in Brain repo
+# Action: regenerate harness rules for all registered projects
+set -euo pipefail
+REGISTRY="$HOME/.mick-brain/.harness-projects"
+[ ! -f "$REGISTRY" ] && exit 0
+while IFS= read -r project || [ -n "$project" ]; do
+    [ -z "$project" ] && continue
+    [ ! -d "$project/.harness" ] && continue
+    if [ -x "$project/.harness/generate.sh" ]; then
+        "$project/.harness/generate.sh" >/dev/null 2>&1 || true
+    fi
+done < "$REGISTRY"
+HOOK_EOF
+        chmod +x "$HOOK_PATH"
+    done
+    ok "Brain hooks deployed: post-commit + post-merge (auto-refresh all registered projects on Brain change)"
+else
+    info "Brain hooks skipped (external brain repo not available)"
 fi
 
 echo ""
