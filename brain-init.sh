@@ -547,6 +547,12 @@ while IFS= read -r project || [ -n "$project" ]; do
     if [ -x "$project/.harness/generate.sh" ]; then
         "$project/.harness/generate.sh" >/dev/null 2>&1 || true
     fi
+    if [ -f "$project/.harness/lib-mount-rules.sh" ]; then
+        info() { :; }; ok() { :; }; warn() { :; }; fail() { :; }
+        # shellcheck disable=SC1091
+        source "$project/.harness/lib-mount-rules.sh"
+        mount_rule_files "$project/.harness" "$project" >/dev/null 2>&1 || true
+    fi
 done < "$REGISTRY"
 HOOK_EOF
         chmod +x "$HOOK_PATH"

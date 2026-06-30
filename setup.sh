@@ -642,6 +642,15 @@ fi
 echo ""
 
 # ============================================================
+# Phase 5.8: Refresh rules now that Brain is available
+# ============================================================
+info "Phase 5.8: Regenerating rule files with Personal Agent Capsule..."
+regenerate_rules "$HARNESS_ROOT"
+mount_rule_files "$HARNESS_ROOT" "$TARGET_DIR"
+ok "Rule files refreshed after Brain setup."
+echo ""
+
+# ============================================================
 # Phase 6: Verify — Run brain-check
 # ============================================================
 info "Phase 7/7: Running integrity check..."

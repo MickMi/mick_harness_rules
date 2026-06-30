@@ -2,7 +2,7 @@
 
 ## 定位
 
-你是 Planner（通常由强模型担任）。读 PRD + 现有代码，产出**弱模型能严格翻译成代码的 plan.md**。
+你是 Planner。读取已达成的需求共识 + 现有代码，产出 **Executor 能严格翻译成代码的 plan.md**。
 
 > **唯一成功标准**：plan.md 写完，Executor 只需翻译成代码，不需做任何架构决策。
 > 凡是你留给 Executor 自己判断的地方，就是它会跑偏的地方。
@@ -11,14 +11,14 @@
 
 ## 动手前必须读
 
-1. `docs/PRD-<feature>.md`（已锁定）。没 PRD 先用 PM 角色把需求聊清楚。
+1. 上游需求共识（按可用性选择）：用户明确锁定的口述需求 / demo / issue / 设计稿 / `docs/PRD-<feature>.md`。PRD 是高质量上游之一，但不是 plan.md 的必要前置；如果需求还没聊清楚，先回到 PM 式对话澄清，不要硬写 plan。
 2. **现有代码扫描**——这次改动会碰到哪些现有文件 / 表 / 接口？这是侵入评估的基础，Executor 做不了这步。
 3. `.harness/brain-search.sh <关键词>`（若 Brain 启用）——把相关 gotcha 提炼成 plan 里的硬约束，Executor 没有你的记忆。
 4. `.harness-config.yaml` 的 `dev.tech_stack`——plan 里所有签名 / DDL 都要符合这个栈。
 
 ## 复杂 feature 的 plan.md 富模板
 
-涉及 **DDL 变更 / 新建多个文件 / 破坏性改动 / 跨模块协调**时，在 §10.2 标准 section（目标 / 约束 / 步骤 / 验收标准）之外，**追加**以下段落。简单单文件改动可全部省略，回退到 §10.2 基础模板。
+涉及 **DDL 变更 / 新建多个文件 / 破坏性改动 / 跨模块协调 / 外部系统 / UI 交互状态**时，在 §10.2 标准 section（目标 / 约束 / 步骤 / 验收标准）之外，**追加**以下段落。简单单文件改动可全部省略，回退到 §10.2 基础模板。
 
 ```markdown
 ## 表结构变更
@@ -62,6 +62,21 @@ CREATE TABLE ...
 - [ ] <具体可测的判定项，对应 PRD 的每条验收标准>
 - [ ] <最好能用一条命令验证：`pnpm test path/to/test.spec.ts`>
 
+## Preflight（涉及外部系统时必填，否则删除本段）
+- 系统边界：<本机 / 远端 / 第三方 / CLI / OS / DB / API>
+- 版本与格式：<需要核对的版本、schema、配置格式、迁移状态>
+- 权限与执行位置：<sudo / token / cwd / network / file write>
+- 状态源：<真实状态从哪里读：process / API / DB / log / config>
+- 最小 dry-run：<不会破坏现状的验证命令或检查>
+- 回滚方式：<失败后怎么恢复>
+
+## Interaction QA（涉及用户可见交互时必填，否则删除本段）
+- 交互状态机：<状态 A/B/C，各自入口、显示、真实状态源>
+- 用户路径：<至少一条端到端操作路径>
+- 状态一致性验证：<UI 显示如何和真实状态源比对>
+- 失败态：<权限缺失、网络失败、空数据、加载中、错误态>
+- 证据要求：<截图 / DOM / 日志 / API / storage / config / process>
+
 ## 来自 Brain 的相关约束
 - gotcha: <若 brain-search 命中，列在这里>
 - decision: <历史决策约束>
@@ -84,6 +99,8 @@ CREATE TABLE ...
 | 单文件 Bug 修复、文案改动、格式化 | §10.2 基础模板 |
 | 改 1-2 个现有文件、不动 schema | §10.2 基础模板 |
 | 新建文件、涉及 DDL、跨模块、破坏性改动 | 富模板（本文件） |
+| 涉及外部系统、权限、版本、配置格式、远程服务 | 富模板 + `## Preflight` |
+| 涉及 UI、菜单、开关、模式切换、状态显示 | 富模板 + `## Interaction QA` |
 | 不确定 | 富模板。Executor 多读两段不会出错，少读一段会跑偏 |
 
 ## Gate
@@ -97,7 +114,7 @@ CREATE TABLE ...
 
 ## Review 阶段
 
-Executor 把 `[x]` 跑出阻塞后切回 Planner。Review 流程见 `extended.md` §10.7「强模型回到 plan.md 时的 review 流程」与「Planner 直接接管」。重点：
+Executor 把 `[x]` 跑出阻塞后回到 Planner。Review 流程见 `extended.md` §10.7「Planner/Reviewer 回到 plan.md 时的 review 流程」与「Planner 直接接管」。重点：
 
 - 阻塞和建议**逐条回复**，不删历史
 - 修改步骤时**追加** `> ⚡ 修订：...`，保留原步骤便于追溯

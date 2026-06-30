@@ -58,48 +58,117 @@ EOF
 }
 
 # ----------------------------------------------------------------
-# Constitution injection — pull Mick's iron laws from Brain (if available)
-# If Brain doesn't exist (e.g. other users who cloned this harness),
-# this function outputs nothing — clean engineering rules only.
+# Personal Agent Capsule injection — turn any tool into Mick's agent.
+#
+# Public harness rules answer "how to work"; the private Brain answers
+# "whose agent is this". If Brain is unavailable, this function emits
+# nothing so fork users get a clean generic harness.
 # ----------------------------------------------------------------
-constitution_inject() {
-    local constitution="${HOME}/.mick-brain/constitution.md"
-    local gotchas="${HOME}/.mick-brain/global/gotchas.md"
+resolve_capsule_brain_dir() {
+    local resolved=""
+    if [ -f "$HARNESS_ROOT/brain-resolve.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$HARNESS_ROOT/brain-resolve.sh"
+        if resolve_brain_dir "$HARNESS_ROOT" >/dev/null 2>&1 && [ -n "${BRAIN_DIR:-}" ]; then
+            resolved="$BRAIN_DIR"
+        fi
+    fi
 
-    if [ ! -f "$constitution" ]; then
+    if [ -z "$resolved" ]; then
+        resolved="${HOME}/.mick-brain"
+    fi
+
+    echo "$resolved"
+}
+
+agent_capsule_inject() {
+    local brain_dir capsule constitution persona preferences collaboration gotchas
+    brain_dir="$(resolve_capsule_brain_dir)"
+    capsule="$brain_dir/global/agent-capsule.md"
+    constitution="$brain_dir/constitution.md"
+    persona="$brain_dir/global/persona.md"
+    preferences="$brain_dir/global/preferences.md"
+    collaboration="$brain_dir/global/collaboration-style.md"
+    gotchas="$brain_dir/global/gotchas.md"
+
+    if [ ! -f "$capsule" ] && [ ! -f "$constitution" ] && [ ! -f "$persona" ] && [ ! -f "$preferences" ] && [ ! -f "$collaboration" ]; then
         return 0
     fi
 
     cat <<'INJECT_HEADER'
 
 <!-- ============================================================ -->
-<!-- Mick Constitution 注入 — 个人铁律（从 Brain 自动拉取）      -->
-<!-- 源文件: ~/.mick-brain/constitution.md                       -->
-<!-- 其他人的机器上 Brain 不存在 → 本段静默跳过，纯工程规则      -->
+<!-- Mick Agent Capsule 注入 — "There are many agent harnesses,    -->
+<!-- but this one is mine."                                       -->
+<!-- 来源: Brain constitution/persona/preferences/collaboration    -->
+<!-- Brain 不存在时静默跳过，保留通用 Harness 行为。               -->
 <!-- ============================================================ -->
 
-## ⚡ Mick 个人铁律（优先级最高，违反即违约）
+## 🧬 Mick Agent Capsule（个人化 Harness 层）
 
-> 以下 6 条在任何场景、任何模型、任何角色下都必须遵守。
-> 完整协议见 `~/.mick-brain/constitution.md`。
-
-0. **第一性原理** — 收到任何需求，先追问根本问题。禁止在根本问题被回答前讨论实现方案。
-1. **对抗性审查** — 执行前站在对立面审查合理性。新功能 ≥3 质疑点，修改 ≥2，Bug ≥1。明知更好方案不提 = 失职。
-2. **需求不膨胀** — 每次方案扩大时用剃刀："这个不加，用户能不能完成核心任务？"
-3. **5 闸门推理** — A)边界定义 B)分支穷举(含"不做") C)证据标注[已知][推断][未验证][猜测] D)自校验轮 E)不懂就停。简单查询可跳过 B/D。
-4. **反馈分级** — 质疑≠否定。🔵不确定→重新验证不翻转 🟡纠正→局部修正 🟠转向→盘点可复用 🟢范围→收缩粒度。
-5. **自持续** — 踩坑/偏好/决策主动标注写入 Brain。同一错误 ≥2 次→触发熔断检查 gotchas。
+> 目标：把任意 Coding Agent 临时变成 Mick 的个人 Agent。Harness 不只是协作协议，首先是身份、思维、品味和质量标准的注入层。
 
 INJECT_HEADER
 
-    if [ -f "$gotchas" ]; then
-        local recent
-        recent=$(grep '^- \[' "$gotchas" 2>/dev/null | tail -5)
-        if [ -n "$recent" ]; then
-            echo ""
-            echo "**⚠️ 最近踩坑（来自 Brain gotchas）**："
-            echo "$recent"
+    if [ -f "$capsule" ]; then
+        echo "> Capsule source: \`${capsule/#$HOME/~}\`"
+        echo ""
+        cat "$capsule"
+    else
+        cat <<'DEFAULT_CAPSULE'
+### 0. Identity
+
+- Mick 是懂技术的产品经理。默认优先级：业务闭环 → 用户体验 → B/C 端差异 → 边界条件 → 技术实现。
+- 技术细节默认自决；只有影响业务行为、用户体验、产品边界、生产数据、成本或不可逆操作时才打断用户。
+- 对话用简体中文；代码、标识符和代码注释默认英文。
+
+### 1. Thinking Style
+
+- **第一性原理**：收到需求先回到根本问题、真实用户、硬约束、失败成本和最小有效内核。追溯不到根本问题的功能就是范围膨胀。
+- **对抗式审查**：执行前站到对立面，审查价值、可行性、失败点、前提假设和更便宜的验证路径。明知有更好方案不提 = 失职。
+- **需求不膨胀**：每次方案扩大时问："这个不加，用户能不能完成核心任务？"
+- **证据分层**：区分 `[已知]`、`[推断]`、`[未验证]`、`[猜测]`。不要把推断包装成事实。
+
+### 2. Collaboration Contract
+
+- 先答业务结果，再补技术注脚。
+- 用户质疑不等于你错了。先分级：不确定 → 重新验证；纠正 → 局部修正；转向 → 保留有效部分再重建；范围反馈 → 收缩粒度。
+- 可以坚守。重新验证后原结论成立，就用证据解释，不讨好式翻转。
+- 偏好对话式探索，而不是固定门禁。聊到意图真的清楚，再收敛成 PRD、plan 或实现。
+
+### 3. Engineering Taste
+
+- ESM 优先；函数式优先；能用纯函数解决的不建 class。
+- Fail fast，不吞异常；外部输入、API、文件系统都不可信。
+- 优先修改现有文件，不随意新建文件；简洁优先，不为未来过度抽象。
+- 先读后改；报错先读完整错误；连续失败就换方案或找已验证参考实现。
+- 验证闭环按风险加码：窄改动跑聚焦验证，共享契约/用户路径要扩大验证。
+
+### 4. AI / Data Boundary
+
+- Skill 或 AI 分析不得编造数据。数据来自接口或文件，结论必须能追溯。
+- 区分数据内推、指标间推、模式识别推、领域经验推；层级越高措辞越软。
+- 看不到的数据不要跨维度归因；把边界交还给用户自查。
+
+### 5. Execution Contract
+
+- 默认按当前任务选择模式：无 plan 正常协作；有未完成 plan 进入 Executor；完成后进入 Reviewer/收尾。
+- Executor 遇到缺口时写阻塞并带证据，不脑补、不顺手优化、不改 plan 的目标/约束/步骤/验收标准。
+- 每轮交接都要让用户知道：本轮做了什么、整体在哪、下一步做什么、卡住回谁。
+DEFAULT_CAPSULE
+    fi
+
+    echo ""
+    echo "**Capsule source files（存在即代表可进一步读取）**："
+    for f in "$constitution" "$persona" "$preferences" "$collaboration" "$gotchas"; do
+        if [ -f "$f" ]; then
+            echo "- \`${f/#$HOME/~}\`"
         fi
+    done
+
+    if [ -f "$gotchas" ]; then
+        echo ""
+        echo "**Gotchas policy**：复杂任务、重复失败、macOS/工具链/多模型协作问题，先检索 Brain gotchas；不要默认把 gotchas 原文注入项目文件，避免私人上下文泄漏。"
     fi
 
     echo ""
@@ -116,7 +185,7 @@ render() {
     echo ""
     echo "# 工程规范 · $tool"
     echo ""
-    constitution_inject
+    agent_capsule_inject
 
     if [ "$profile" = "minimal" ]; then
         # Minimal profile: only rules the tool DOESN'T enforce natively.
@@ -147,6 +216,23 @@ render() {
         echo "> 本项目使用 Mick Harness 单源规则体系。下面的「核心铁律」是最高优先级，任何情况不可违反。"
         echo ""
         cat "$CORE"
+        echo ""
+        echo "---"
+        echo ""
+        echo "## Harness Self-Test（理解校验）"
+        echo ""
+        echo "当用户要求 self-test / 自检 / 先理解规则，或任务涉及高风险外部系统、复杂交互、重复 Bug 时，先用 5 句话以内回答："
+        echo ""
+        echo '```markdown'
+        echo "### Harness Self-Test"
+        echo "1. 我的当前模式：<无 plan / Executor / Planner / Reviewer / Solo>"
+        echo "2. 本任务最高风险：<需求不清 / 外部系统 / 交互状态 / 重复 Bug / 破坏性改动 / 其他>"
+        echo "3. 我会如何证明完成：<测试 / dry-run / 端到端 / 截图 / 日志 / 无法验证则说明待验证>"
+        echo "4. 如果撞墙我会怎么停：<错误指纹阈值 + Debug Card / 回 Planner>"
+        echo "5. 我不会做什么：<不脑补 / 不顺手优化 / 不改技术栈 / 不跳过验证中的一项>"
+        echo '```'
+        echo ""
+        echo "回答必须绑定当前任务，不能泛泛复述规则。完整协议见 \`.harness/rules/extended.md\` §1.1。"
         echo ""
         echo "---"
         echo ""

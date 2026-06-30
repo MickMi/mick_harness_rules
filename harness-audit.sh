@@ -8,9 +8,11 @@ set -euo pipefail
 #   1. Step-file alignment (files changed but not in plan)
 #   2. Self-check coverage (completed steps vs log entries)
 #   3. Verification evidence (verify: line present and meaningful)
-#   4. Step order (timestamps monotonically increasing)
-#   5. Scope creep (files in diff not mentioned in any plan step)
-#   6. Plan integrity (required sections exist)
+#      - Flags completed steps whose verify line admits no verification or a failed check
+#   4. Preflight / Interaction QA hints for risky plans
+#   5. Step order (timestamps monotonically increasing)
+#   6. Scope creep (files in diff not mentioned in any plan step)
+#   7. Plan integrity (required sections exist)
 #
 # Usage:
 #   .harness/harness-audit.sh [--since <commit>] [--log]
@@ -64,8 +66,10 @@ if [ ! -f "$PLAN" ]; then
 fi
 
 # --- Count steps ---
-TOTAL_STEPS=$(grep -cE '^\- \[[ x]\] [0-9]+\.' "$PLAN" 2>/dev/null || echo 0)
-COMPLETED_STEPS=$(grep -cE '^\- \[x\] [0-9]+\.' "$PLAN" 2>/dev/null || echo 0)
+TOTAL_STEPS=$(grep -cE '^\- \[[ x]\] [0-9]+\.' "$PLAN" 2>/dev/null || true)
+COMPLETED_STEPS=$(grep -cE '^\- \[x\] [0-9]+\.' "$PLAN" 2>/dev/null || true)
+TOTAL_STEPS=${TOTAL_STEPS:-0}
+COMPLETED_STEPS=${COMPLETED_STEPS:-0}
 
 # --- Get git diff files ---
 DIFF_FILES=""
@@ -101,7 +105,8 @@ fi
 # Check 2: Self-check coverage
 # ============================================================
 echo -e "${CYAN}📋 Check 2: Self-check coverage${NC}"
-SELFCHECK_ENTRIES=$(grep -cE '^### Step [0-9]+' "$PLAN" 2>/dev/null || echo 0)
+SELFCHECK_ENTRIES=$(grep -cE '^### Step [0-9]+' "$PLAN" 2>/dev/null || true)
+SELFCHECK_ENTRIES=${SELFCHECK_ENTRIES:-0}
 
 if [ "$COMPLETED_STEPS" -eq 0 ]; then
     pass "No completed steps yet — nothing to check"
@@ -121,6 +126,8 @@ if [ "$SELFCHECK_ENTRIES" -eq 0 ]; then
 else
     NO_VERIFY=0
     VAGUE_VERIFY=0
+    UNVERIFIED_VERIFY=0
+    FAILED_VERIFY=0
     IN_SELFCHECK=false
     CURRENT_STEP=""
 
@@ -138,6 +145,12 @@ else
             if [[ "$verify_lower" =~ ^(完成|done|ok|通过)$ ]]; then
                 ((VAGUE_VERIFY++))
             fi
+            if [[ "$verify_lower" =~ (未验证|待验证|无法验证|未运行|没跑|未执行|未测试|not[[:space:]]+run|not[[:space:]]+tested|skipped|skip|n/a) ]]; then
+                ((UNVERIFIED_VERIFY++))
+            fi
+            if [[ "$verify_lower" =~ (failed|failure|失败|未通过|not[[:space:]]+pass|exit[[:space:]]+code[[:space:]]+[1-9]) ]]; then
+                ((FAILED_VERIFY++))
+            fi
         fi
     done < <(sed -n '/^## 自检日志/,/^## [^自]/p' "$PLAN")
 
@@ -145,18 +158,47 @@ else
         ((NO_VERIFY++))
     fi
 
-    if [ "$NO_VERIFY" -eq 0 ] && [ "$VAGUE_VERIFY" -eq 0 ]; then
+    if [ "$NO_VERIFY" -eq 0 ] && [ "$VAGUE_VERIFY" -eq 0 ] && [ "$UNVERIFIED_VERIFY" -eq 0 ] && [ "$FAILED_VERIFY" -eq 0 ]; then
         pass "All self-check entries have meaningful verify evidence"
     else
         [ "$NO_VERIFY" -gt 0 ] && warn_check "verify-missing" "$NO_VERIFY entries missing verify: line"
         [ "$VAGUE_VERIFY" -gt 0 ] && warn_check "verify-vague" "$VAGUE_VERIFY entries have vague verify (just '完成'/'done')"
+        [ "$UNVERIFIED_VERIFY" -gt 0 ] && fail_check "verify-unverified" "$UNVERIFIED_VERIFY completed-step verify lines admit no real verification"
+        [ "$FAILED_VERIFY" -gt 0 ] && fail_check "verify-failed" "$FAILED_VERIFY completed-step verify lines report failed verification"
     fi
 fi
 
 # ============================================================
-# Check 4: Step order (timestamp monotonicity)
+# Check 4: Preflight / Interaction QA hints
 # ============================================================
-echo -e "${CYAN}📋 Check 4: Step execution order${NC}"
+echo -e "${CYAN}📋 Check 4: Preflight / Interaction QA hints${NC}"
+EXTERNAL_PATTERN='(server|remote|api|cli|sudo|permission|token|config|migration|database|db|network|proxy|browser|service|daemon|plist|launchd|ci|deploy|version|版本|权限|配置|远程|服务|网络|代理|浏览器|数据库|迁移|部署)'
+INTERACTION_PATTERN='(ui|interaction|button|toggle|switch|menu|modal|form|toast|state|status|loading|empty|error|click|hover|交互|按钮|菜单|开关|切换|弹窗|表单|状态|加载|空态|错误态)'
+
+if grep -Eiq "$EXTERNAL_PATTERN" "$PLAN"; then
+    if grep -Eiq '(preflight|前置核对|前置检查|版本兼容|权限核对|dry-run|dry run)' "$PLAN"; then
+        pass "External-system plan includes preflight-style checks"
+    else
+        warn_check "preflight-missing" "Plan appears to touch external systems/config/permissions but lacks an explicit Preflight section or check"
+    fi
+else
+    pass "No obvious external-system risk keywords in plan"
+fi
+
+if grep -Eiq "$INTERACTION_PATTERN" "$PLAN"; then
+    if grep -Eiq '(interaction qa|交互状态|真实状态源|用户路径|状态源|screenshot|截图|dom|e2e)' "$PLAN"; then
+        pass "Interaction plan includes state-source or user-path QA"
+    else
+        warn_check "interaction-qa-missing" "Plan appears to touch UI/interaction/state but lacks explicit Interaction QA evidence"
+    fi
+else
+    pass "No obvious UI/interaction risk keywords in plan"
+fi
+
+# ============================================================
+# Check 5: Step order (timestamp monotonicity)
+# ============================================================
+echo -e "${CYAN}📋 Check 5: Step execution order${NC}"
 TIMESTAMPS=()
 while IFS= read -r line; do
     if [[ "$line" =~ ^###\ Step\ [0-9]+\ —\ ([0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}) ]]; then
@@ -184,17 +226,17 @@ else
 fi
 
 # ============================================================
-# Check 5: Scope creep — files in diff not in any plan step
+# Check 6: Scope creep — files in diff not in any plan step
 # ============================================================
-echo -e "${CYAN}📋 Check 5: Scope creep detection${NC}"
+echo -e "${CYAN}📋 Check 6: Scope creep detection${NC}"
 if [ -z "$DIFF_FILES" ]; then
     pass "No git diff to check (or invalid --since ref)"
 else
     # Extract file paths mentioned in plan steps (backtick-quoted)
-    PLAN_FILES=$(grep -E '^\- \[[ x]\] [0-9]+\.' "$PLAN" | grep -oE '`[^`]+`' | tr -d '`' | sort -u)
+    PLAN_FILES=$(grep -E '^\- \[[ x]\] [0-9]+\.' "$PLAN" | grep -oE '`[^`]+`' | tr -d '`' | sort -u || true)
     # Also extract from self-check files: lines
-    SELFCHECK_FILES=$(grep -E '^- files:' "$PLAN" | sed 's/^- files: //' | tr ',' '\n' | sed 's/^ *//;s/ *$//' | sort -u)
-    ALL_PLAN_FILES=$(echo -e "$PLAN_FILES\n$SELFCHECK_FILES" | sort -u | grep -v '^$')
+    SELFCHECK_FILES=$(grep -E '^- files:' "$PLAN" | sed 's/^- files: //' | tr ',' '\n' | sed 's/^ *//;s/ *$//' | sort -u || true)
+    ALL_PLAN_FILES=$(echo -e "$PLAN_FILES\n$SELFCHECK_FILES" | sort -u | grep -v '^$' || true)
 
     CREEP_FILES=""
     while IFS= read -r diff_file; do
@@ -225,9 +267,9 @@ else
 fi
 
 # ============================================================
-# Check 6: Step-file alignment (completed steps vs self-check files)
+# Check 7: Step-file alignment (completed steps vs self-check files)
 # ============================================================
-echo -e "${CYAN}📋 Check 6: Step-file alignment${NC}"
+echo -e "${CYAN}📋 Check 7: Step-file alignment${NC}"
 if [ "$SELFCHECK_ENTRIES" -eq 0 ]; then
     pass "No self-check entries to cross-reference"
 else

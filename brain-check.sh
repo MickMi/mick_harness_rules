@@ -307,27 +307,72 @@ else
 fi
 
 # ============================================================
-# Check 14: Constitution ↔ Harness staleness
+# Check 14: Harness Self-Test prompt present
 # ============================================================
-echo "📋 Check 14: Constitution ↔ Harness staleness"
-CONSTITUTION_FILE="$BRAIN_DIR/constitution.md"
-if [ -f "$CONSTITUTION_FILE" ]; then
+echo "📋 Check 14: Harness Self-Test prompt"
+SELFTEST_PRESENT=true
+for dist_target in "AGENTS.md" "CLAUDE.md" ".cursorrules"; do
+    DIST_FILE="$HARNESS_ROOT/dist/$dist_target"
+    if [ ! -f "$DIST_FILE" ] || ! grep -q "Harness Self-Test" "$DIST_FILE" 2>/dev/null; then
+        SELFTEST_PRESENT=false
+    fi
+done
+
+if [ "$SELFTEST_PRESENT" = true ]; then
+    check_pass "Harness Self-Test prompt is present in generated rule files"
+else
+    check_warn "Harness Self-Test prompt missing from generated rule files. Run '.harness/generate.sh'."
+fi
+echo "         Ask the current Agent to answer: '请按 Harness Self-Test 用 5 句话证明你理解当前任务约束。'"
+
+# ============================================================
+# Check 15: Personal Agent Capsule ↔ Harness staleness
+# ============================================================
+echo "📋 Check 15: Personal Agent Capsule ↔ Harness staleness"
+CAPSULE_SOURCES=(
+    "$BRAIN_DIR/global/agent-capsule.md"
+    "$BRAIN_DIR/constitution.md"
+    "$BRAIN_DIR/global/persona.md"
+    "$BRAIN_DIR/global/preferences.md"
+    "$BRAIN_DIR/global/collaboration-style.md"
+    "$BRAIN_DIR/global/gotchas.md"
+)
+HAS_CAPSULE_SOURCE=false
+for src in "${CAPSULE_SOURCES[@]}"; do
+    if [ -f "$src" ]; then
+        HAS_CAPSULE_SOURCE=true
+        break
+    fi
+done
+
+if [ "$HAS_CAPSULE_SOURCE" = true ]; then
+    CAPSULE_PRESENT=true
     STALE=false
-    for dist_target in "AGENTS.md" ".cursorrules"; do
+    for dist_target in "AGENTS.md" "CLAUDE.md" ".cursorrules"; do
         DIST_FILE="$HARNESS_ROOT/dist/$dist_target"
-        [ ! -f "$DIST_FILE" ] && continue
-        if [ "$CONSTITUTION_FILE" -nt "$DIST_FILE" ]; then
-            STALE=true
-            break
+        if [ ! -f "$DIST_FILE" ]; then
+            CAPSULE_PRESENT=false
+            continue
         fi
+        if ! grep -q "Mick Agent Capsule" "$DIST_FILE" 2>/dev/null; then
+            CAPSULE_PRESENT=false
+        fi
+        for src in "${CAPSULE_SOURCES[@]}"; do
+            if [ -f "$src" ] && [ "$src" -nt "$DIST_FILE" ]; then
+                STALE=true
+            fi
+        done
     done
-    if [ "$STALE" = true ]; then
-        check_warn "Constitution was updated more recently than dist/ rule files. Run '.harness/generate.sh' to sync."
+
+    if [ "$CAPSULE_PRESENT" = false ]; then
+        check_warn "Personal Agent Capsule sources exist, but generated rule files do not contain the capsule. Run '.harness/generate.sh'."
+    elif [ "$STALE" = true ]; then
+        check_warn "Personal Agent Capsule sources are newer than dist/ rule files. Run '.harness/generate.sh' to sync."
     else
-        check_pass "Constitution ↔ dist/ in sync"
+        check_pass "Personal Agent Capsule is injected and in sync"
     fi
 else
-    check_pass "No Constitution found (OK for non-Mick users)"
+    check_pass "No Personal Agent Capsule source found (OK for non-Mick users)"
 fi
 
 # ============================================================

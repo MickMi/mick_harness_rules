@@ -5,7 +5,11 @@
 它围绕两个核心能力展开：
 
 - **Harness（工程护栏）**
-  - **单源规则体系**：`rules/core.md`（10 条铁律，弱模型优化）+ `rules/extended.md`（完整工程规范），一份维护
+  - **单源规则体系**：`rules/core.md`（11 条铁律，个人 Agent 的硬约束）+ `rules/extended.md`（完整工程规范），一份维护
+  - **Anti-Wall 调试控制器**：同一错误重复出现时，强制证据复核、整体 review、完成验证，避免反复撞墙
+  - **Cross-System Preflight**：涉及版本、权限、远程服务、配置格式、OS/CLI/API 时，先核对边界再实现
+  - **Interaction QA Contract**：涉及 UI/菜单/开关/状态显示时，强制验证真实状态源和用户路径
+  - **Harness Self-Test**：让 Agent 用当前任务回答 5 个理解校验点，证明不是只"读过规则"
   - **多格式生成**：`generate.sh` 自动产出 `AGENTS.md` / `CLAUDE.md` / `.cursorrules` / `.windsurfrules` / `.clinerules` / `copilot-instructions.md` / `.trae/rules.md`
   - 多 Agent 角色协作（PM / Designer / QA / Reviewer / Dev）
   - 强制需求审查门禁
@@ -15,18 +19,20 @@
   - 自动蒸馏 + 检索优先
   - 自动写入随生成器流入各 IDE 规则文件
 
-### 为什么是单源 + 弱模型优化
+### 为什么是单源 + 个人 Agent 约束
 
-旧版核心规范只活在一份 Cursor 专有的 `.cursorrules` 里，长达上百行——对推理较弱的模型（GLM / Qwen / DeepSeek / Trae 等）指令遵循率会断崖下跌，排在后面的规则几乎不执行。
+Harness 的第一目标不是"强弱模型切换"，而是让任何 Coding Agent 进入项目后都先变成 **Mick 的个人 Agent**：按你的证据标准、调试纪律、完成定义和协作方式工作。上下文预算优化只是实现这个目标的分发策略。
+
+旧版核心规范只活在一份 Cursor 专有的 `.cursorrules` 里，长达上百行——不同工具和不同模型读到的上下文不一致，对推理较弱的模型（GLM / Qwen / DeepSeek / Trae 等）指令遵循率会断崖下跌，排在后面的规则几乎不执行。
 
 新版把规则拆成两层：
 
 | 层 | 文件 | 谁读 | 形态 |
 |----|------|------|------|
-| **core** | `rules/core.md` | 所有工具（含弱模型） | 10 条铁律，极短极硬，编号祈使句，最关键的排最前 |
-| **extended** | `rules/extended.md` | 强模型 / 按需读取 | 代码哲学、Git、CI-CD、测试、角色协作、Brain 写入 |
+| **core** | `rules/core.md` | 所有工具 | 11 条铁律，极短极硬，含证据优先、撞墙熔断、完成验证 |
+| **extended** | `rules/extended.md` | 按需读取 | 代码哲学、Anti-Wall、Preflight、Interaction QA、Git、CI-CD、测试、角色协作、Brain 写入 |
 
-`generate.sh` 用两套 profile 分发：**lean**（弱模型 / AGENTS / Claude / Copilot / Trae —— core 内联 + extended 指针，省 context）和 **full**（Cursor / Windsurf / Cline —— 全量内联）。改一处 `core.md`，跑一次 `generate.sh`，所有工具同步更新。
+`generate.sh` 用两套 profile 分发：**lean**（AGENTS / Claude / Copilot / Trae —— core + Self-Test 内联，extended 指针，省 context）和 **full**（Cursor / Windsurf / Cline —— 全量内联）。改一处 `core.md`，跑一次 `generate.sh`，所有工具同步更新。
 
 ## 这个项目解决什么问题
 
@@ -58,6 +64,16 @@ git clone https://github.com/MickMi/mick_harness_rules.git .harness && .harness/
 5. **Strictness（流程严格度）**：强门禁 / 软提示 / 自由
 
 答案写入 `.harness-config.yaml`（commit 到项目，跨机器/跨成员一致）。AI 在工作时会读这个文件决定行为，不再对所有项目一刀切。
+
+### Harness Self-Test
+
+当你切到任意 Agent 或怀疑它没有真正读懂规则时，直接发：
+
+```text
+请按 Harness Self-Test 用 5 句话证明你理解当前任务约束。
+```
+
+合格回答必须绑定当前任务，说清楚当前模式、最高风险、如何证明完成、撞墙时如何停、以及这轮不会做什么。泛泛复述规则视为未通过。
 
 后续运行非交互式 / CI 用：
 
@@ -138,7 +154,7 @@ flowchart TD
     Init -->|"brain-init.sh"| Brain
 
     CR -->|"AI 遵循规范"| Code["⚙️ 代码实现"]
-    PM -->|"需求审查 2-3 轮"| Code
+    PM -->|"需求探讨 + 明确分支"| Code
     Brain -->|"brain-search.sh"| Code
     Code -->|"brain-push.sh"| S
 ```
@@ -214,25 +230,27 @@ Global（跨项目通用经验）
 
 ## Agent 角色
 
-内置 5 个 Agent 角色（源文件在 `rules/roles/`，项目里映射为 `.prompts/`）。弱模型不可靠地自动切换角色，因此改为**显式点名调用**：
+内置 5 个 Agent 角色（源文件在 `rules/roles/`，项目里映射为 `.prompts/`）。角色是职责边界，不是模型等级；需要专项能力时，显式点名调用：
 
 | 角色 | 文件 | 职责 | 唤起 |
 |------|------|------|------|
-| **PM Agent** | `rules/roles/pm.md` | 需求审查、三轮追问、目标发现 | "用 PM 角色评审需求" |
+| **PM Agent** | `rules/roles/pm.md` | 需求探讨、对抗性审查、目标发现；明确要求时输出 PRD | "用 PM 角色聊需求" / "输出 PRD" |
 | **Designer Agent** | `rules/roles/designer.md` | UI/UX 设计、设计代币、组件规格 | "用 Designer 角色出设计" |
 | **QA Agent** | `rules/roles/qa.md` | 测试策略、用例矩阵、质量门禁 | "用 QA 角色制定测试" |
 | **Reviewer Agent** | `rules/roles/reviewer.md` | 代码审查、逻辑完备性、安全审计 | "用 Reviewer 角色审查" |
 | **Dev Agent** | `rules/extended.md` | 编码实现、调试、架构设计（默认角色） | 默认 |
 
-### 需求审查门禁
+### 需求探讨与分支
 
-实质性需求（新功能、重构、架构变更）必须先经过 PM 角色的审查：
+实质性需求（新功能、重构、架构变更）建议先完成需求探讨和对抗性审查。这个阶段的目标是形成需求共识，而不是默认产出 PRD。
 
-1. **第 1 轮**：目标与边界
-2. **第 2 轮**：技术约束与风险
-3. **第 3 轮**：输出结构化需求确认清单
+1. 用户先描述 demo、场景、问题或方向
+2. AI 沿着目标、边界、数据、AI 风险、用户路径等关键不确定性追问和审查
+3. 需求共识形成后，用户明确选择分支：
+   - 给人类/同事沟通 → 输出 PRD
+   - 让 Codex/Executor 实现 → 输出 plan.md
 
-用户确认清单前，禁止任何 Agent 编写实现代码。
+需求共识未锁定、分支未明确前，禁止 Agent 擅自进入实现。
 
 豁免：单文件 Bug 修复、文档更新、格式化、用户明确说"跳过审查"。
 
@@ -241,8 +259,8 @@ Global（跨项目通用经验）
 ```
 mick_harness_rules/
 ├── rules/                    # ⭐ 单一数据源
-│   ├── core.md               #   10 条铁律（弱模型优化，所有工具都读）
-│   ├── extended.md           #   完整工程规范 + 角色协作 + Brain 写入 + Plan-Execute Protocol
+│   ├── core.md               #   11 条铁律（个人 Agent 硬约束，所有工具都读）
+│   ├── extended.md           #   完整工程规范 + Anti-Wall + Preflight + Interaction QA + Plan-Execute
 │   └── roles/                #   Agent 角色模板（项目里映射为 .prompts/）
 │       ├── orchestration.md  #     角色编排协议
 │       ├── pm.md             #     PM 角色（需求审查官）
@@ -314,26 +332,37 @@ mick_harness_rules/
 
 > 改规则只需编辑 `rules/core.md` 或 `rules/extended.md`，再跑 `.harness/generate.sh`，全部工具同步更新。
 
-### Mick Constitution 注入（个人智能体）
+### Mick Agent Capsule（个人智能体）
 
-如果 Brain 仓库中存在 `constitution.md`（定义了「谁在用 + 怎么思考 + 偏好 + 铁律」），`generate.sh` 会自动提取 6 条个人铁律摘要 + 最近踩坑记录，注入到所有 7 种工具规则文件头部。
+> There are many agent harnesses, but this one is mine.
 
-- **有自己的 Constitution** → 所有工具拿到统一的个人行为约束（~20 行，不炸 context）
-- **没有 Constitution**（别人的机器）→ 静默跳过，纯工程规则
+Harness 的核心不是"多一套编码规范"，而是把任意 Coding Agent 临时变成 **Mick 的个人 Agent**。如果 Brain 仓库中存在个人上下文，`generate.sh` 会生成一段 **Mick Agent Capsule** 并注入所有 7 种工具规则文件头部。
 
-Constitution 变更后，Brain 的 `post-commit` / `post-merge` hook 会自动对所有注册项目触发 `generate.sh` 刷新。整个链路：
+Capsule 的输入源（存在即纳入）：
+
+- `~/.mick-brain/global/agent-capsule.md` — 手写/蒸馏后的最终短胶囊，优先级最高
+- `~/.mick-brain/constitution.md` — 第一性原理、对抗式审查、反馈分级等个人铁律
+- `~/.mick-brain/global/persona.md` — 用户是谁、怎么判断问题
+- `~/.mick-brain/global/preferences.md` — 代码/PRD/沟通偏好
+- `~/.mick-brain/global/collaboration-style.md` — 技术 PM 协作协议
+- `~/.mick-brain/global/gotchas.md` — 可检索的踩坑源（默认不展开原文，避免私人上下文泄漏）
+
+- **有 Brain / Capsule** → 所有工具拿到统一的个人行为约束
+- **没有 Brain**（别人的机器）→ 静默跳过，纯工程规则
+
+Brain 变更后，Brain 的 `post-commit` / `post-merge` hook 会自动对所有注册项目触发 `generate.sh` + 规则重新挂载。整个链路：
 
 ```
-编辑 ~/.mick-brain/constitution.md → git commit
+编辑 ~/.mick-brain/constitution.md / global/*.md → git commit
   → post-commit hook 触发
     → 遍历 ~/.mick-brain/.harness-projects（所有注册项目）
       → 每个项目 .harness/generate.sh
-        → 7 种工具规则文件全部刷新，Constitution 铁律同步到位
+        → 7 种工具规则文件全部刷新，Mick Agent Capsule 同步到位
 ```
 
-> Constitution 是私有文件（在 Brain 仓库中），不会出现在公开的 harness 仓库里。
+> Agent Capsule 的源文件在私有 Brain 仓库中，不会出现在公开的 harness 仓库里。公开仓库只保留生成与注入机制。
 
-AI 会在以下事件发生时自动写入记忆（强模型 / 支持 shell 的环境）：
+AI 会在以下事件发生时自动写入记忆（支持 shell 的环境）：
 
 - 🐛 **Gotcha** — 非显而易见的 Bug、API 怪癖、库限制
 - 🏗️ **Decision** — 选择了某个库/方案，做了取舍
@@ -352,7 +381,7 @@ AI 会在以下事件发生时自动写入记忆（强模型 / 支持 shell 的�
 
 - 一套可复用的 AI 编码规范，引入任何项目即生效
 - 跨对话、跨项目的持久化记忆
-- 多 Agent 角色协作，有需求审查门禁
+- 多 Agent 角色协作，先形成需求共识，再明确分支到 PRD 或 plan.md
 - 本地优先、文件优先、不依赖云服务
 
 它是一个 **file-first**、**local-first** 的个人基础设施。
