@@ -5,7 +5,8 @@
 它围绕两个核心能力展开：
 
 - **Harness（工程护栏）**
-  - **单源规则体系**：`rules/core.md`（11 条铁律，个人 Agent 的硬约束）+ `rules/extended.md`（完整工程规范），一份维护
+  - **Mick Agent Kernel**：`rules/core.md` 固化 Mick 的判断方式、证据纪律、完成定义、撞墙熔断和交接方式
+  - **Playbook 分层**：`rules/extended.md` 放高风险场景的执行手册；普通代码风格优先交给项目工具链
   - **Anti-Wall 调试控制器**：同一错误重复出现时，强制证据复核、整体 review、完成验证，避免反复撞墙
   - **Cross-System Preflight**：涉及版本、权限、远程服务、配置格式、OS/CLI/API 时，先核对边界再实现
   - **Interaction QA Contract**：涉及 UI/菜单/开关/状态显示时，强制验证真实状态源和用户路径
@@ -29,8 +30,8 @@ Harness 的第一目标不是"强弱模型切换"，而是让任何 Coding Agent
 
 | 层 | 文件 | 谁读 | 形态 |
 |----|------|------|------|
-| **core** | `rules/core.md` | 所有工具 | 11 条铁律，极短极硬，含证据优先、撞墙熔断、完成验证 |
-| **extended** | `rules/extended.md` | 按需读取 | 代码哲学、Anti-Wall、Preflight、Interaction QA、Git、CI-CD、测试、角色协作、Brain 写入 |
+| **core** | `rules/core.md` | 所有工具 | Mick Agent Kernel：证据优先、边界控制、撞墙熔断、完成验证、反馈处理、交接卡片 |
+| **extended** | `rules/extended.md` | 按需读取 | Playbook：Code Quality、Anti-Wall、Preflight、Interaction QA、Git、CI-CD、测试、角色协作、Brain 写入 |
 
 `generate.sh` 用两套 profile 分发：**lean**（AGENTS / Claude / Copilot / Trae —— core + Self-Test 内联，extended 指针，省 context）和 **full**（Cursor / Windsurf / Cline —— 全量内联）。改一处 `core.md`，跑一次 `generate.sh`，所有工具同步更新。
 
@@ -38,13 +39,13 @@ Harness 的第一目标不是"强弱模型切换"，而是让任何 Coding Agent
 
 用 AI 写代码的时候，普遍会遇到三个问题：
 
-1. **没有规范** — AI 写出的代码风格不一致，没有防御性编程，没有 TDD，没有架构约束
+1. **没有个人判断层** — AI 会写代码，但不会天然按 Mick 的证据标准、产品边界、完成定义和反驳方式工作
 2. **没有记忆** — 每次对话都是从零开始，之前踩过的坑、做过的决策全部丢失
-3. **没有流程** — 需求模糊就直接开始写代码，没有审查，没有角色分工
+3. **没有闭环纪律** — 复杂功能能很快落地，但交互细节、外部系统、重复 Bug 容易反复撞墙
 
 这个脚手架的设计是：
 
-- **Harness 解决 1 和 3** — 通过规则文件和 Agent 角色模板，强制 AI 遵循编码规范和协作流程
+- **Harness 解决 1 和 3** — 通过 Kernel + Playbook + Agent 角色模板，让 AI 先按 Mick 的工作纪律运行，再进入具体工程实现
 - **Brain 解决 2** — 通过三层记忆模型，让经验跨对话、跨项目持久化
 
 ## 快速开始（一行命令）
@@ -134,7 +135,7 @@ chmod +x ~/mick_harness_rules/*.sh
 ```mermaid
 flowchart TD
     subgraph Harness["🛡️ Harness（工程护栏）"]
-        CR[".cursorrules<br/>编码规范 + 角色路由"]
+        CR[".cursorrules<br/>Kernel + 角色路由"]
         PM[".prompts/pm_agent.md<br/>需求审查门禁"]
         QA[".prompts/qa_agent.md<br/>测试策略"]
         RV[".prompts/reviewer_agent.md<br/>代码审查"]
@@ -259,8 +260,8 @@ Global（跨项目通用经验）
 ```
 mick_harness_rules/
 ├── rules/                    # ⭐ 单一数据源
-│   ├── core.md               #   11 条铁律（个人 Agent 硬约束，所有工具都读）
-│   ├── extended.md           #   完整工程规范 + Anti-Wall + Preflight + Interaction QA + Plan-Execute
+│   ├── core.md               #   Mick Agent Kernel（所有工具都读）
+│   ├── extended.md           #   Playbook + Anti-Wall + Preflight + Interaction QA + Plan-Execute
 │   └── roles/                #   Agent 角色模板（项目里映射为 .prompts/）
 │       ├── orchestration.md  #     角色编排协议
 │       ├── pm.md             #     PM 角色（需求审查官）
@@ -379,7 +380,7 @@ AI 会在以下事件发生时自动写入记忆（支持 shell 的环境）：
 
 ## 适合什么场景
 
-- 一套可复用的 AI 编码规范，引入任何项目即生效
+- 一套可复用的个人 Agent Kernel，引入任何项目即按 Mick 的工作纪律运行
 - 跨对话、跨项目的持久化记忆
 - 多 Agent 角色协作，先形成需求共识，再明确分支到 PRD 或 plan.md
 - 本地优先、文件优先、不依赖云服务

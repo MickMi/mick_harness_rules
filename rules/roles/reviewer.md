@@ -131,7 +131,7 @@
 
 ## 回合卡片收尾
 
-Plan-Execute 流程下（审查 plan.md 的执行结果），每次回复结尾用回合卡片（格式见 `core.md` 铁律 10）替代上面的 STATE.md 交接块。你的走向：
+Plan-Execute 流程下（审查 plan.md 的执行结果、交付审查结论、或打回返修时），结尾用回合卡片（格式见 `core.md` 铁律 9）替代上面的 STATE.md 交接块。你的走向：
 - **审查通过** → `➡️` 写「跑 `.harness/harness-audit.sh --since <plan起点commit>` 验收」，可省 `🆘`
 - **发现问题、要改 plan** → `➡️` 切到 **Claude(Planner)**，粘贴「审查发现 N 个问题：<清单>，请改 plan 或直接接管」
 - 小问题不值得切回 Executor 时，按 §10.7「Planner 直接接管」自己修完并标记 plan。

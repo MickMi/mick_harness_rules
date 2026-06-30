@@ -193,7 +193,7 @@ render() {
         #   - read before edit, plan before act, ask when unclear
         #   - defensive coding, error analysis, self-review
         #   - permission system for dangerous ops
-        echo "> 本项目使用 Mick Harness。你的内建能力已覆盖大部分编码规范，以下仅补充你不知道的项目级约束。"
+        echo "> 本项目使用 Mick Harness。你的内建能力已覆盖大部分通用工程规范，以下补充 Mick 的个人 Agent Kernel 与项目级约束。"
         echo ""
         echo "## 项目级约束"
         echo ""
@@ -201,7 +201,7 @@ render() {
         echo ""
         echo "**锁死技术栈**：不擅自更换语言/框架/库，不擅自引入新依赖。要换先说明原因并等用户确认。"
         echo ""
-        echo "**回合卡片收尾**：每次回复结尾输出回合卡片——✅ 本回合做了什么 / 📍 整体进度 / ➡️ 下一步切到哪、粘贴什么 / 🆘 卡住回谁。多线程切换时靠它不失焦。格式见 \`.harness/rules/core.md\` 铁律 10。"
+        echo "**回合卡片**：有交付物、正在推进 plan/workflow、多角色交接、发布/合并、长任务阶段更新、或出现卡点时，结尾输出回合卡片——✅ 本回合做了什么 / 📍 整体进度 / ➡️ 下一步切到哪、粘贴什么 / 🆘 卡住回谁。纯解释/短问答可省略。格式见 \`.harness/rules/core.md\` 铁律 9。"
         echo ""
         echo "## 角色协作"
         echo ""
@@ -210,10 +210,10 @@ render() {
         echo ""
         echo "## 详细规范"
         echo ""
-        echo "完整工程规范（Git / CI-CD / 测试 / Brain 记忆写入 / Plan-Execute Protocol）见 \`.harness/rules/extended.md\`。"
+        echo "完整 Playbook（Git / CI-CD / 测试 / Brain 记忆写入 / Plan-Execute Protocol）见 \`.harness/rules/extended.md\`。"
         echo "需要时主动读取该文件。"
     else
-        echo "> 本项目使用 Mick Harness 单源规则体系。下面的「核心铁律」是最高优先级，任何情况不可违反。"
+        echo "> 本项目使用 Mick Harness 单源规则体系。下面的「Mick Agent Kernel」是最高优先级，任何情况不可违反。"
         echo ""
         cat "$CORE"
         echo ""
@@ -260,7 +260,7 @@ render() {
             echo ""
             echo "## 详细规范"
             echo ""
-            echo "完整工程规范（代码哲学 / Git / CI-CD / 测试 / 角色协作）见 \`.harness/rules/extended.md\`。"
+            echo "完整 Playbook（代码质量 / Git / CI-CD / 测试 / 角色协作）见 \`.harness/rules/extended.md\`。"
             echo "需要时主动读取该文件，不要凭印象编造规范。"
         fi
     fi
