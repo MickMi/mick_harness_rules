@@ -41,7 +41,7 @@
 2. **读 `docs/STATE.md`** → 确认当前阶段、当前 feature 名
 3. **输出 Scaffold Status Line**（v4 新增，回复第一行）→ 格式：`[🎭 {角色} · {feature}@{阶段} · {strictness}/{design}/{testing}]`
    - 若任一文件缺失，对应字段写 `⚠️ 未初始化` / `⚠️ no config`，不能填写默认值
-4. **读自己负责的上游产物**（PM 读用户输入；Designer 读 PRD；QA 读 PRD+设计稿；Dev 读全部；Reviewer 读代码+PRD+test_cases）
+4. **读自己负责的上游产物**（PM 读用户输入；Designer 读 PRD 或已锁定需求共识；QA 读 PRD/plan + 设计稿；Dev 读 plan；Reviewer 读代码 + plan/PRD + test_cases）
 5. 工作完成后输出**交接块（Handoff Block）**，并更新 STATE.md
 
 ---
@@ -51,12 +51,14 @@
 ```mermaid
 flowchart TD
     User[👤 用户] -->|1. 提出业务想法| AI{🤖 AI 读 STATE.md}
-    AI -->|首次 / PRD 缺失| PM[📋 PM Agent]
-    PM -->|2. 多轮需求审查| Review{🔍 需求审查\n2-3 轮追问}
+    AI -->|首次 / 需求未锁定| PM[📋 PM Agent]
+    PM -->|2. 对话式探索| Review{🔍 需求共识审查\n按风险追问}
     Review -->|需求模糊| PM
-    Review -->|需求清晰| Checklist[📋 需求确认清单]
-    Checklist -->|3. 用户确认| PRD[✅ docs/PRD-feature.md]
-    PRD -->|更新 STATE.md| AI
+    Review -->|需求清晰| Consensus[📋 需求共识]
+    Consensus -->|用户明确要 PRD| PRD[✅ docs/PRD-feature.md]
+    Consensus -->|用户明确要实现| Plan[✅ plan.md]
+    PRD -->|如需实现| Plan
+    Plan -->|更新 STATE.md| AI
 
     AI -->|当前阶段=Designer| Designer[🎨 Designer Agent]
     Designer -->|4. HTML 视觉稿| Mockup[docs/design/feature-mockup.html]
@@ -78,7 +80,7 @@ flowchart TD
 
 > **⚠️ 执行门禁（v2）**：
 > 1. **目标未锚定**：`architecture.md` 业务目标为占位符 → 强制 Goal Discovery（PM Agent）
-> 2. **PRD 未确认**：用户未确认需求清单 → 任何 Agent 禁止写实现代码
+> 2. **需求共识未锁定 / 分支未明确**：用户尚未确认要输出 PRD 还是 plan.md → 禁止擅自进入实现
 > 3. **跨阶段意图**：用户提的问题对应的 Agent 与 STATE.md 当前阶段不一致 → AI 必须显式询问"先走完当前阶段，还是跳过？"
 
 ---
@@ -89,16 +91,16 @@ flowchart TD
 | 方向 | 内容 | 格式 |
 |------|------|------|
 | **输入** | 用户的业务想法 / 需求描述 | 自然语言 |
-| **中间产物** | 需求确认清单 (Checklist) | 结构化 Markdown |
-| **门禁** | 用户逐项确认 | 用户回复 |
-| **输出 A** | `docs/PRD-<feature>.md` | 单需求 PRD（包含场景、边界、验收标准） |
+| **中间产物** | 需求共识（目标、边界、关键风险、分期、待确认项） | 结构化 Markdown |
+| **门禁** | 用户明确选择输出 PRD 或 plan.md | 用户回复 |
+| **输出 A** | `docs/PRD-<feature>.md`（可选） | 用户明确要给人类沟通时输出 |
 | **输出 B** | `docs/architecture.md` 增量更新 | 仅当涉及系统级架构变更时才动 |
-| **输出 C** | `TODO.md` 任务追加 + STATE.md 状态更新 | 勾选 PM 阶段，激活 Designer |
+| **输出 C** | `TODO.md` 任务追加 + STATE.md 状态更新 | 勾选需求共识阶段，激活 PRD/Designer/Planner 分支 |
 
 ### Designer Agent (`designer_agent.md`)
 | 方向 | 内容 | 格式 |
 |------|------|------|
-| **输入** | `docs/PRD-<feature>.md` + 既有 design 资产 | Markdown + HTML/CSS |
+| **输入** | `docs/PRD-<feature>.md` 或已锁定需求共识 + 既有 design 资产 | Markdown + HTML/CSS |
 | **输出 A** | `docs/design/<feature>-mockup.html` | **自包含 HTML 视觉稿**（CSS 内联，浏览器直开） |
 | **输出 B** | `docs/design/<feature>-design-notes.md` | 设计决策、组件清单、交互流程、边界处理 |
 | **门禁** | 用户在浏览器评审 mockup.html | 用户回复"设计确认" |
@@ -109,7 +111,7 @@ flowchart TD
 ### QA Agent (`qa_agent.md`)
 | 方向 | 内容 | 格式 |
 |------|------|------|
-| **输入** | `docs/PRD-<feature>.md` + `docs/design/<feature>-mockup.html`（如有） | Markdown + HTML |
+| **输入** | `docs/PRD-<feature>.md` 或 plan.md + `docs/design/<feature>-mockup.html`（如有） | Markdown + HTML |
 | **输出 A** | `docs/test_strategy-<feature>.md` | 测试金字塔、工具选型、质量门禁 |
 | **输出 B** | `docs/test_cases-<feature>.md` | 用例矩阵（正向/边界/异常） |
 | **输出 C** | `TODO.md` 测试任务追加 + STATE.md 状态更新 | 勾选 QA 阶段，激活 Dev |
@@ -120,14 +122,14 @@ flowchart TD
 
 | 方向 | 内容 | 格式 |
 |------|------|------|
-| **输入** | `docs/PRD-<feature>.md` + `docs/design/<feature>-*.html` + `docs/test_cases-<feature>.md` + `MEMORY.md` | Markdown + HTML + JSON |
+| **输入** | `plan.md` + `docs/design/<feature>-*.html`（如有） + `docs/test_cases-<feature>.md`（如有） + `MEMORY.md` | Markdown + HTML + JSON |
 | **输出** | 可运行的代码 + 单元测试 | 源代码 |
 | **门禁** | 单元测试全绿、自验通过 | 自动 |
 
 ### Reviewer Agent (`reviewer_agent.md`)
 | 方向 | 内容 | 格式 |
 |------|------|------|
-| **输入** | 被审查代码 + `docs/PRD-<feature>.md` + `docs/test_cases-<feature>.md` | 源代码 + Markdown |
+| **输入** | 被审查代码 + `plan.md` + `docs/PRD-<feature>.md`（如有） + `docs/test_cases-<feature>.md`（如有） | 源代码 + Markdown |
 | **输出** | 结构化审查报告 → `docs/reviews/<feature>-<date>.md` | Markdown |
 
 ---
@@ -137,7 +139,7 @@ flowchart TD
 ### AI 在每次回复前必须做的三步
 
 ```
-1. 读 docs/STATE.md（如不存在 → 默认激活 PM Agent 引导用户从需求开始）
+1. 读 docs/STATE.md（如不存在 → 默认进入需求探讨/澄清；不要直接生成 PRD）
 2. 找出 **当前阶段** 标记所在的 Agent
 3. 输出 Scaffold Status Line（回复第一行，格式见本文件"可观测性 v4"章节）
 4. 比对用户消息意图：
@@ -171,10 +173,10 @@ C) 推翻当前流程，从需求重新审查
 
 ## 🔄 迭代循环规则
 
-### 需求审查阶段（强制）
-1. PM Agent 收到需求 → 必须 2-3 轮结构化追问
-2. 输出 `docs/PRD-<feature>.md` 后，用户逐项确认
-3. **门禁**：用户确认前禁止任何 Agent 写实现代码
+### 需求探讨阶段（按需）
+1. PM Agent 收到需求 → 按需求大小和关键风险进行对话式澄清与对抗性审查，没有固定轮数
+2. 需求共识形成后，必须等待用户明确选择：输出 PRD 给人类沟通，或输出 plan.md 让 Codex/Executor 执行
+3. **门禁**：需求共识未锁定、分支未明确前，禁止任何 Agent 擅自写实现代码
 4. 豁免：见上方"豁免清单"
 
 ### 正常流转

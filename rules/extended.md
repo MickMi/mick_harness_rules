@@ -59,7 +59,7 @@
 
 | 角色 | 文件 | 职责 | 唤起方式 |
 |------|------|------|---------|
-| PM | `.harness/rules/roles/pm.md` | 对话式意图探索、需求澄清、输出 PRD | "用 PM 角色聊需求" |
+| PM | `.harness/rules/roles/pm.md` | 对话式意图探索、需求澄清、对抗性审查；用户明确要求时输出 PRD | "用 PM 角色聊需求" / "输出 PRD" |
 | Planner | `.harness/rules/roles/planner.md` | 复杂 feature 的富 plan.md（DDL / API 契约 / 禁止项 / 完成判定） | "用 Planner 角色写 plan" |
 | Executor | `.harness/rules/roles/executor.md` | 严格按 plan.md 翻译成代码，遇缺口回流 | "用 Executor 角色执行" / 弱模型默认 |
 | QA | `.harness/rules/roles/qa.md` | 测试策略、用例矩阵、质量门禁 | "用 QA 角色制定测试" |
@@ -67,7 +67,7 @@
 | Designer | `.harness/rules/roles/designer.md` | 设计代币、组件规格、可访问性 | "用 Designer 角色出设计" |
 | Dev | 本文件（默认） | 编码实现、调试、架构 | 默认角色 |
 
-- **需求探索**：实质性需求（新功能 / 重构 / 架构变更）建议先用 PM 角色对话探索，把想法聊清楚后输出 PRD，再交给 Dev 执行。没有固定轮数限制——聊到双方都清楚就输出。豁免：单文件 Bug 修复、文档更新、格式化、用户明确说"直接做"。
+- **需求探索**：实质性需求（新功能 / 重构 / 架构变更）建议先进行对话式需求探索和对抗性审查，把想法聊清楚。需求共识形成后，必须看用户明确指示分支：要给人类沟通 → 输出 PRD；要让 Codex/Executor 实现 → 输出 plan.md。PRD 不是默认前置，Planner 可以直接消费已锁定的口述需求 / demo / issue / 设计稿 / PRD。
 - **目标发现**：读 `docs/architecture.md` 时若「业务最终目标」为占位符或空，建议用 PM 角色帮用户锚定目标。
 
 ## 9. Brain 记忆自动写入 (Brain Auto-Write Protocol)
@@ -396,8 +396,10 @@ Planner 写 plan.md 时，**第一行**必须是状态行；每次有人推进 p
 #### 状态机（含错误边）
 
 ```
-需求(PM·Claude)
-   ↓ PRD 就绪
+需求探讨(PM·Claude，可选)
+   ↓ 用户明确选择：PRD 分支 或 Planner 分支
+PRD(面向人类沟通，可选)
+   ↓ 若需要实现
 [设计(Designer·OD)]   ← 仅当有 UI 且 design.mode≠skip
    ↓ 视觉稿就绪
 规划(Planner·Claude)  ← 写 plan.md + 顶部状态行
@@ -423,7 +425,7 @@ Planner 写 plan.md 时，**第一行**必须是状态行；每次有人推进 p
 
 | 当前角色 | 正常完成 → `➡️` 指向 | 卡住 → `🆘` 指向 |
 |---|---|---|
-| **PM** | Designer（有 UI）或 Planner（纯后端） | —（需求阶段一般不卡，模糊就继续追问） |
+| **PM** | 等用户明确选择 PRD 或 Planner；若已明确要实现则到 Designer（有 UI）或 Planner（纯后端） | —（需求阶段一般不卡，模糊就继续追问） |
 | **Designer** | Planner（视觉稿就绪可以规划了） | 回 PM（PRD 没说清这个界面要什么） |
 | **Planner** | 弱模型 Executor（plan 写好了，切过去执行） | 回 PM（需求本身有洞，规划不下去） |
 | **Executor** | 强模型 Reviewer（全做完了，请审查） | 见上方分流表 |
