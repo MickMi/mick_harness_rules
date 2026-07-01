@@ -177,6 +177,36 @@ EOF
         ok "TODO.md created."
     fi
 
+    # --- 7. Brain repo — connect if configured ---
+    if [ -f "$HARNESS_GLOBAL/brain-resolve.sh" ]; then
+        source "$HARNESS_GLOBAL/brain-resolve.sh"
+        resolve_brain_dir "$HARNESS_GLOBAL" 2>/dev/null || true
+        if [ -n "${BRAIN_REPO_REMOTE:-}" ]; then
+            local brain_local="${BRAIN_REPO_LOCAL:-$HOME/.mick-brain}"
+            if [ -d "$brain_local/.git" ]; then
+                ok "Brain repo already connected: $brain_local"
+            else
+                info "Cloning brain repo..."
+                if git clone --quiet "$BRAIN_REPO_REMOTE" "$brain_local" 2>/dev/null; then
+                    ok "Brain repo connected: $brain_local"
+                else
+                    warn "Brain repo unavailable (OK for fork users). Local fallback will be used."
+                fi
+            fi
+            # Symlink brain/ in harness
+            local brain_link="$HARNESS_GLOBAL/brain"
+            if [ ! -L "$brain_link" ] && [ ! -d "$brain_link" ]; then
+                ln -s "$brain_local" "$brain_link" 2>/dev/null || true
+            fi
+        fi
+    fi
+
+    # --- 8. Verify — run brain-check ---
+    echo ""
+    if [ -x "$HARNESS_GLOBAL/brain-check.sh" ]; then
+        "$HARNESS_GLOBAL/brain-check.sh" "$target" 2>&1 || true
+    fi
+
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo -e "${GREEN}${BOLD}✅ Done.${NC} Harness is active."
@@ -245,10 +275,10 @@ case "${1:-}" in
         shift
         cmd_init "${1:-}"
         # Register this project for future updates
-        _t="$(cd "${1:-$(pwd)}" 2>/dev/null && pwd || pwd)"
-        _r="$HARNESS_GLOBAL/.registered-projects"
-        if ! grep -qxF "$_t" "$_r" 2>/dev/null; then
-            echo "$_t" >> "$_r"
+        _target="$(cd "${1:-$(pwd)}" 2>/dev/null && pwd || pwd)"
+        _reg="$HARNESS_GLOBAL/.registered-projects"
+        if ! grep -qxF "$_target" "$_reg" 2>/dev/null; then
+            echo "$_target" >> "$_reg"
         fi
         ;;
     install)
