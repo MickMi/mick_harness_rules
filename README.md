@@ -48,15 +48,26 @@ Harness 的第一目标不是"强弱模型切换"，而是让任何 Coding Agent
 - **Harness 解决 1 和 3** — 通过 Kernel + Playbook + Agent 角色模板，让 AI 先按 Mick 的工作纪律运行，再进入具体工程实现
 - **Brain 解决 2** — 通过三层记忆模型，让经验跨对话、跨项目持久化
 
-## 快速开始（一行命令）
+## 快速开始
 
-在你的项目根目录执行：
+### 全局 CLI（推荐 — 一次安装，任何项目一句话初始化）
 
 ```bash
-git clone https://github.com/MickMi/mick_harness_rules.git .harness && .harness/setup.sh
+# 第一步：全局安装（只需做一次）
+git clone https://github.com/MickMi/mick_harness_rules.git ~/.mick-harness
+ln -s ~/.mick-harness/bin/harness ~/.local/bin/harness
+
+# 第二步：进入任意项目，一句话初始化
+cd /path/to/your/project
+harness init
 ```
 
-`setup.sh` 会生成 `.harness-config.yaml`（包含 5 个配置维度），AI 在工作时会读这个文件决定行为。你可以直接编辑这个文件调整工作流偏好：
+之后：
+- 任何项目里 `harness init` 一键挂载
+- `harness update` 更新 Harness 版本 + 刷新所有注册项目
+- `harness check` 验证当前项目脚手架完整性
+
+`harness init` 会自动生成 `.harness-config.yaml`，AI 在工作时会读它决定行为。你可以直接编辑这个文件调整工作流偏好：
 
 1. **Brain（个人记忆）**：是否启用跨对话记忆
 2. **Design（设计工作方式）**：html / ai_tool_spec / designer_brief / skip
@@ -64,7 +75,11 @@ git clone https://github.com/MickMi/mick_harness_rules.git .harness && .harness/
 4. **Testing（测试投入）**：严格 TDD / 关键路径 / 仅冒烟 / 不写测试
 5. **Strictness（流程严格度）**：强门禁 / 软提示 / 自由
 
-直接编辑 `.harness-config.yaml`（commit 到项目，跨机器/跨成员一致）。
+### 传统方式（项目内 Clone）
+
+```bash
+git clone https://github.com/MickMi/mick_harness_rules.git .harness && .harness/setup.sh
+```
 
 ### Harness Self-Test
 

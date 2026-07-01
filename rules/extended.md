@@ -561,7 +561,7 @@ Planner/Reviewer 每次 review 后，在 plan.md 末尾追加或更新 `## Execu
 
 ### 10.8 回合卡片与状态机动线（防失焦 / 多线程不串台）
 
-PM / Designer / Planner / Executor / Reviewer 多角色来回切换时，用户是人肉消息总线。痛点不是流程长，是**没人告诉用户"现在在哪、接下来去哪、坏了回谁"**。本节定义两个机制把导航做到每一步。
+PM / Planner / Executor / Reviewer 多角色来回切换时，用户是人肉消息总线。痛点不是流程长，是**没人告诉用户"现在在哪、接下来去哪、坏了回谁"**。本节定义两个机制把导航做到每一步。
 
 #### 机制一：plan.md 顶部状态行（单一事实源）
 
@@ -571,7 +571,7 @@ Planner 写 plan.md 时，**第一行**必须是状态行；每次有人推进 p
 > 🧭 状态：执行中 | 进度 5/8 | 当前归属：Executor | 最近卡点：无
 ```
 
-- `当前归属` 取值：`Planner` / `Executor` / `Designer` / `Reviewer` / `已完成`
+- `当前归属` 取值：`Planner` / `Executor` / `Reviewer` / `已完成`
 - 谁推进 plan，谁负责把这一行改对（Executor 完成一步也要更新进度数字）
 - 这一行是 `🆘` 逃生线和"该不该动手"判断的依据
 
@@ -611,7 +611,7 @@ PRD(面向人类沟通，可选)
 
 | 当前角色 | 正常完成 → `➡️` 指向 | 卡住 → `🆘` 指向 |
 |---|---|---|
-| **PM** | 等用户明确选择 PRD 或 Planner；若已明确要实现则到 Designer（有 UI）或 Planner（纯后端） | —（需求阶段一般不卡，模糊就继续追问） |
+| **PM** | 等用户明确选择 PRD 或 Planner | —（需求阶段一般不卡，模糊就继续追问） |
 | **Designer** | Planner（视觉稿就绪可以规划了） | 回 PM（PRD 没说清这个界面要什么） |
 | **Planner** | Executor（plan 写好了，开始执行） | 回 PM（需求本身有洞，规划不下去） |
 | **Executor** | Reviewer（全做完了，请审查） | 见上方分流表 |

@@ -17,8 +17,8 @@ set -euo pipefail
 #   --quick           Minimal setup: rules + mount + gitignore only. No brain, no scaffold.
 #   --fresh           Start with a clean brain (for fork/clone users)
 #   --no-vibe         Skip Vibe scaffold files (MEMORY.md, TODO.md, docs/)
-#   --reconfigure     Re-run interactive workflow configuration (overwrites .harness-config.yaml)
-#   --non-interactive Skip interactive questions, use defaults (or values from --profile)
+#   --reconfigure     Regenerate .harness-config.yaml from template (overwrites existing)
+#   --non-interactive Skip prompts, use template defaults (or values from --profile)
 #   --profile FILE    Load answers from a YAML profile file (for CI / repeatable setup)
 #   -h, --help        Show this help message
 #
@@ -220,7 +220,7 @@ fi
 # Phase 2: Configure .gitignore isolation
 # ============================================================
 if [ "$QUICK_MODE" != true ]; then
-    info "Phase 2/7: Configuring .gitignore isolation..."
+    info "Phase 2/6: Configuring .gitignore isolation..."
 fi
 
 GITIGNORE="$TARGET_DIR/.gitignore"
@@ -258,7 +258,7 @@ fi
 # Phase 3: Deploy Vibe scaffold files (skip if exist)
 # ============================================================
 if [ "$SKIP_VIBE" = false ]; then
-    info "Phase 3/7: Deploying Vibe scaffold files (skip if already exist)..."
+    info "Phase 3/6: Deploying Vibe scaffold files (skip if already exist)..."
 
     # Create directory structure
     mkdir -p "$TARGET_DIR/docs"
@@ -318,7 +318,7 @@ TODO_EOF
     echo ""
 else
     if [ "$QUICK_MODE" != true ]; then
-        info "Phase 3/7: Skipped (--no-vibe flag)."
+        info "Phase 3/6: Skipped (--no-vibe flag)."
         echo ""
     fi
 fi
@@ -399,7 +399,7 @@ fi
 # ============================================================
 # Phase 5: Brain repo — clone/connect
 # ============================================================
-info "Phase 6/7: Setting up Brain repository..."
+info "Phase 5/6: Setting up Brain repository..."
 
 # Source the shared brain resolver
 source "$HARNESS_ROOT/brain-resolve.sh"
@@ -654,7 +654,7 @@ echo ""
 # ============================================================
 # Phase 6: Verify — Run brain-check
 # ============================================================
-info "Phase 7/7: Running integrity check..."
+info "Phase 6/6: Running integrity check..."
 echo ""
 
 BRAIN_CHECK="$HARNESS_ROOT/brain-check.sh"
