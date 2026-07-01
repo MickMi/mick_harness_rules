@@ -324,10 +324,11 @@ else
 fi
 
 # ============================================================
-# Phase 3.5: Workflow configuration → .harness-config.yaml
+# Phase 3.5: Copy workflow config template → .harness-config.yaml
+# User edits the file directly to set their workflow preferences.
 # ============================================================
 if [ "$QUICK_MODE" != true ]; then
-    info "Phase 3.5: Workflow configuration..."
+    info "Phase 3.5: Copying workflow config template..."
 fi
 
 CONFIG_FILE="$TARGET_DIR/.harness-config.yaml"

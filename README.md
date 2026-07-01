@@ -56,15 +56,25 @@ Harness 的第一目标不是"强弱模型切换"，而是让任何 Coding Agent
 git clone https://github.com/MickMi/mick_harness_rules.git .harness && .harness/setup.sh
 ```
 
-`setup.sh` 会通过 **5 题交互式问答**（v3 新增）问清楚你的工作流偏好：
+`setup.sh` 会生成 `.harness-config.yaml`（包含 5 个配置维度），AI 在工作时会读这个文件决定行为。你可以直接编辑这个文件调整工作流偏好：
 
 1. **Brain（个人记忆）**：是否启用跨对话记忆
-2. **Design（设计工作方式）**：AI 出 HTML / 出 spec.json 给 Figma Maker / 出 brief 给真人设计师 / 跳过
+2. **Design（设计工作方式）**：html / ai_tool_spec / designer_brief / skip
 3. **Dev（开发栈范围）**：全栈 / 纯后端 / 纯前端 / 客户端 / CLI
 4. **Testing（测试投入）**：严格 TDD / 关键路径 / 仅冒烟 / 不写测试
 5. **Strictness（流程严格度）**：强门禁 / 软提示 / 自由
 
-答案写入 `.harness-config.yaml`（commit 到项目，跨机器/跨成员一致）。AI 在工作时会读这个文件决定行为，不再对所有项目一刀切。
+直接编辑 `.harness-config.yaml`（commit 到项目，跨机器/跨成员一致）。
+
+### Harness Self-Test
+
+当你切到任意 Agent 或怀疑它没有真正读懂规则时，直接发：
+
+```text
+请按 Harness Self-Test 用 5 句话证明你理解当前任务约束。
+```
+
+合格回答必须绑定当前任务，说清楚当前模式、最高风险、如何证明完成、撞墙时如何停、以及这轮不会做什么。泛泛复述规则视为未通过。
 
 ### Harness Self-Test
 
@@ -135,29 +145,35 @@ chmod +x ~/mick_harness_rules/*.sh
 ```mermaid
 flowchart TD
     subgraph Harness["🛡️ Harness（工程护栏）"]
-        CR[".cursorrules<br/>Kernel + 角色路由"]
-        PM[".prompts/pm_agent.md<br/>需求审查门禁"]
-        QA[".prompts/qa_agent.md<br/>测试策略"]
-        RV[".prompts/reviewer_agent.md<br/>代码审查"]
-        OC[".prompts/orchestration.md<br/>角色编排协议"]
+        GEN["generate.sh<br/>单源 → 7 工具格式"]
+        CORE["rules/core.md<br/>Mick Agent Kernel"]
+        EXT["rules/extended.md<br/>Playbook + Plan-Execute"]
+        ROLES["rules/roles/<br/>PM / Planner / QA / Executor / Reviewer"]
+    end
+
+    subgraph Flow["🔄 标准工作流"]
+        PM["📋 PM<br/>需求探索"]
+        QA["🧪 QA<br/>测试策略"]
+        DEV["⚙️ Dev<br/>代码实现"]
+        RV["🔍 Reviewer<br/>代码审查"]
+        PM -->|"PRD / 需求共识"| QA
+        QA -->|"测试用例"| DEV
+        DEV -->|"代码 + 自检"| RV
     end
 
     subgraph Brain["🧠 Brain（个人记忆）"]
-        S["Session 层<br/>原始对话摘要<br/>90 天归档"]
-        P["Project 层<br/>项目专属决策<br/>项目存续期"]
-        G["Global 层<br/>跨项目偏好<br/>永久保留"]
+        S["Session 层<br/>90 天归档"]
+        P["Project 层<br/>项目存续期"]
+        G["Global 层<br/>永久保留"]
         S -->|"daily compound"| P
         P -->|"weekly compound"| G
     end
 
-    User["👤 用户项目"] -->|"vibe-init.sh"| Init["🚀 一键初始化"]
-    Init -->|"symlink .harness/"| Harness
-    Init -->|"brain-init.sh"| Brain
-
-    CR -->|"AI 遵循规范"| Code["⚙️ 代码实现"]
-    PM -->|"需求探讨 + 明确分支"| Code
-    Brain -->|"brain-search.sh"| Code
-    Code -->|"brain-push.sh"| S
+    User["👤 用户项目"] -->|"setup.sh"| Init["🚀 一键初始化"]
+    Init -->|"symlink dist/ + roles/"| Harness
+    Init -->|"brain-init"| Brain
+    Flow -->|"brain-push.sh"| S
+    Brain -->|"brain-search.sh"| Flow
 ```
 
 ## 核心架构
@@ -231,25 +247,26 @@ Global（跨项目通用经验）
 
 ## Agent 角色
 
-内置 5 个 Agent 角色（源文件在 `rules/roles/`，项目里映射为 `.prompts/`）。角色是职责边界，不是模型等级；需要专项能力时，显式点名调用：
+内置 5 个 Agent 角色（源文件在 `rules/roles/`，项目里映射为 `.prompts/`）。调度由 **优先级链**（plan.md > STATE.md > 用户意图）决定，详见 `rules/roles/orchestration.md` 顶部。
 
 | 角色 | 文件 | 职责 | 唤起 |
 |------|------|------|------|
-| **PM Agent** | `rules/roles/pm.md` | 需求探讨、对抗性审查、目标发现；明确要求时输出 PRD | "用 PM 角色聊需求" / "输出 PRD" |
-| **Designer Agent** | `rules/roles/designer.md` | UI/UX 设计、设计代币、组件规格 | "用 Designer 角色出设计" |
+| **PM Agent** | `rules/roles/pm.md` | 需求探索、对抗性审查、目标发现。**管"做什么"** | "用 PM 角色聊需求" |
+| **Planner Agent** | `rules/roles/planner.md` | 需求共识 → 可执行 plan.md。**管"怎么落地"** | "用 Planner 角色写 plan" |
 | **QA Agent** | `rules/roles/qa.md` | 测试策略、用例矩阵、质量门禁 | "用 QA 角色制定测试" |
 | **Reviewer Agent** | `rules/roles/reviewer.md` | 代码审查、逻辑完备性、安全审计 | "用 Reviewer 角色审查" |
 | **Dev Agent** | `rules/extended.md` | 编码实现、调试、架构设计（默认角色） | 默认 |
+| **Designer Agent** | `rules/roles/designer.md` | **可选外部角色** — 校验外部 Design AI 的视觉稿 | 显式点名时激活 |
 
 ### 需求探讨与分支
 
-实质性需求（新功能、重构、架构变更）建议先完成需求探讨和对抗性审查。这个阶段的目标是形成需求共识，而不是默认产出 PRD。
+实质性需求（新功能、重构、架构变更）必须先完成需求探讨和对抗性审查。这个阶段的目标是形成需求共识，而不是默认产出 PRD。
 
 1. 用户先描述 demo、场景、问题或方向
 2. AI 沿着目标、边界、数据、AI 风险、用户路径等关键不确定性追问和审查
 3. 需求共识形成后，用户明确选择分支：
    - 给人类/同事沟通 → 输出 PRD
-   - 让 Codex/Executor 实现 → 输出 plan.md
+   - 让 Executor 实现 → 输出 plan.md（Planner 角色）
 
 需求共识未锁定、分支未明确前，禁止 Agent 擅自进入实现。
 

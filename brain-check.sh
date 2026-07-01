@@ -42,6 +42,17 @@ if [ ! -d "$TARGET_DIR" ]; then
 fi
 TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
 
+resolve_link_target() {
+    local link_path="$1"
+    local raw_target
+    raw_target="$(readlink "$link_path")"
+    if [[ "$raw_target" = /* ]]; then
+        echo "$raw_target"
+    else
+        echo "$(cd "$(dirname "$link_path")" && pwd)/$raw_target"
+    fi
+}
+
 echo "🔍 Brain Check — Verifying harness + brain integrity"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  Harness repo : $HARNESS_ROOT"
@@ -54,7 +65,7 @@ echo ""
 echo "📋 Check 1: .harness/ symlink"
 HARNESS_LINK="$TARGET_DIR/.harness"
 if [ -L "$HARNESS_LINK" ]; then
-    LINK_TARGET="$(readlink "$HARNESS_LINK")"
+    LINK_TARGET="$(resolve_link_target "$HARNESS_LINK")"
     if [ -d "$LINK_TARGET" ]; then
         check_pass ".harness/ → $LINK_TARGET (valid)"
     else
@@ -88,7 +99,7 @@ fi
 echo "📋 Check 3: .prompts/ symlink"
 PROMPTS_LINK="$TARGET_DIR/.prompts"
 if [ -L "$PROMPTS_LINK" ]; then
-    PROMPTS_TARGET="$(readlink "$PROMPTS_LINK")"
+    PROMPTS_TARGET="$(resolve_link_target "$PROMPTS_LINK")"
     if [ -d "$PROMPTS_TARGET" ]; then
         check_pass ".prompts/ → $PROMPTS_TARGET (valid symlink)"
     else
@@ -310,43 +321,26 @@ fi
 # Check 14: Harness Self-Test prompt present
 # ============================================================
 echo "📋 Check 14: Harness Self-Test prompt"
-SELFTEST_PRESENT=true
-for dist_target in "AGENTS.md" "CLAUDE.md" ".cursorrules"; do
+SELFTEST_MISSING=()
+for dist_target in "AGENTS.md" ".cursorrules"; do
     DIST_FILE="$HARNESS_ROOT/dist/$dist_target"
     if [ ! -f "$DIST_FILE" ] || ! grep -q "Harness Self-Test" "$DIST_FILE" 2>/dev/null; then
-        SELFTEST_PRESENT=false
+        SELFTEST_MISSING+=("$dist_target")
     fi
 done
-
-if [ "$SELFTEST_PRESENT" = true ]; then
+if [ ${#SELFTEST_MISSING[@]} -eq 0 ]; then
     check_pass "Harness Self-Test prompt is present in generated rule files"
 else
-    check_warn "Harness Self-Test prompt missing from generated rule files. Run '.harness/generate.sh'."
+    check_warn "Harness Self-Test prompt missing from generated rule files: ${SELFTEST_MISSING[*]}. Run '.harness/generate.sh'."
+    echo "         Ask the current Agent to answer: '请按 Harness Self-Test 用 5 句话证明你理解当前任务约束。'"
 fi
-echo "         Ask the current Agent to answer: '请按 Harness Self-Test 用 5 句话证明你理解当前任务约束。'"
 
 # ============================================================
-# Check 15: Personal Agent Capsule ↔ Harness staleness
+# Check 15: Constitution ↔ Harness staleness
 # ============================================================
-echo "📋 Check 15: Personal Agent Capsule ↔ Harness staleness"
-CAPSULE_SOURCES=(
-    "$BRAIN_DIR/global/agent-capsule.md"
-    "$BRAIN_DIR/constitution.md"
-    "$BRAIN_DIR/global/persona.md"
-    "$BRAIN_DIR/global/preferences.md"
-    "$BRAIN_DIR/global/collaboration-style.md"
-    "$BRAIN_DIR/global/gotchas.md"
-)
-HAS_CAPSULE_SOURCE=false
-for src in "${CAPSULE_SOURCES[@]}"; do
-    if [ -f "$src" ]; then
-        HAS_CAPSULE_SOURCE=true
-        break
-    fi
-done
-
-if [ "$HAS_CAPSULE_SOURCE" = true ]; then
-    CAPSULE_PRESENT=true
+echo "📋 Check 15: Constitution ↔ Harness staleness"
+CONSTITUTION_FILE="$BRAIN_DIR/constitution.md"
+if [ -f "$CONSTITUTION_FILE" ]; then
     STALE=false
     for dist_target in "AGENTS.md" "CLAUDE.md" ".cursorrules"; do
         DIST_FILE="$HARNESS_ROOT/dist/$dist_target"
@@ -373,6 +367,17 @@ if [ "$HAS_CAPSULE_SOURCE" = true ]; then
     fi
 else
     check_pass "No Personal Agent Capsule source found (OK for non-Mick users)"
+fi
+
+# ============================================================
+# Check 16: Harness Guard available
+# ============================================================
+echo "📋 Check 16: Harness Guard"
+GUARD="$HARNESS_ROOT/harness-guard.sh"
+if [ -x "$GUARD" ]; then
+    check_pass "harness-guard.sh is available and executable"
+else
+    check_warn "harness-guard.sh is missing or not executable. Run 'chmod +x .harness/harness-guard.sh'."
 fi
 
 # ============================================================

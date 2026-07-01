@@ -118,6 +118,16 @@
   - **跨阶段反问话术模板**已固化在 orchestration.md 与 .cursorrules 中
   - **向后兼容**：旧项目缺 STATE.md 时，AI 会 fallback 到 v1 的关键词路由
   - 设计目标：消除"每次提问都得先想清楚找谁"的认知负担，让 AI 主动承担分类工作。
+- [2026-07-02] ADR-021: Harness 严谨性审查与工作流简化（Audit-Driven Simplification）
+  - **触发**：对 `mick_harness_rules` 的完整审查发现了调度体系四代并存、Designer 产物格式分裂、回合卡片/交接块双轨并行等致命矛盾
+  - **调度优先级链**：确立 `plan.md > STATE.md > 用户意图` 的唯一优先级链（orchestration.md 顶部），消除四套调度逻辑的冲突
+  - **Designer 角色降级**：从标准工作流（PM → QA → Dev → Reviewer）中移除 Designer。Designer 保留为可选外部角色，仅显式点名时激活，用于校验外部 Design AI（Open Design 等）的视觉稿
+  - **统一为回合卡片**：删除 Handoff Block 格式，回合卡片（core.md 铁律 9）成为唯一交付格式。所有角色文件统一使用
+  - **PM/Planner 边界明确**：PM 管"做什么"（业务目标与边界），Planner 管"怎么落地"（plan.md）。扩展角色表中新增职责边界对照表
+  - **豁免清单收紧**：删除"用户在询问而非要求执行"豁免条件。豁免时必须在回复第一行输出 `[⚡ 豁免 · 理由]`
+  - **Anti-Wall Debug Card 内联**：Debug Card 格式模板直接写入 core.md 铁律 5，保证 lean/full 所有 profile 可达
+  - **plan.md 缺失时基础约束**：core.md 铁律 0c 增加多文件改动时主动建议用 Planner 产 plan
+  - **修复**：MEMORY.md ADR-018 重复编号修复（ADR-018→ADR-020）；extended.md §10.2 重复段删除；harness-audit.sh 正则修复；README mermaid 图更新
 - [2026-06-04] ADR-019: 工作流配置参数化（Setup Interactive Configuration v3）
   - **痛点**：v2 把工作流串通了，但 Agent 模板里的产物契约对所有用户写死（如 Designer 总是出 HTML），与"用户用 Figma Maker / 有专职设计师 / 纯后端"等真实场景不匹配，导致工作流仍然不契合。
   - **决策**：在 v2 基础上加一层"项目级工作流配置"。setup.sh 首次运行通过**5 题交互式问答**生成 `.harness-config.yaml`；Agent 模板改为**内嵌多分支** + **runtime 读 config** 决定走哪个分支。
@@ -134,7 +144,7 @@
   - **向后兼容**：缺失 `.harness-config.yaml` 时所有 Agent 走默认行为（等同于 v2），不报错。
   - 设计目标：让工作流从"对所有人一刀切"升级为"按用户工具栈自适应"。
 
-- [2026-06-08] ADR-018: 单源规则体系 + 弱模型优化（Single-Source Rules / 方向B）
+- [2026-06-08] ADR-020: 单源规则体系 + 弱模型优化（Single-Source Rules / 方向B）
   - **问题**：旧体系核心规则只维护在一份 `.cursorrules`（Cursor 专有，128 行），其他 IDE 只追加 brain 写入协议、不含编码规范；长指令对弱推理模型（GLM/Qwen/DeepSeek/Trae）遵循率低。
   - **单一数据源**：`rules/core.md`（10 条铁律，弱模型优化，极短极硬）+ `rules/extended.md`（完整工程深度）。
   - **生成器 `generate.sh`**：两套 profile —— lean（core 内联 + extended 指针，省 context：AGENTS/CLAUDE/Copilot/Trae）、full（全量内联：Cursor/Windsurf/Cline）。产物落 `dist/`（gitignore，每次 mount 前重生成）。
@@ -156,7 +166,7 @@
 *从历史讨论中提炼的核心设计原则。*
 
 - **`.env` 模式**：个人基础设施以 symlink 挂载到项目，`.gitignore` 隔离，绝不污染项目仓库
-- **单仓库双职能**：Harness（护栏）+ Brain（记忆）合并为同一仓库，统一版本管理，独立于业务项目发布
+- **双仓库隔离**：Harness（公开）+ Brain（私有），fork 时天然不带个人记忆（ADR-016）
 - **验证闭环**：加载 → 检查 → 强制拦截 → 状态报告，四步确保脚手架真正生效
 - **优雅降级**：有高级工具用高级工具，没有就自动回退到基础方案（如 qmd → ripgrep）
 - **幂等挂载**：`brain init` / `brain mount` 重复运行不会出错

@@ -237,22 +237,31 @@ Harness 的核心不是把所有代码审美都塞进 Prompt，而是把约束�
 - **活文档同步**：重大重构或数据模型调整后，同步更新相关文档，避免上下文断层。
 - **待办收尾**：完成功能后对照 `TODO.md` 清理已完成项，并输出一条 Conventional Commits 提交信息。
 
-## 8. 角色协作 (显式调用，不做自动路由)
+## 8. 角色协作
 
-> 角色是职责边界，不是模型等级。需要专项能力时，由用户显式点名，AI 加载对应角色文件后再工作。
+> 角色是职责边界，不是模型等级。调度优先级见 `.harness/rules/roles/orchestration.md` 顶部优先级链。
 
 | 角色 | 文件 | 职责 | 唤起方式 |
 |------|------|------|---------|
-| PM | `.harness/rules/roles/pm.md` | 对话式意图探索、需求澄清、对抗性审查；用户明确要求时输出 PRD | "用 PM 角色聊需求" / "输出 PRD" |
-| Planner | `.harness/rules/roles/planner.md` | 复杂 feature 的富 plan.md（DDL / API 契约 / 禁止项 / 完成判定） | "用 Planner 角色写 plan" |
-| Executor | `.harness/rules/roles/executor.md` | 严格按 plan.md 翻译成代码，遇缺口回流 | "用 Executor 角色执行" / plan.md 存在时默认 |
-| QA | `.harness/rules/roles/qa.md` | 测试策略、用例矩阵、质量门禁 | "用 QA 角色制定测试" |
-| Reviewer | `.harness/rules/roles/reviewer.md` | 代码审查、逻辑/安全/性能审计 | "用 Reviewer 角色审查" |
-| Designer | `.harness/rules/roles/designer.md` | 设计代币、组件规格、可访问性 | "用 Designer 角色出设计" |
-| Dev | 本文件（默认） | 编码实现、调试、架构 | 默认角色 |
+| **PM** | `rules/roles/pm.md` | 需求探索、对抗性审查、目标锚定。**PM 决定"做什么"**——明确业务目标、边界、排除项 | "用 PM 角色聊需求" / "输出 PRD" |
+| **Planner** | `rules/roles/planner.md` | 将已锁定的需求共识翻译为可执行的 plan.md。**Planner 决定"怎么落地"**——DDL / API 契约 / 步骤拆解 / 禁止项 | "用 Planner 角色写 plan" |
+| **Executor** | `rules/roles/executor.md` | 严格按 plan.md 翻译成代码，遇缺口回流。不做架构决策 | "用 Executor 角色执行" / plan.md 存在时默认 |
+| **QA** | `rules/roles/qa.md` | 测试策略、用例矩阵、质量门禁 | "用 QA 角色制定测试" |
+| **Reviewer** | `rules/roles/reviewer.md` | 代码审查、逻辑/安全/性能审计 | "用 Reviewer 角色审查" |
+| **Designer** | `rules/roles/designer.md` | **可选外部角色**——不在标准工作流中。用于校验外部 Design AI（如 Open Design）产出的视觉稿。仅显式点名时激活 | "用 Designer 角色校验视觉稿" |
+| **Dev** | 本文件（默认） | 编码实现、调试、架构 | 默认角色 |
 
-- **需求探索**：实质性需求（新功能 / 重构 / 架构变更）建议先进行对话式需求探索和对抗性审查，把想法聊清楚。需求共识形成后，必须看用户明确指示分支：要给人类沟通 → 输出 PRD；要让 Codex/Executor 实现 → 输出 plan.md。PRD 不是默认前置，Planner 可以直接消费已锁定的口述需求 / demo / issue / 设计稿 / PRD。
-- **目标发现**：读 `docs/architecture.md` 时若「业务最终目标」为占位符或空，建议用 PM 角色帮用户锚定目标。
+### PM 与 Planner 的职责边界
+
+| 维度 | PM | Planner |
+|------|-----|---------|
+| **核心问题** | 做什么？为什么做？不做会怎样？ | 怎么落地？改哪些文件？分几步？ |
+| **输入** | 用户口述 / demo / 场景描述 | PM 产出的需求共识 / PRD / 口述需求 / 设计稿 |
+| **输出** | 需求共识（目标/边界/排除项/关键风险）+ PRD（按需） | plan.md（步骤/API 契约/DDL/禁止项/验收标准） |
+| **话语权** | 对业务目标、产品边界有最终话语权 | 对技术实现路径有最终话语权；如需修改 PM 的目标或边界，必须回 PM 确认 |
+
+- **需求探索**：实质性需求（新功能 / 重构 / 架构变更）必须先进行对话式需求探索，把想法聊清楚。需求共识形成后，必须等用户明确指示分支：给人类沟通 → 输出 PRD；要 Codex/Executor 实现 → 切 Planner 产出 plan.md。
+- **目标发现**：读 `docs/architecture.md` 时若「业务最终目标」为占位符或空，用 PM 角色帮用户锚定目标。
 
 ## 9. Brain 记忆自动写入 (Brain Auto-Write Protocol)
 
@@ -331,12 +340,6 @@ Harness 的核心不是把所有代码审美都塞进 Prompt，而是把约束�
 8. **关键字段路径用反引号**：如 `built.groups[0].matches[0]`，便于 Executor 字面匹配验证。
 9. **能贴代码就贴代码**：对关键步骤直接给出可抄的代码片段，减少 Executor 自由发挥空间——这是最有效的对齐手段。
 10. **OD 任务必须拆多回合**：Open Design (OD) 单次输出上限 8192 tokens / 98 秒。涉及设计产出的步骤，每步产物不得超出此限——如果一个页面/组件的设计规格超过 ~200 行，必须拆成多个步骤（如"步骤 3a: Header + Nav 设计"、"步骤 3b: 主内容区设计"）。Executor 每完成一个回合先输出已完成部分，再继续下一回合。
-
-#### 富模板（复杂 feature 时用）
-
-涉及 **DDL 变更 / 新建多个文件 / 破坏性改动 / 跨模块协调 / 外部系统 / UI 交互状态**时，在上面标准 section 之外**追加** `## 表结构变更` / `## 文件级 API 契约` / `## 禁止项` / `## 完成判定` / `## Preflight` / `## Interaction QA` / `## 来自 Brain 的相关约束` 段。
-
-Executor 最容易翻车的五个洞——猜函数签名、自造 schema、"顺手优化"、模糊打勾、卡住硬编——靠这五段堵住。完整模板、填写纪律、何时用基础 / 何时用富模板的取舍见 `rules/roles/planner.md`。
 
 #### 富模板（复杂 feature 时用）
 
@@ -471,8 +474,9 @@ Harness 的核心不是强弱模型切换，而是让任何工具里的 Agent �
 
 | 阶段 | 角色 | 行为 |
 |------|------|------|
-| 需求评审、技术规划 | Planner / PM | 澄清目标、写 `plan.md`、补 Preflight / Interaction QA |
-| 实现 | Executor | 严格按 `plan.md` 步骤执行，遇到歧义写阻塞，不脑补 |
+| 需求澄清、目标锚定 | PM | 对抗性审查、明确目标与边界、锁定需求共识（PRD 按需） |
+| 技术规划 | Planner | 读需求共识 + 现有代码，写 plan.md、补 Preflight / Interaction QA |
+| 实现 | Executor | 严格按 plan.md 步骤执行，遇到歧义写阻塞，不脑补 |
 | 审查 | Reviewer | 对照 plan、测试和真实用户路径审查 |
 
 **每次会话开局的 mode check**：

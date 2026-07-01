@@ -248,7 +248,9 @@ else
         FOUND=false
         while IFS= read -r plan_file; do
             [ -z "$plan_file" ] && continue
-            if [[ "$diff_file" == *"$plan_file"* ]] || [[ "$plan_file" == *"$diff_file"* ]]; then
+            # Match only when the plan file path is a suffix of the diff file path
+            # e.g. "src/foo.ts" matches "src/foo.ts" but NOT "src/foobar.ts"
+            if [[ "$diff_file" = "$plan_file" ]] || [[ "$diff_file" = */"$plan_file" ]] || [[ "$diff_file" = "$plan_file"/* ]]; then
                 FOUND=true
                 break
             fi

@@ -18,7 +18,6 @@
 > 勾选 `[x]` = 已完成；当前激活阶段在 `**当前阶段**` 标记的那一行。
 
 - [ ] **PM 需求审查** → `docs/PRD-<feature>.md`  ← **当前阶段**
-- [ ] **Designer 视觉稿** → `docs/design/<feature>-mockup.html` + `<feature>-design-notes.md`
 - [ ] **QA 测试策略** → `docs/test_strategy-<feature>.md` + `docs/test_cases-<feature>.md`
 - [ ] **Dev 实现** → 源代码 + 单元测试
 - [ ] **Reviewer 审查** → 审查报告（写入 `docs/reviews/<feature>-<date>.md`）
@@ -45,7 +44,7 @@
 
 ### Agent 完成产物后必须做的两件事
 
-1. 在回复末尾输出**交接块**（Handoff Block，格式见各 agent 模板）
+1. 在回复末尾输出**回合卡片**（格式见 `core.md` 铁律 9）
 2. 用户确认后，**更新本文件**：
    - 把当前阶段的 `[ ]` 改为 `[x]`
    - 把 `**当前阶段**` 标记移到下一行
@@ -68,7 +67,7 @@
 
 ```markdown
 ## 进行中的需求
-- [ ] share-card → docs/STATE-share-card.md (Designer 阶段)
+- [ ] share-card → docs/STATE-share-card.md (QA 阶段)
 - [ ] payment-retry → docs/STATE-payment-retry.md (Dev 阶段)
 ```
 
