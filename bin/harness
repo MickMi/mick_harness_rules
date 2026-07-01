@@ -82,8 +82,8 @@ cmd_init() {
     fi
 
     local target="${1:-$(pwd)}"
-    target="$(cd "$target" 2>/dev/null && pwd || echo "")"
-    if [ -z "$target" ] || [ ! -d "$target" ]; then
+    target="$(cd "$_t" 2>/dev/null && pwd || echo "")"
+    if [ -z "$_t" ] || [ ! -d "$_t" ]; then
         fail "Target directory does not exist: ${1:-current dir}"
         exit 1
     fi
@@ -115,7 +115,7 @@ cmd_init() {
     # --- 3. Mount rule files into project ---
     if [ -f "$HARNESS_GLOBAL/lib-mount-rules.sh" ]; then
         source "$HARNESS_GLOBAL/lib-mount-rules.sh"
-        mount_rule_files "$HARNESS_GLOBAL" "$target" 2>/dev/null || true
+        mount_rule_files "$HARNESS_GLOBAL" "$_t" 2>/dev/null || true
         ok "Rules mounted to project root."
     fi
 
@@ -208,7 +208,7 @@ cmd_update() {
 
     # Update all registered projects
     local reg="$HARNESS_GLOBAL/.registered-projects"
-    if [ -f "$reg" ]; then
+    if [ -f "$_r" ]; then
         while IFS= read -r proj; do
             [ -z "$proj" ] && continue
             [ ! -d "$proj" ] && continue
@@ -218,7 +218,7 @@ cmd_update() {
                 source "$HARNESS_GLOBAL/lib-mount-rules.sh"
                 mount_rule_files "$HARNESS_GLOBAL" "$proj" 2>/dev/null || true
             fi
-        done < "$reg"
+        done < "$_r"
     fi
 
     ok "All registered projects refreshed."
@@ -230,7 +230,7 @@ cmd_update() {
 cmd_check() {
     local target="${1:-$(pwd)}"
     if [ -x "$HARNESS_GLOBAL/brain-check.sh" ]; then
-        "$HARNESS_GLOBAL/brain-check.sh" "$target"
+        "$HARNESS_GLOBAL/brain-check.sh" "$_t"
     else
         fail "brain-check.sh not found."
         exit 1
@@ -245,10 +245,10 @@ case "${1:-}" in
         shift
         cmd_init "${1:-}"
         # Register this project for future updates
-        local target="$(cd "${1:-$(pwd)}" 2>/dev/null && pwd || pwd)"
-        local reg="$HARNESS_GLOBAL/.registered-projects"
-        if ! grep -qxF "$target" "$reg" 2>/dev/null; then
-            echo "$target" >> "$reg"
+        _t="$(cd "${1:-$(pwd)}" 2>/dev/null && pwd || pwd)"
+        _r="$HARNESS_GLOBAL/.registered-projects"
+        if ! grep -qxF "$_t" "$_r" 2>/dev/null; then
+            echo "$_t" >> "$_r"
         fi
         ;;
     install)
