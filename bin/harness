@@ -367,15 +367,14 @@ cmd_metrics() {
 
     # === Plan-based metrics ===
     if [ -f "$plan" ]; then
-        _c() { grep -cE "$1" "$2" 2>/dev/null || echo 0; }
-        total=$(_c '^- \[[ x]\]' "$plan")
-        completed=$(_c '^- \[x\]' "$plan")
-        verify_ok=$(_c '^- verify:.*(passed|通过|PASS)' "$plan")
-        verify_failed=$(_c '^- verify:.*(failed|失败|FAIL)' "$plan")
-        log_count=$(_c '^### Step' "$plan")
+        total=$(grep -cE '^- \[[ x]\]' "$plan" 2>/dev/null); total=${total:-0}
+        completed=$(grep -cE '^- \[x\]' "$plan" 2>/dev/null); completed=${completed:-0}
+        verify_ok=$(grep -cE '^- verify:.*(passed|通过|PASS)' "$plan" 2>/dev/null); verify_ok=${verify_ok:-0}
+        verify_failed=$(grep -cE '^- verify:.*(failed|失败|FAIL)' "$plan" 2>/dev/null); verify_failed=${verify_failed:-0}
+        log_count=$(grep -cE '^### Step' "$plan" 2>/dev/null); log_count=${log_count:-0}
+        deviations=$(grep -cE '偏离|deviation|diverged' "$plan" 2>/dev/null); deviations=${deviations:-0}
         verify_missing=$((log_count - verify_ok - verify_failed))
         [ "$verify_missing" -lt 0 ] && verify_missing=0
-        deviations=$(_c '偏离|deviation|diverged' "$plan")
 
         echo ""
         echo "  ── Plan Execution ──"
