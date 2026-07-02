@@ -104,7 +104,7 @@ cmd_init() {
 
     # 2. Generate + mount
     local g="$HARNESS_GLOBAL/generate.sh"
-    [ -x "$g" ] && { "$g" --all >/dev/null 2>&1; ok "AGENTS.md generated."; }
+    [ -x "$g" ] && { "$g" >/dev/null 2>&1; ok "AGENTS.md generated."; }
     if [ -f "$HARNESS_GLOBAL/scripts/lib-mount-rules.sh" ]; then
         source "$HARNESS_GLOBAL/scripts/lib-mount-rules.sh"
         mount_rule_files "$HARNESS_GLOBAL" "$target"
