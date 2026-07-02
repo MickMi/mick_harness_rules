@@ -60,7 +60,7 @@ PROJECT_DIR="$(cd "$HARNESS_ROOT/.." && pwd)"
 # --- Resolve signal source: first existing candidate wins ---
 # Prefer Brain (cross-project), fall back to per-project audit-log.md.
 CANDIDATES=()
-if [ -f "$HARNESS_ROOT/brain-resolve.sh" ]; then
+if [ -f "$HARNESS_ROOT/scripts/brain-resolve.sh" ]; then
     # shellcheck disable=SC1091
     source "$HARNESS_ROOT/scripts/brain-resolve.sh"
     if resolve_brain_dir "$HARNESS_ROOT" 2>/dev/null && [ -n "${BRAIN_DIR:-}" ]; then

@@ -193,7 +193,11 @@ TRANSCRIPT:
 PROMPTEOF
     echo "$FILTERED" >> "$TEMP_PROMPT"
 
-    SUMMARY=$(timeout 300 claude -p --model opus --output-format text < "$TEMP_PROMPT" 2>/dev/null || echo "")
+    if command -v timeout >/dev/null 2>&1; then
+        SUMMARY=$(timeout 300 claude -p --model opus --output-format text < "$TEMP_PROMPT" 2>/dev/null || echo "")
+    else
+        SUMMARY=$(perl -e 'alarm 300; exec @ARGV' claude -p --model opus --output-format text < "$TEMP_PROMPT" 2>/dev/null || echo "")
+    fi
     rm -f "$TEMP_PROMPT"
 
     if [ -z "$SUMMARY" ] || ! echo "$SUMMARY" | grep -q "---GOAL---"; then

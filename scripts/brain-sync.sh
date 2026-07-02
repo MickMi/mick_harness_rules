@@ -142,6 +142,8 @@ if [ -z "$TRANSCRIPT_FILE" ]; then
     exit 0
 fi
 
+export TRANSCRIPT_FILE
+
 # --- Gate 3: Minimum session size ---
 USER_MSG_COUNT=$(python3 -c "
 import json
@@ -274,7 +276,12 @@ PROMPTEOF
 echo "$FILTERED" >> "$TEMP_PROMPT"
 
 log "SessionEnd: $SESSION_SHORT — running claude -p for distillation..."
-SUMMARY=$(timeout 300 claude -p --model opus --output-format text < "$TEMP_PROMPT" 2>>"$LOG_FILE" || echo "")
+# macOS doesn't ship with GNU timeout. Use perl alarm as portable fallback.
+if command -v timeout >/dev/null 2>&1; then
+    SUMMARY=$(timeout 300 claude -p --model opus --output-format text < "$TEMP_PROMPT" 2>>"$LOG_FILE" || echo "")
+else
+    SUMMARY=$(perl -e 'alarm 300; exec @ARGV' claude -p --model opus --output-format text < "$TEMP_PROMPT" 2>>"$LOG_FILE" || echo "")
+fi
 
 rm -f "$TEMP_PROMPT"
 
@@ -314,7 +321,7 @@ git -C "$BRAIN_REPO" pull --rebase --quiet origin main 2>/dev/null || true
 TODAY=$(date +%Y-%m-%d)
 SESSION_DIR="$BRAIN_REPO/sessions/$TODAY"
 mkdir -p "$SESSION_DIR"
-SESSION_FILE="$SESSION_DIR/claude-code.md"
+SESSION_FILE="$SESSION_DIR/claude-code-${SESSION_SHORT}.md"
 
 {
     echo "# Session: $TODAY ($SESSION_SHORT)"
@@ -337,7 +344,7 @@ SESSION_FILE="$SESSION_DIR/claude-code.md"
     [ -n "$PROJECT_SLUG" ] && echo "## Project: $PROJECT_SLUG" || echo "## Project: none"
 } > "$SESSION_FILE"
 
-log "SessionEnd: $SESSION_SHORT — wrote session digest to brain/sessions/$TODAY/claude-code.md"
+log "SessionEnd: $SESSION_SHORT — wrote session digest to brain/sessions/$TODAY/claude-code-${SESSION_SHORT}.md"
 
 # --- Push learnings individually ---
 if [ -n "$LEARNINGS" ] && ! echo "$LEARNINGS" | grep -qi "none"; then
