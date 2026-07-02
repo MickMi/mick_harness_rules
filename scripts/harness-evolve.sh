@@ -55,7 +55,12 @@ done
 
 # --- Resolve paths ---
 HARNESS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PROJECT_DIR="$(cd "$HARNESS_ROOT/.." && pwd)"
+# Use current working directory as project; fall back to HARNESS_ROOT parent
+PROJECT_DIR="${1:-$(pwd)}"
+if [ ! -d "$PROJECT_DIR" ]; then
+    PROJECT_DIR="$(pwd)"
+fi
+shift 2>/dev/null || true
 
 # --- Resolve signal source: first existing candidate wins ---
 # Prefer Brain (cross-project), fall back to per-project audit-log.md.
@@ -171,11 +176,17 @@ while IFS='|' read -r tag level cur prev projs; do
     } >> "$TMP_BODY"
 done <<< "$AGG"
 
-# --- Optional signal: recurring banned patterns / corrections (forward-compat) ---
-BANNED="${BRAIN_DIR:-}/global/evolution/banned-patterns.md"
-if [ -n "${BRAIN_DIR:-}" ] && [ -f "$BANNED" ]; then
-    info "检测到 banned-patterns.md，已纳入提案上下文（人工分析高频禁止项）"
-fi
+# --- Optional signals: harness-failures, corrections, banned-patterns ---
+for sig in "harness-failures.md" "corrections.md" "banned-patterns.md"; do
+    local sig_file="${BRAIN_DIR:-}/global/evolution/$sig"
+    if [ -n "${BRAIN_DIR:-}" ] && [ -f "$sig_file" ]; then
+        local sig_count
+        sig_count=$(grep -cE '^[0-9]{4}-[0-9]{2}-[0-9]{2}' "$sig_file" 2>/dev/null || echo "0")
+        if [ "${sig_count:-0}" -gt 0 ]; then
+            info "检测到 $sig ($sig_count 条记录)，建议在提案中纳入分析。"
+        fi
+    fi
+done
 
 # --- Write the proposal file ---
 if [ "$PROPOSAL_COUNT" -eq 0 ]; then

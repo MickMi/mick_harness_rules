@@ -28,6 +28,8 @@ SYNCED_DIR="$SYNC_STATE/synced"
 ERROR_DIR="$SYNC_STATE/errors"
 LOCK_DIR="$SYNC_STATE/lock"
 LOG_FILE="$HOME/.claude/logs/brain-sync-daily.log"
+
+mkdir -p "$SYNCED_DIR" "$ERROR_DIR" "$(dirname "$LOG_FILE")"
 BRAIN_REPO=""
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"; }

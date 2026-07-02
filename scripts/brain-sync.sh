@@ -89,8 +89,10 @@ fi
 # Last resort: find most recent unsynced transcript
 if [ -z "$SESSION_ID" ]; then
     SESSION_ID=$(ls -t "$TRANSCRIPT_DIR"/*.jsonl 2>/dev/null | while read f; do
-        sid=$(basename "$f" .jsonl | sed 's/-.*//')
-        [ ! -f "$SYNCED_DIR/$sid" ] && echo "$sid" && break
+        sid=$(basename "$f" .jsonl)
+        # Extract UUID prefix: 8-4 (e.g., a1b2c3d4-e5f6)
+        sid=$(echo "$sid" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}' | head -1)
+        [ -n "$sid" ] && [ ! -f "$SYNCED_DIR/$sid" ] && echo "$sid" && break
     done)
 fi
 
@@ -99,9 +101,7 @@ if [ -z "$SESSION_ID" ]; then
     exit 0
 fi
 
-# Trim to first UUID segment (before first dash)
-SESSION_ID="${SESSION_ID%%-*}-${SESSION_ID#*-}"
-# Actually, session IDs are full UUIDs. Let's use the first two segments
+# Normalize to first 8+4 UUID segments
 SESSION_SHORT=$(echo "$SESSION_ID" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}' | head -1)
 [ -z "$SESSION_SHORT" ] && SESSION_SHORT="$SESSION_ID"
 
