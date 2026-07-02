@@ -172,7 +172,7 @@ cmd_init() {
     # 3. .gitignore
     local gi="$target/.gitignore"
     [ ! -f "$gi" ] && touch "$gi"
-    for e in ".harness/" ".harness" "${HARNESS_OWNED_FILES[@]}"; do
+    for e in ".harness/" ".harness" "${HARNESS_OWNED_FILES[@]:-}"; do
         grep -qxF "$e" "$gi" 2>/dev/null || echo "$e" >> "$gi"
     done
     ok ".gitignore updated."
@@ -492,8 +492,51 @@ cmd_brain() {
             fi
             # Check SessionEnd hook
             local hook_file="$HOME/.claude/settings.json"
-            if [ -f "$hook_file" ] && grep -q "brain-sync" "$hook_file" 2>/dev/null; then
+            local brain_sync_path="$HARNESS_GLOBAL/scripts/brain-sync.sh"
+            local hook_status
+            hook_status=$(HOOK_FILE="$hook_file" BRAIN_SYNC_PATH="$brain_sync_path" python3 <<'PY' 2>/dev/null || echo "invalid"
+import json, os
+
+hook_file = os.environ["HOOK_FILE"]
+brain_sync = os.environ["BRAIN_SYNC_PATH"]
+
+def iter_commands(hooks):
+    if isinstance(hooks, dict):
+        entries = hooks.get("SessionEnd", [])
+    elif isinstance(hooks, list):
+        entries = hooks
+    else:
+        entries = []
+    if not isinstance(entries, list):
+        entries = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        if isinstance(entry.get("hooks"), list):
+            for sub in entry["hooks"]:
+                if isinstance(sub, dict) and sub.get("command"):
+                    yield sub.get("command", "")
+        if entry.get("command"):
+            yield entry.get("command", "")
+
+if not os.path.exists(hook_file):
+    print("missing")
+else:
+    with open(hook_file) as fh:
+        data = json.load(fh)
+    commands = list(iter_commands(data.get("hooks", {})))
+    if brain_sync in commands:
+        print("installed")
+    elif any("brain-sync" in c for c in commands):
+        print("other")
+    else:
+        print("missing")
+PY
+)
+            if [ "$hook_status" = "installed" ]; then
                 echo -e "  SessionEnd  : ${GREEN}installed${NC}"
+            elif [ "$hook_status" = "other" ]; then
+                echo -e "  SessionEnd  : ${YELLOW}other brain-sync hook found — run 'harness brain install'${NC}"
             else
                 echo -e "  SessionEnd  : ${YELLOW}not installed — run 'harness brain install'${NC}"
             fi
@@ -501,7 +544,10 @@ cmd_brain() {
             local plist="$HOME/Library/LaunchAgents/com.mick.brain-daily-distill.plist"
             if [ -f "$plist" ]; then
                 local loaded_check
-                loaded_check=$(launchctl list 2>/dev/null | grep "com.mick.brain" || true)
+                loaded_check=$(launchctl print "gui/$(id -u)/com.mick.brain-daily-distill" >/dev/null 2>&1 && echo "loaded" || true)
+                if [ -z "$loaded_check" ]; then
+                    loaded_check=$(launchctl list 2>/dev/null | grep "com.mick.brain-daily-distill" || true)
+                fi
                 if [ -n "$loaded_check" ]; then
                     echo -e "  Daily sync  : ${GREEN}installed & loaded${NC}"
                 else
@@ -529,49 +575,87 @@ cmd_brain() {
             local hook_file="$HOME/.claude/settings.json"
             local brain_sync_path="$HARNESS_GLOBAL/scripts/brain-sync.sh"
             local already_hooked=false
-            if [ -f "$hook_file" ] && grep -qF "$brain_sync_path" "$hook_file" 2>/dev/null; then
+            if [ -f "$hook_file" ] && HOOK_FILE="$hook_file" BRAIN_SYNC_PATH="$brain_sync_path" python3 <<'PY' >/dev/null 2>&1
+import json, os, sys
+hook_file = os.environ["HOOK_FILE"]
+brain_sync = os.environ["BRAIN_SYNC_PATH"]
+with open(hook_file) as fh:
+    data = json.load(fh)
+hooks = data.get("hooks", {})
+entries = hooks.get("SessionEnd", []) if isinstance(hooks, dict) else hooks if isinstance(hooks, list) else []
+for entry in entries if isinstance(entries, list) else []:
+    if isinstance(entry, dict) and entry.get("command") == brain_sync:
+        sys.exit(0)
+    for sub in entry.get("hooks", []) if isinstance(entry, dict) else []:
+        if isinstance(sub, dict) and sub.get("command") == brain_sync:
+            sys.exit(0)
+sys.exit(1)
+PY
+            then
                 already_hooked=true
             fi
             if [ "$already_hooked" = true ]; then
                 echo -e "  ${GREEN}SessionEnd hook already installed.${NC}"
             else
                 echo "  Adding SessionEnd hook to $hook_file ..."
-                python3 -c "
+                mkdir -p "$(dirname "$hook_file")"
+                HOOK_FILE="$hook_file" BRAIN_SYNC_PATH="$brain_sync_path" python3 <<'PY' 2>/dev/null && echo -e "  ${GREEN}SessionEnd hook installed.${NC}" || echo -e "  ${YELLOW}Hook install failed. Add manually: $brain_sync_path${NC}"
 import json, os
-f = '$hook_file'
-brain_sync = '$brain_sync_path'
+
+f = os.environ["HOOK_FILE"]
+brain_sync = os.environ["BRAIN_SYNC_PATH"]
 data = {}
 if os.path.exists(f) and os.path.getsize(f) > 0:
     with open(f) as fh:
         try: data = json.load(fh)
         except: data = {}
-# hooks is a list of objects, not a dict
-hooks = data.get('hooks', [])
-if not isinstance(hooks, list):
-    hooks = []
-# Check if already present (exact path match)
-already = any(
-    (isinstance(h, dict) and h.get('command','') == brain_sync)
-    or (isinstance(h, dict) and isinstance(h.get('command'), dict) and h.get('command',{}).get('command','') == brain_sync)
-    for h in hooks
-)
+
+raw_hooks = data.get("hooks", {})
+if isinstance(raw_hooks, dict):
+    hooks = raw_hooks
+    session_end = hooks.get("SessionEnd", [])
+elif isinstance(raw_hooks, list):
+    # Repair legacy/damaged list form by treating it as SessionEnd entries.
+    hooks = {}
+    session_end = raw_hooks
+else:
+    hooks = {}
+    session_end = []
+
+if not isinstance(session_end, list):
+    session_end = []
+
+def entry_has_command(entry, command):
+    if not isinstance(entry, dict):
+        return False
+    if entry.get("command") == command:
+        return True
+    for sub in entry.get("hooks", []):
+        if isinstance(sub, dict) and sub.get("command") == command:
+            return True
+    return False
+
+already = any(entry_has_command(entry, brain_sync) for entry in session_end)
 if not already:
-    hooks.append({
-        'type': 'command',
-        'command': brain_sync,
-        'description': 'Auto-distill session learnings to Brain'
+    session_end.append({
+        "hooks": [{
+            "type": "command",
+            "command": brain_sync,
+            "description": "Auto-distill session learnings to Brain"
+        }]
     })
-data['hooks'] = hooks
+hooks["SessionEnd"] = session_end
+data["hooks"] = hooks
 with open(f, 'w') as fh:
     json.dump(data, fh, indent=2, ensure_ascii=False)
-" 2>/dev/null && echo -e "  ${GREEN}SessionEnd hook installed.${NC}" || echo -e "  ${YELLOW}Hook install failed. Add manually: $brain_sync_path${NC}"
+PY
             fi
             # Install launchd plist
             local plist_dir="$HOME/Library/LaunchAgents"
             local plist="$plist_dir/com.mick.brain-daily-distill.plist"
             mkdir -p "$plist_dir" "$HOME/.claude/logs"
             # Always write plist (idempotent), unload+reload to fix stale state
-            launchctl unload "$plist" 2>/dev/null || true
+            launchctl bootout "gui/$(id -u)" "$plist" 2>/dev/null || launchctl unload "$plist" 2>/dev/null || true
             cat > "$plist" << PLISTEOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -599,8 +683,11 @@ with open(f, 'w') as fh:
 </dict>
 </plist>
 PLISTEOF
-            launchctl load "$plist" 2>/dev/null || true
-            echo -e "  ${GREEN}Daily sync installed (3:07 AM).${NC}"
+            if launchctl bootstrap "gui/$(id -u)" "$plist" 2>/dev/null || launchctl load "$plist" 2>/dev/null; then
+                echo -e "  ${GREEN}Daily sync installed (3:07 AM).${NC}"
+            else
+                echo -e "  ${YELLOW}Daily sync plist written but launchctl did not load it. Run 'harness brain status'.${NC}"
+            fi
             echo ""
             echo "  SessionEnd hook + daily batch sync installed."
             echo "  Run 'harness brain status' to verify."
