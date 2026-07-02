@@ -500,7 +500,9 @@ cmd_brain() {
             # Check launchd
             local plist="$HOME/Library/LaunchAgents/com.mick.brain-daily-distill.plist"
             if [ -f "$plist" ]; then
-                if launchctl list 2>/dev/null | grep -q "com.mick.brain" 2>/dev/null; then
+                local loaded_check
+                loaded_check=$(launchctl list 2>/dev/null | grep "com.mick.brain" || true)
+                if [ -n "$loaded_check" ]; then
                     echo -e "  Daily sync  : ${GREEN}installed & loaded${NC}"
                 else
                     echo -e "  Daily sync  : ${YELLOW}plist exists but not loaded — run 'harness brain install'${NC}"
