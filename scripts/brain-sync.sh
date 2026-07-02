@@ -38,7 +38,7 @@ LOG_FILE="$HOME/.claude/logs/brain-sync.log"
 BRAIN_REPO=""
 
 # --- Resolve brain ---
-source "$HARNESS_ROOT/scripts/brain-resolve.sh""
+source "$HARNESS_ROOT/scripts/brain-resolve.sh"
 resolve_brain_dir "$HARNESS_ROOT"
 # Use the resolved brain directory from brain-resolve.sh
 if [ -n "${BRAIN_REPO_LOCAL:-}" ]; then

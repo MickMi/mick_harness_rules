@@ -62,7 +62,7 @@ PROJECT_DIR="$(cd "$HARNESS_ROOT/.." && pwd)"
 CANDIDATES=()
 if [ -f "$HARNESS_ROOT/brain-resolve.sh" ]; then
     # shellcheck disable=SC1091
-    source "$HARNESS_ROOT/scripts/brain-resolve.sh""
+    source "$HARNESS_ROOT/scripts/brain-resolve.sh"
     if resolve_brain_dir "$HARNESS_ROOT" 2>/dev/null && [ -n "${BRAIN_DIR:-}" ]; then
         CANDIDATES+=("$BRAIN_DIR/global/evolution/audit-trail.md")
     fi

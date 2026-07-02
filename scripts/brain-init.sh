@@ -23,7 +23,7 @@ fail()  { echo -e "${RED}❌ $1${NC}"; }
 HARNESS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # --- Source shared brain resolver + rule-mounting library ---
-source "$HARNESS_ROOT/scripts/brain-resolve.sh""
+source "$HARNESS_ROOT/scripts/brain-resolve.sh"
 source "$HARNESS_ROOT/scripts/lib-mount-rules.sh"
 
 # --- Parse arguments ---

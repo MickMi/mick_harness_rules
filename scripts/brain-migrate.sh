@@ -27,7 +27,7 @@ fail()  { echo -e "${RED}❌ $1${NC}"; }
 HARNESS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # --- Source shared brain resolver ---
-source "$HARNESS_ROOT/scripts/brain-resolve.sh""
+source "$HARNESS_ROOT/scripts/brain-resolve.sh"
 
 echo ""
 echo "🧠 Brain Migration — Harness → External Brain Repo"

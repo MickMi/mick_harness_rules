@@ -33,7 +33,7 @@ BRAIN_REPO=""
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"; }
 
 # --- Resolve brain ---
-source "$HARNESS_ROOT/scripts/brain-resolve.sh""
+source "$HARNESS_ROOT/scripts/brain-resolve.sh"
 resolve_brain_dir "$HARNESS_ROOT"
 if [ -n "${BRAIN_REPO_LOCAL:-}" ]; then
     BRAIN_REPO="$BRAIN_REPO_LOCAL"
