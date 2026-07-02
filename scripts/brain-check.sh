@@ -78,19 +78,19 @@ else
 fi
 
 # ============================================================
-# Check 2: .cursorrules exists and is non-empty
+# Check 2: AGENTS.md exists and is non-empty
 # ============================================================
-echo "📋 Check 2: .cursorrules"
-CURSORRULES="$TARGET_DIR/.cursorrules"
-if [ -L "$CURSORRULES" ] || [ -f "$CURSORRULES" ]; then
-    if [ -s "$CURSORRULES" ]; then
-        LINE_COUNT=$(wc -l < "$CURSORRULES" | tr -d ' ')
-        check_pass ".cursorrules exists and is non-empty ($LINE_COUNT lines)"
+echo "📋 Check 2: AGENTS.md"
+AGENTS_MD="$TARGET_DIR/AGENTS.md"
+if [ -L "$AGENTS_MD" ] || [ -f "$AGENTS_MD" ]; then
+    if [ -s "$AGENTS_MD" ]; then
+        LINE_COUNT=$(wc -l < "$AGENTS_MD" | tr -d ' ')
+        check_pass "AGENTS.md exists and is non-empty ($LINE_COUNT lines)"
     else
-        check_fail ".cursorrules exists but is empty!"
+        check_fail "AGENTS.md exists but is empty!"
     fi
 else
-    check_fail ".cursorrules does not exist. Run 'brain-init.sh' first."
+    check_fail "AGENTS.md does not exist. Run 'brain-init.sh' first."
 fi
 
 # ============================================================
@@ -261,13 +261,13 @@ else
 fi
 
 # ============================================================
-# Check 11: Brain auto-write rules present in .cursorrules
+# Check 11: Brain auto-write rules present in AGENTS.md
 # ============================================================
 echo "📋 Check 11: Brain auto-write rules"
-if [ -f "$CURSORRULES" ] && grep -q "Brain Auto-Write Protocol" "$CURSORRULES" 2>/dev/null; then
-    check_pass "Brain auto-write rules are present in .cursorrules"
+if [ -f "$AGENTS_MD" ] && grep -q "Brain Auto-Write Protocol" "$AGENTS_MD" 2>/dev/null; then
+    check_pass "Brain auto-write rules are present in AGENTS.md"
 else
-    check_warn "Brain auto-write rules not found in .cursorrules. AI won't auto-push memories."
+    check_warn "Brain auto-write rules not found in AGENTS.md. AI won't auto-push memories."
 fi
 
 # ============================================================
