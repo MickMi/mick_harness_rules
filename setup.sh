@@ -14,7 +14,9 @@ set -euo pipefail
 # performs all initialization in one step.
 #
 # Options:
-#   --quick           Minimal setup: rules + mount + gitignore only. No brain, no scaffold.
+#   --quick           Same as default: rules + mount + gitignore only.
+#   --full            Add Brain, config, MEMORY/TODO/docs scaffold.
+#   --all-rules       Also mount legacy tool-specific rule files.
 #   --fresh           Start with a clean brain (for fork/clone users)
 #   --no-vibe         Skip Vibe scaffold files (MEMORY.md, TODO.md, docs/)
 #   --reconfigure     Regenerate .harness-config.yaml from template (overwrites existing)
@@ -24,13 +26,9 @@ set -euo pipefail
 #
 # What it does:
 #   1. Detect parent directory as target project
-#   2. Symlink .cursorrules and .prompts/ into project root
+#   2. Symlink/inject AGENTS.md into project root
 #   3. Configure .gitignore to isolate harness files
-#   4. Deploy Vibe scaffold files (skip if already exist)
-#   5. ✨ Interactive workflow configuration → .harness-config.yaml
-#   6. Inject multi-IDE rules
-#   7. Clone/connect brain repo (fallback to local if unavailable)
-#   8. Run brain-check to verify integrity
+#   4. Stop. Full setup is opt-in via --full.
 # ============================================================
 
 # --- Color helpers ---
@@ -51,12 +49,13 @@ HARNESS_ROOT="$(cd "$(dirname "$0")" && pwd)"
 
 # --- Parse arguments ---
 FRESH_MODE=false
-SKIP_VIBE=false
-SKIP_BRAIN=false
-QUICK_MODE=false
+SKIP_VIBE=true
+SKIP_BRAIN=true
+QUICK_MODE=true
 RECONFIGURE=false
-NON_INTERACTIVE=false
+NON_INTERACTIVE=true
 PROFILE_FILE=""
+RULE_MODE="single"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -67,8 +66,23 @@ while [[ $# -gt 0 ]]; do
             NON_INTERACTIVE=true
             shift
             ;;
+        --full)
+            QUICK_MODE=false
+            SKIP_VIBE=false
+            SKIP_BRAIN=false
+            NON_INTERACTIVE=false
+            shift
+            ;;
+        --all-rules|--compat)
+            RULE_MODE="all"
+            shift
+            ;;
         --fresh)
             FRESH_MODE=true
+            QUICK_MODE=false
+            SKIP_VIBE=false
+            SKIP_BRAIN=false
+            NON_INTERACTIVE=false
             shift
             ;;
         --no-vibe)
@@ -99,7 +113,9 @@ while [[ $# -gt 0 ]]; do
             echo "the harness repo as .harness/ subdirectory."
             echo ""
             echo "Options:"
-            echo "  --quick             Minimal setup: generate rules + mount + gitignore. No brain, no scaffold."
+            echo "  --quick             Same as default: AGENTS.md + .gitignore only. No brain, no scaffold."
+            echo "  --full              Add Brain, config, MEMORY/TODO/docs scaffold."
+            echo "  --all-rules         Also mount legacy tool-specific rule files."
             echo "  --fresh             Start with a clean brain (for new users who cloned/forked)"
             echo "  --no-vibe           Skip Vibe scaffold files (MEMORY.md, TODO.md, docs/)"
             echo "  --reconfigure       Re-run interactive workflow configuration (overwrites .harness-config.yaml)"
@@ -107,11 +123,11 @@ while [[ $# -gt 0 ]]; do
             echo "  --profile FILE      Load answers from a YAML profile file"
             echo "  -h, --help          Show this help message"
             echo ""
-            echo "Quick start (1 minute, zero questions):"
-            echo "  git clone https://github.com/MickMi/mick_harness_rules.git .harness && .harness/setup.sh --quick"
+            echo "Quick start (zero questions):"
+            echo "  git clone https://github.com/MickMi/mick_harness_rules.git .harness && .harness/setup.sh"
             echo ""
             echo "Full setup (with Brain memory + workflow config):"
-            echo "  git clone https://github.com/MickMi/mick_harness_rules.git .harness && .harness/setup.sh"
+            echo "  git clone https://github.com/MickMi/mick_harness_rules.git .harness && .harness/setup.sh --full"
             exit 0
             ;;
         -*)
@@ -171,7 +187,8 @@ else
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  Harness location: $HARNESS_ROOT"
     echo "  Target project  : $TARGET_DIR"
-    echo "  Fresh mode      : $FRESH_MODE"
+        echo "  Rule mode       : $RULE_MODE"
+        echo "  Fresh mode      : $FRESH_MODE"
     echo "  Skip vibe files : $SKIP_VIBE"
     echo "  Reconfigure     : $RECONFIGURE"
     echo "  Non-interactive : $NON_INTERACTIVE"
@@ -196,9 +213,13 @@ source "$HARNESS_ROOT/scripts/lib-mount-rules.sh"
 if [ "$QUICK_MODE" != true ]; then
     info "Phase 0.5: Generating rule files from single source (rules/core.md + extended.md)..."
 fi
-regenerate_rules "$HARNESS_ROOT"
+regenerate_rules "$HARNESS_ROOT" "$RULE_MODE"
 if [ "$QUICK_MODE" = true ]; then
-    ok "Rules generated (7 IDE formats)"
+    if [ "$RULE_MODE" = "all" ]; then
+        ok "Rules generated (AGENTS.md + compatibility entries)"
+    else
+        ok "Rules generated (AGENTS.md)"
+    fi
 else
     echo ""
 fi
@@ -209,7 +230,7 @@ fi
 if [ "$QUICK_MODE" != true ]; then
     info "Phase 1/6: Symlinking generated rule files into project root..."
 fi
-mount_rule_files "$HARNESS_ROOT" "$TARGET_DIR"
+mount_rule_files "$HARNESS_ROOT" "$TARGET_DIR" "$RULE_MODE"
 if [ "$QUICK_MODE" = true ]; then
     ok "Rules mounted to project root"
 else
@@ -224,9 +245,9 @@ if [ "$QUICK_MODE" != true ]; then
 fi
 
 GITIGNORE="$TARGET_DIR/.gitignore"
-# Always isolate the harness mount + role-template projection. Per-rule-file
-# entries are added dynamically below, only for files the harness actually owns.
-IGNORE_ENTRIES=(".harness/" ".harness" ".prompts/" ".prompts")
+# Always isolate the harness mount. Per-rule-file entries are added dynamically
+# below, only for files the harness actually owns.
+IGNORE_ENTRIES=(".harness/" ".harness")
 IGNORE_ENTRIES+=("${HARNESS_OWNED_FILES[@]}")
 
 if [ ! -f "$GITIGNORE" ]; then
@@ -329,35 +350,26 @@ fi
 # ============================================================
 if [ "$QUICK_MODE" != true ]; then
     info "Phase 3.5: Copying workflow config template..."
-fi
 
-CONFIG_FILE="$TARGET_DIR/.harness-config.yaml"
-TEMPLATE_FILE="$HARNESS_ROOT/config/.harness-config.template.yaml"
+    CONFIG_FILE="$TARGET_DIR/.harness-config.yaml"
+    TEMPLATE_FILE="$HARNESS_ROOT/config/.harness-config.template.yaml"
 
-if [ -f "$CONFIG_FILE" ] && [ "$RECONFIGURE" = false ]; then
-    if [ "$QUICK_MODE" != true ]; then
+    if [ -f "$CONFIG_FILE" ] && [ "$RECONFIGURE" = false ]; then
         ok ".harness-config.yaml already exists. Use --reconfigure to regenerate. (idempotent)"
-    fi
-else
-    if [ -n "$PROFILE_FILE" ] && [ ! -f "$PROFILE_FILE" ]; then
-        warn "Profile file not found: $PROFILE_FILE. Falling back to template defaults."
-    fi
-    if [ -n "$PROFILE_FILE" ] && [ -f "$PROFILE_FILE" ]; then
-        cp "$PROFILE_FILE" "$CONFIG_FILE"
-        if [ "$QUICK_MODE" != true ]; then
-            ok "Generated: .harness-config.yaml (from profile: $PROFILE_FILE)"
+    else
+        if [ -n "$PROFILE_FILE" ] && [ ! -f "$PROFILE_FILE" ]; then
+            warn "Profile file not found: $PROFILE_FILE. Falling back to template defaults."
         fi
-    elif [ -f "$TEMPLATE_FILE" ]; then
-        cp "$TEMPLATE_FILE" "$CONFIG_FILE"
-        if [ "$QUICK_MODE" = true ]; then
-            ok "Config template copied"
-        else
+        if [ -n "$PROFILE_FILE" ] && [ -f "$PROFILE_FILE" ]; then
+            cp "$PROFILE_FILE" "$CONFIG_FILE"
+            ok "Generated: .harness-config.yaml (from profile: $PROFILE_FILE)"
+        elif [ -f "$TEMPLATE_FILE" ]; then
+            cp "$TEMPLATE_FILE" "$CONFIG_FILE"
             ok "Generated: .harness-config.yaml (template defaults)"
             info "Edit anytime: \$EDITOR .harness-config.yaml — or re-run with --reconfigure"
-        fi
-    else
-        warn ".harness-config.template.yaml not found. Writing minimal config..."
-        cat > "$CONFIG_FILE" <<EOF
+        else
+            warn ".harness-config.template.yaml not found. Writing minimal config..."
+            cat > "$CONFIG_FILE" <<EOF
 version: 1
 meta: { language: "en" }
 brain: { enabled: true, path: "~/.mick-brain" }
@@ -366,10 +378,9 @@ dev: { scope: "fullstack", tech_stack: { language: "", framework: "", database: 
 testing: { mode: "critical_path", coverage_threshold: 50 }
 strictness: { mode: "soft", pm_max_rounds: 3 }
 EOF
-        ok "Generated: .harness-config.yaml (minimal)"
+            ok "Generated: .harness-config.yaml (minimal)"
+        fi
     fi
-fi
-if [ "$QUICK_MODE" != true ]; then
     echo ""
 fi
 
@@ -377,9 +388,12 @@ fi
 # Phase 4: Multi-IDE rules — handled by single-source generator
 # ============================================================
 if [ "$QUICK_MODE" != true ]; then
-    info "Phase 4/6: Multi-IDE rules..."
-    ok "All IDE rule files (Cursor/Windsurf/Cline/Copilot/Trae/AGENTS.md/CLAUDE.md) are"
-    ok "  generated from a single source and mounted in Phase 1. Nothing to inject."
+    info "Phase 4/6: Rule entry mode..."
+    if [ "$RULE_MODE" = "all" ]; then
+        ok "Compatibility rule files are generated from the same source and mounted in Phase 1."
+    else
+        ok "Default project entry is AGENTS.md. Other tools should use their global Loader to read it."
+    fi
     echo ""
 fi
 
@@ -389,9 +403,10 @@ fi
 if [ "$QUICK_MODE" = true ]; then
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo -e "${GREEN}${BOLD}Done.${NC} Rules are active for all 7 IDEs."
+    echo -e "${GREEN}${BOLD}Done.${NC} AGENTS.md is active for this project."
     echo ""
-    echo -e "  Run ${CYAN}.harness/setup.sh${NC} (no flags) for full setup with Brain + config."
+    echo -e "  Optional: run ${CYAN}.harness/setup.sh --full${NC} for Brain + config."
+    echo -e "  Optional: add ${CYAN}--all-rules${NC} only for tools that cannot read AGENTS.md."
     echo ""
     exit 0
 fi
@@ -646,8 +661,8 @@ echo ""
 # Phase 5.8: Refresh rules now that Brain is available
 # ============================================================
 info "Phase 5.8: Regenerating rule files with Personal Agent Capsule..."
-regenerate_rules "$HARNESS_ROOT"
-mount_rule_files "$HARNESS_ROOT" "$TARGET_DIR"
+regenerate_rules "$HARNESS_ROOT" "$RULE_MODE"
+mount_rule_files "$HARNESS_ROOT" "$TARGET_DIR" "$RULE_MODE"
 ok "Rule files refreshed after Brain setup."
 echo ""
 
@@ -675,10 +690,12 @@ else
 fi
 echo ""
 echo "  What happened:"
-echo "    ✅ Rule files generated from single source (rules/core.md + extended.md):"
-echo "         AGENTS.md · CLAUDE.md · .cursorrules · .windsurfrules · .clinerules"
-echo "         .github/copilot-instructions.md · .trae/rules.md  (all → .harness/dist/)"
-echo "    ✅ .prompts/    → .harness/rules/roles/  (Agent role templates)"
+if [ "$RULE_MODE" = "all" ]; then
+    echo "    ✅ Rule files generated from single source (AGENTS.md + compatibility entries)"
+    echo "    ✅ .prompts/    → .harness/rules/roles/  (compatibility role templates)"
+else
+    echo "    ✅ Rule file generated from single source: AGENTS.md"
+fi
 echo "    ✅ .gitignore   updated (harness files isolated from project Git)"
 if [ "$SKIP_VIBE" = false ]; then
     echo "    ✅ MEMORY.md, TODO.md, docs/architecture.md deployed"
@@ -693,16 +710,15 @@ else
 fi
 echo ""
 echo "  Next steps:"
-echo "    1. Fill in Tech Stack Constraints in .harness/rules/extended.md, then"
-echo "       re-run '.harness/generate.sh' to propagate to every tool."
-echo "    2. Start your first AI conversation — it will auto-detect the blank"
-echo "       architecture.md and guide you through Goal Discovery."
-echo "    3. Use '.harness/scripts/brain-push.sh' to write learnings."
-echo "    4. Use '.harness/scripts/brain-search.sh <keyword>' to search memory."
+echo "    1. Configure each Code Agent once with docs/CONFIGURE-APPS.md."
+echo "    2. Open this project and ask the Agent for a Harness Self-Test."
+echo "    3. Use plan.md only when the task actually needs planned execution."
+echo "    4. Use '.harness/scripts/brain-push.sh' / brain-search.sh when you want Brain memory."
 echo ""
 echo "  Edit rules once, regenerate everywhere:"
 echo "    vim .harness/rules/core.md   # the 10 core rules (weak-model optimized)"
-echo "    .harness/generate.sh         # rebuild all IDE rule files"
+echo "    .harness/generate.sh         # rebuild AGENTS.md"
+echo "    .harness/generate.sh --all   # optional compatibility entries"
 echo ""
 echo "  Update harness:"
 echo "    cd .harness && git pull && ./generate.sh"

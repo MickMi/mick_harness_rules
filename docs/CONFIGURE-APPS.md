@@ -1,112 +1,115 @@
-# 配置桌面 App 持久化指令(一次性,所有项目通用)
+# 配置 AI 入口加载 Harness
 
-> 把下面对应的指令贴进每个 App 的"自定义指令 / 系统提示词 / Profile / 用户记忆"位置。
-> **配一次,永久生效**——之后任何项目两个 App 都各自知道自己是强还是弱。
->
-> 详细行为规范见 `.harness/rules/extended.md` 第 10 节(Plan-Execute Protocol)和第 10.7 节(多模型角色识别)。
-
----
-
-## 🔴 强模型(Claude)— 复制下面整段贴进去
+Harness 的正常形态不是“给每个工具生成一套自己的规则”，而是：
 
 ```text
-我在多模型 Harness 协作中扮演「🔴 强模型」角色。
-
-打开任何含 .harness/ 或 AGENTS.md 的项目时,我必须:
-
-1. 读 .harness/plan.md
-   - 不存在 → 还没进入执行阶段。按用户当前请求工作:
-     · 用户要"评审需求 / 出方案 / 拆任务" → 我用 PM 角色或 Plan-Execute 的 Planner 身份,
-       产出符合 rules/extended.md 第 10.2 节格式的 plan,写入 .harness/plan.md
-     · 用户要做单文件 Bug 修复 / 文档更新 / 询问 → 走豁免清单,直接处理
-   - 存在且仍有 [ ] 未完成步骤 → 我处于「等弱模型执行」状态,禁止抢着写实现代码,
-     提示用户:"切到 MiniMax 桌面端说'继续'即可,我在这里等"
-   - 存在且全部 [x] 完成 → 我做代码审查(用 Reviewer 角色)
-
-2. Solo 模式例外:
-   - .harness-config.yaml 中 multi_model.solo_mode: true → 我一干到底,
-     写 plan、按 plan 实现、自己审查,不提示切 App
-   - 用户单次说"走 solo / 你全干 / 不用切 App" → 同上,本次会话内有效
-
-3. 各角色契约文件只规定"产物格式"和"Gate 节点",
-   不规定"怎么思考"——我用最新能力自由发挥,但产物符合契约,Gate 处停下找用户确认。
-
-完成产物后,我必须更新 plan.md(勾选完成步骤、追加备注),输出业务结果优先的交接说明。
+单一规则源 rules/core.md + rules/extended.md
+        ↓
+项目入口 AGENTS.md
+        ↓
+按使用场景导出的 Loader
 ```
 
-### 在哪里配?
+也就是说，项目里默认只需要 `AGENTS.md`。不同 Agent、纯 API、IDE 插件只是读取同一个 Harness 的不同入口。
 
-- **Claude Code(终端/Mac App)**:追加到 `~/.claude/CLAUDE.md` 末尾(你已经有这个文件)
-- **Claude.ai Mac 桌面端**:Settings → Profile → "What personal preferences should Claude consider in responses?"
-- **Cursor 接 Claude**:Settings → Rules for AI(全局) 或项目根 `.cursorrules`
+## 最短使用流程
 
----
+### 1. 项目里初始化一次
 
-## 🔵 弱模型(MiniMax)— 复制下面整段贴进去
-
-```text
-我在多模型 Harness 协作中扮演「🔵 弱模型 - Executor」角色。
-
-打开任何含 .harness/ 或 AGENTS.md 的项目时,我必须:
-
-1. 读 .harness/plan.md
-   - 不存在 → 还没进入执行阶段。我不主动写 plan,提示用户:
-     "请回 Claude 桌面端让强模型先出 plan,完成后再切回我说'继续'"
-   - 存在且有 [ ] 未完成步骤 → 我接手,按 rules/extended.md 第 10.3 节
-     Executor 职责严格执行:从第一个 [ ] 开始,按顺序做,每完成一步把 [ ] 改 [x]
-     并在该步骤下方缩进补一行简述做了什么
-   - 存在且全部 [x] 完成 → 我处于「等待强模型审查」状态,提示用户切回 Claude
-
-2. 执行铁律(永远不破):
-   - 🚫 不做架构决策,plan 没写的不发明
-   - 🚫 不改 plan 步骤内容(只能勾完成和加备注)
-   - 🚫 不在 plan 范围外做额外改动
-   - 🚫 不引入 plan 未列出的依赖、不"顺手优化"
-   - ✅ 严格一步一文件,按顺序
-
-3. 遇到 plan 步骤有歧义 / 矛盾 / 缺前提时:
-   - 不脑补,不猜
-   - 把卡点写到 plan.md 末尾 "## 阻塞" 区块:精确描述哪一步、缺什么、需要强模型补什么
-   - 提示用户切回 Claude 让强模型补齐 plan
+```bash
+cd /path/to/project
+harness init
 ```
 
-### 在哪里配?
+这会在项目里放入：
 
-具体位置看 MiniMax 桌面端 UI(通常叫"自定义指令 / 系统设定 / 用户偏好")。
-找不到告诉 Claude,我帮你找。
+- `.harness/`：指向全局 Harness
+- `AGENTS.md`：项目级入口
+- `.gitignore`：避免把脚手架提交进业务仓库
 
----
+### 2. 给 AI 入口配置 Loader
 
-## 🧪 配完后怎么验证生效?
+按你使用的入口选一个：
 
-建个空文件夹,在里面建一个 `.harness/plan.md`:
-
-```markdown
-# Plan: 验证多模型识别
-
-## 目标
-验证 Claude/MiniMax 各自识别角色是否正确
-
-## 步骤
-- [ ] 1. [创建] `hello.txt` — 写一行 "hello from executor"
-
-## 验收标准
-hello.txt 存在且内容正确
+```bash
+harness export codex    # Codex / AGENTS.md 基线
+harness export agent    # 任意 Code Agent 的全局指令
+harness export api      # 纯 API 调用的 system/developer prompt
+harness export ide      # IDE 插件自定义规则
 ```
 
-- 用 **Claude** 打开 → 应该说「plan 已存在且有未完成步骤,我处于等待状态,请切 MiniMax 说继续」
-- 用 **MiniMax** 打开 → 应该说「我看到 plan,我是 executor,开始执行步骤 1」
+把输出复制到对应工具的全局指令、自定义规则或 API system/developer message。
 
-两边都按这个反应,持久化指令就生效了。
+默认导出内联 `rules/core.md`，并指向 `rules/extended.md`。如果入口没有文件系统、模型较弱，或你希望一次性完整灌入 Playbook，用：
 
----
+```bash
+harness export api --full
+harness export ide --full
+```
 
-## 📌 常用唤起词速查
+## 四个加载面
 
-| 你说什么 | 触发 |
+| 场景 | 推荐命令 | 解决的问题 |
+|---|---|---|
+| Codex / 支持 `AGENTS.md` 的 Code Agent | `harness init` + `harness export codex` | 以项目 `AGENTS.md` 为基线，让 Agent 进入项目先读 Harness |
+| 任意 Code Agent | `harness export agent` | 工具不一定天然知道 `AGENTS.md`，用全局 Loader 强制它寻找项目入口 |
+| 纯 API 调用 | `harness export api` | 没有文件系统、shell、浏览器时，把 Harness 变成可注入 prompt，并禁止伪造验证 |
+| IDE 插件 | `harness export ide` | 插件上下文不稳定时，要求先读工作区入口，无法验证就标注 pending |
+
+## 放在哪里
+
+| 工具/入口 | 推荐位置 |
 |---|---|
-| (任意业务需求描述) | Claude 走需求评审 → 写 plan |
-| "继续" / "执行" | 弱模型从 plan 第一个 `[ ]` 开始执行 |
-| "审查" | Claude 走 Reviewer 角色,对照 plan + 代码审 |
-| "走 solo / 你全干" | Claude 跳过弱模型,一干到底 |
-| "卡住了" / "缺什么" | 让 plan 的接手方报告阻塞点 |
+| Codex | 全局指令 / Profile / 用户规则；项目根目录保留 `AGENTS.md` |
+| Claude Code | `~/.claude/CLAUDE.md` 或全局自定义指令 |
+| Cursor | 全局 Rules for AI；必要时再用 `harness init --all-rules` |
+| Windsurf / Cline / Roo / Trae | 全局自定义规则或用户偏好 |
+| 纯 API | system/developer message；同时把 `AGENTS.md`、`plan.md`、相关文件内容作为输入 |
+| IDE 插件 | 插件的 custom instructions / rules / workspace rules |
+
+## 什么时候用 --all-rules
+
+默认项目只需要：
+
+```bash
+harness init
+```
+
+只有当某个工具无法通过 Loader 读取 `AGENTS.md`，才运行：
+
+```bash
+harness init --all-rules
+```
+
+这会额外挂载 `CLAUDE.md`、`.cursorrules`、`.windsurfrules` 等兼容入口。它是兼容层，不是默认心智模型。
+
+## 生效边界
+
+Harness 对 AI 的约束分两层：
+
+- **先验加载**：`AGENTS.md` 和 `harness export ...` 让模型在回答前读到同一套规则。
+- **后验检查**：`harness check`、`generate.sh --check`、`scripts/harness-guard.sh` 等脚本发现生成物、计划、验证记录是否偏离。
+
+Prompt 不能保证模型 100% 不犯错；Harness 的价值是把“约束是否被加载、是否按约束交付、是否有验证证据”变成可观察、可追问、可复用的流程。
+
+## 完整加载和成本
+
+为了避免每轮都消耗大量上下文，默认 Loader 只内联 Core：
+
+- Tripwire
+- plan.md 进入条件
+- Self-Test
+- 验证纪律
+- 回合卡片
+- 反馈分级
+
+Extended Playbook 默认按需读取。需要完整内联时使用 `--full`。这不会改变 Harness 意图，只是把“完整加载”从默认成本变成显式选择。
+
+## 用户心智模型
+
+```text
+新电脑 / 新 Agent：配置一次 export loader
+新项目 / 已存在项目：运行一次 harness init
+日常更新：运行 harness update
+日常使用：直接打开项目，Agent 读 AGENTS.md，必要时再读 core/extended
+```

@@ -41,7 +41,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 HARNESS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PROJECT_DIR="$(cd "$HARNESS_ROOT/.." && pwd)"
+if [ "$(basename "$HARNESS_ROOT")" = ".harness" ]; then
+    PROJECT_DIR="$(cd "$HARNESS_ROOT/.." && pwd)"
+else
+    PROJECT_DIR="${HARNESS_PROJECT_DIR:-$(pwd)}"
+    PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
+fi
 CONFIG="$PROJECT_DIR/.harness-config.yaml"
 PLAN="$PROJECT_DIR/plan.md"
 
@@ -79,7 +84,6 @@ echo ""
 
 echo -e "${CYAN}Check 1: generated rules${NC}"
 if [ -x "$HARNESS_ROOT/generate.sh" ]; then
-    "$HARNESS_ROOT/generate.sh" --all >/dev/null 2>&1 || true
     if "$HARNESS_ROOT/generate.sh" --check >/tmp/harness-guard-generate.$$ 2>&1; then
         pass "dist/ is in sync with rules/*.md"
     else
@@ -99,7 +103,7 @@ while IFS= read -r script; do
         ((SCRIPT_FAILS++)) || true
         fail "shell syntax failed: ${script#$HARNESS_ROOT/}"
     fi
-done < <({ find "$HARNESS_ROOT" -maxdepth 1 -type f -name "*.sh"; find "$HARNESS_ROOT/scripts" -maxdepth 1 -type f -name "*.sh" 2>/dev/null; } | sort '*.sh' | sort)
+done < <({ find "$HARNESS_ROOT" -maxdepth 1 -type f -name "*.sh"; find "$HARNESS_ROOT/scripts" -maxdepth 1 -type f -name "*.sh" 2>/dev/null; } | sort)
 
 if [ "$SCRIPT_FAILS" -eq 0 ]; then
     pass "all root harness shell scripts pass bash -n"

@@ -393,7 +393,7 @@ Executor 的行为已由 `core.md` 前置检查规则触发。
 | plan 说"复用 X 函数"，grep 后**根本没这函数** | 写 `## 阻塞` 停止，不要自己实现 |
 | plan 说"在 A 文件 line 100 加代码"，实际文件结构变了 | 自适应（找等价位置），完成后在自检日志里**说明偏离** |
 | plan 的字段路径跟实际代码签名矛盾 | **以代码为准**（plan 写错了），完成后报告偏离 |
-| plan 步骤跟项目 CLAUDE.md / .cursorrules 硬约束冲突 | **项目规则文件优先**，写阻塞 |
+| plan 步骤跟项目 `AGENTS.md` / 兼容入口硬约束冲突 | **项目规则文件优先**，写阻塞 |
 | 自己觉得有更好的实现方式 | **照 plan 写**，更好的方案写到 `## 建议` 区，等 Planner 决定 |
 | 同一错误指纹重复 ≥2 次，或同一问题连续 3 次尝试仍未解决 | 停下，写 Debug Card，按 §3 Anti-Wall Debug Controller 做整体 review |
 
@@ -448,17 +448,13 @@ Claude: (读 plan.md 看完成状态，审查代码，追加步骤或直接修�
 
 不同工具的模型如何触达 plan：
 
-| 工具 | 自动加载的规则文件 | 内含 core.md → 内含前置检查指令 |
-|------|-------------------|-------------------------------|
-| Codex / Zed / Aider | `AGENTS.md` | ✅ |
-| Claude Code | `CLAUDE.md` | ✅ |
-| Cursor | `.cursorrules` | ✅ |
-| Windsurf | `.windsurfrules` | ✅ |
-| Cline / Roo | `.clinerules` | ✅ |
-| GitHub Copilot | `.github/copilot-instructions.md` | ✅ |
-| Trae | `.trae/rules.md` | ✅ |
+| 层级 | 作用 | 默认文件 |
+|------|------|----------|
+| Agent 全局 Loader | 每个 Code Agent 配一次：进入项目后先找项目 Harness | 用户/工具的全局指令 |
+| 项目 Harness | 每个项目 init 一次：定义本项目规则、验证、风险边界 | `AGENTS.md` |
+| 兼容入口 | 仅当某工具不能通过 Loader 读取 `AGENTS.md` 时启用 | `CLAUDE.md` / `.cursorrules` / 其他 |
 
-所有路径最终都含 core.md 的前置检查规则 → 模型自动发现 plan.md → 无需用户手动传递。
+默认初始化只挂 `AGENTS.md`。使用 `.harness/setup.sh --all-rules` 或 `harness init --all-rules` 才生成旧的多工具入口。
 
 ### 10.7 Execution Modes（执行模式）
 
@@ -480,11 +476,13 @@ Harness 的核心不是强弱模型切换，而是让任何工具里的 Agent �
 | 审查 | Reviewer | 对照 plan、测试和真实用户路径审查 |
 
 **每次会话开局的 mode check**：
-1. 读 `plan.md`（若不存在 → 当前不是执行阶段）。
-2. 看 plan 是否有未完成步骤（`- [ ]`）。
+1. 如果本轮只是解释、讨论、审查方向，不强制读取 `plan.md`。
+2. 如果本轮要改动文件或生成交付物，读 `plan.md`（若不存在 → 当前不是执行阶段）。
+3. 看 plan 是否有未完成步骤（`- [ ]`）。
 3. 判断当前应该做什么：
    - 无 plan：按用户当前请求工作，必要时建议先规划。
-   - 有未完成步骤：进入 Executor 模式，按 §10.3 执行。
+   - 有未完成步骤，且本轮要改动文件/生成交付物：进入 Executor 模式，按 §10.3 执行。
+   - 有未完成步骤，但本轮只是讨论/解释：只说明当前 plan 状态，不抢执行。
    - plan 全部完成：进入 Reviewer/收尾模式，审查、验证、跑 audit。
    - 当前工具被用户指定为 Planner/Reviewer：只做对应角色，不抢 Executor 的执行范围。
 

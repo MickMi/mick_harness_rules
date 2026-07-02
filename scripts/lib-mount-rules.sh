@@ -3,16 +3,16 @@
 # scripts/lib-mount-rules.sh — Shared rule-mounting logic (sourced, not executed)
 #
 # Single source of truth for how generated rule files get mounted into a
-# target project. Sourced by both setup.sh (clone-in-place mode) and
-# brain-init.sh (global-symlink mode) so the two entry points never drift.
+# target project. Sourced by setup.sh, bin/harness, and brain-init.sh so the
+# entry points never drift.
 #
 # Exposes:
-#   regenerate_rules <HARNESS_ROOT>
+#   regenerate_rules <HARNESS_ROOT> [single|all]
 #       Runs generate.sh to (re)build dist/ from rules/core.md + extended.md.
 #
-#   mount_rule_files <HARNESS_ROOT> <TARGET_DIR>
-#       Symlinks every generated rule file into the target project root and
-#       projects rules/roles/ as .prompts/. Populates the global array
+#   mount_rule_files <HARNESS_ROOT> <TARGET_DIR> [single|all]
+#       Default mode symlinks/injects only AGENTS.md. all mode adds legacy
+#       tool-specific entry files and .prompts/. Populates the global array
 #       HARNESS_OWNED_FILES with the project-relative paths it owns, so the
 #       caller can add exactly those (and no project-owned files) to .gitignore.
 #
@@ -20,8 +20,11 @@
 # ============================================================
 
 # project-root-relative | dist-relative
-HARNESS_RULE_LINKS=(
+HARNESS_DEFAULT_RULE_LINKS=(
     "AGENTS.md|AGENTS.md"
+)
+
+HARNESS_COMPAT_RULE_LINKS=(
     "CLAUDE.md|CLAUDE.md"
     ".cursorrules|.cursorrules"
     ".windsurfrules|.windsurfrules"
@@ -32,10 +35,16 @@ HARNESS_RULE_LINKS=(
 
 regenerate_rules() {
     local harness_root="$1"
+    local mode="${2:-single}"
     local generate="$harness_root/generate.sh"
+
     if [ -x "$generate" ]; then
-        if "$generate" --all >/dev/null; then
-            ok "Rule files generated into .harness/dist/ (single source)."
+        if { [ "$mode" = "all" ] && "$generate" --all >/dev/null; } || { [ "$mode" != "all" ] && "$generate" >/dev/null; }; then
+            if [ "$mode" = "all" ]; then
+                ok "Rule files generated into .harness/dist/ (compatibility entries enabled)."
+            else
+                ok "Rule file generated into .harness/dist/AGENTS.md."
+            fi
         else
             warn "generate.sh failed — using whatever already exists in dist/."
         fi
@@ -101,16 +110,105 @@ inject_harness_block() {
     rm -f "$block"
 }
 
+strip_harness_block() {
+    local target="$1"
+
+    if ! grep -qF "HARNESS:BEGIN" "$target" 2>/dev/null; then
+        return 1
+    fi
+
+    local stripped
+    stripped="$(mktemp)"
+    awk -v begin="HARNESS:BEGIN" -v end="HARNESS:END" '
+        index($0, begin) { skip=1; next }
+        index($0, end)   { skip=0; next }
+        !skip { print }
+    ' "$target" | sed '/./,$!d' > "$stripped"
+
+    mv "$stripped" "$target"
+    return 0
+}
+
+resolve_mount_link() {
+    local link_path="$1"
+    local raw_target
+    raw_target="$(readlink "$link_path")"
+    if [[ "$raw_target" = /* ]]; then
+        echo "$raw_target"
+    else
+        echo "$(cd "$(dirname "$link_path")" && pwd)/$raw_target"
+    fi
+}
+
+is_active_rule_link() {
+    local wanted="$1"
+    shift
+    local entry proj_rel dist_rel
+    for entry in "$@"; do
+        IFS='|' read -r proj_rel dist_rel <<< "$entry"
+        if [ "$wanted" = "$proj_rel" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+cleanup_inactive_rule_mounts() {
+    local harness_root="$1"
+    local target_dir="$2"
+    shift 2
+
+    local all_links=("${HARNESS_DEFAULT_RULE_LINKS[@]}" "${HARNESS_COMPAT_RULE_LINKS[@]}")
+    local entry proj_rel dist_rel link resolved
+
+    for entry in "${all_links[@]}"; do
+        IFS='|' read -r proj_rel dist_rel <<< "$entry"
+        if is_active_rule_link "$proj_rel" "$@"; then
+            continue
+        fi
+
+        link="$target_dir/$proj_rel"
+        if [ -L "$link" ]; then
+            resolved="$(resolve_mount_link "$link")"
+            if [[ "$resolved" = "$harness_root/dist/"* ]]; then
+                rm "$link"
+                ok "$proj_rel stale harness symlink removed."
+            fi
+        elif [ -f "$link" ]; then
+            if strip_harness_block "$link"; then
+                ok "$proj_rel stale harness injection removed."
+            fi
+        fi
+    done
+
+    local prompts_link="$target_dir/.prompts"
+    if [ -L "$prompts_link" ]; then
+        resolved="$(resolve_mount_link "$prompts_link")"
+        if [ "$resolved" = "$harness_root/rules/roles" ]; then
+            rm "$prompts_link"
+            ok ".prompts/ stale harness symlink removed."
+        fi
+    fi
+}
+
 # Populated by mount_rule_files. Caller reads this after the call.
 HARNESS_OWNED_FILES=()
 
 mount_rule_files() {
     local harness_root="$1"
     local target_dir="$2"
+    local mode="${3:-single}"
     HARNESS_OWNED_FILES=()
 
+    local active_links=("${HARNESS_DEFAULT_RULE_LINKS[@]}")
+    if [ "$mode" = "all" ]; then
+        active_links+=("${HARNESS_COMPAT_RULE_LINKS[@]}")
+    fi
+
+    cleanup_inactive_rule_mounts "$harness_root" "$target_dir" "${active_links[@]}"
+
     local entry proj_rel dist_rel link src
-    for entry in "${HARNESS_RULE_LINKS[@]}"; do
+    for entry in "${active_links[@]}"; do
         IFS='|' read -r proj_rel dist_rel <<< "$entry"
         link="$target_dir/$proj_rel"
         src="$harness_root/dist/$dist_rel"
@@ -136,14 +234,22 @@ mount_rule_files() {
         fi
     done
 
-    # Agent role templates: project .prompts/ → .harness/rules/roles/ (back-compat)
+    if [ "$mode" != "all" ]; then
+        return 0
+    fi
+
+    # Agent role templates: project .prompts/ → .harness/rules/roles/ (compat mode)
     local prompts_link="$target_dir/.prompts"
     if [ -L "$prompts_link" ]; then
         ok ".prompts/ symlink already exists. (idempotent)"
+        HARNESS_OWNED_FILES+=(".prompts")
+        HARNESS_OWNED_FILES+=(".prompts/")
     elif [ -d "$prompts_link" ]; then
         warn ".prompts/ already exists as a real directory. Keeping project's own version."
     else
         ln -s "$harness_root/rules/roles" "$prompts_link"
         ok ".prompts/ → .harness/rules/roles/"
+        HARNESS_OWNED_FILES+=(".prompts")
+        HARNESS_OWNED_FILES+=(".prompts/")
     fi
 }

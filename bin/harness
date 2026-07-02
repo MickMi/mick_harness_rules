@@ -11,8 +11,10 @@ set -euo pipefail
 #   ln -s ~/.mick-harness/bin/harness ~/.local/bin/harness
 #
 # 使用：
-#   harness init              # 当前目录初始化
-#   harness init /path/to/proj # 指定目录初始化
+#   harness init              # 当前目录初始化（默认只挂 AGENTS.md）
+#   harness init --full       # 额外启用 config / Brain 检查
+#   harness init --all-rules  # 额外挂旧工具入口
+#   harness export api        # 输出纯 API 可注入的 Harness Prompt
 #   harness update             # 更新全局 harness + 注册项目
 #   harness check              # 验证当前项目完整性
 #   harness version            # 查看版本
@@ -27,6 +29,10 @@ ok()    { echo -e "${GREEN}✅ $1${NC}"; }
 warn()  { echo -e "${YELLOW}⚠️  $1${NC}"; }
 fail()  { echo -e "${RED}❌ $1${NC}"; }
 
+harness_available() {
+    [ -x "$HARNESS_GLOBAL/generate.sh" ] && [ -f "$HARNESS_GLOBAL/scripts/lib-mount-rules.sh" ]
+}
+
 # ============================================================
 # harness version
 # ============================================================
@@ -35,6 +41,8 @@ cmd_version() {
         local ver
         ver=$(git -C "$HARNESS_GLOBAL" describe --tags --always 2>/dev/null || echo "unknown")
         echo "Mick Harness $ver  ($HARNESS_GLOBAL)"
+    elif harness_available; then
+        echo "Mick Harness local checkout  ($HARNESS_GLOBAL)"
     else
         echo "Mick Harness (not installed. Run: harness install)"
     fi
@@ -49,9 +57,17 @@ cmd_install() {
         info "Run 'harness update' to pull latest."
         return 0
     fi
+    if [ -e "$HARNESS_GLOBAL" ]; then
+        if harness_available; then
+            ok "Harness available at $HARNESS_GLOBAL"
+            return 0
+        fi
+        fail "Install target exists but is not a harness repo: $HARNESS_GLOBAL"
+        return 1
+    fi
 
     info "Installing Mick Harness to $HARNESS_GLOBAL ..."
-    git clone "$HARNESS_REPO" "$HARNESS_GLOBAL"
+    git clone "$HARNESS_REPO" "$HARNESS_GLOBAL" || { fail "git clone failed."; return 1; }
     chmod +x "$HARNESS_GLOBAL"/*.sh "$HARNESS_GLOBAL"/bin/* 2>/dev/null || true
 
     # Add to PATH hint
@@ -74,13 +90,49 @@ cmd_install() {
 # harness init [project-dir] — one-command project bootstrap
 # ============================================================
 cmd_init() {
-    if [ ! -d "$HARNESS_GLOBAL/.git" ]; then
+    if ! harness_available; then
         info "Harness not yet installed. Installing first..."
         cmd_install || { fail "Install failed."; exit 1; }
         echo ""
     fi
 
-    local target="${1:-$(pwd)}"
+    local target=""
+    local rule_mode="single"
+    local full_mode=false
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --full)
+                full_mode=true
+                shift
+                ;;
+            --all-rules|--compat)
+                rule_mode="all"
+                shift
+                ;;
+            -h|--help)
+                echo "Usage: harness init [dir] [--full] [--all-rules]"
+                echo ""
+                echo "Default: mount AGENTS.md + update .gitignore only."
+                echo "Use --full for config/Brain checks; --all-rules for legacy tool files."
+                return 0
+                ;;
+            -*)
+                fail "Unknown init option: $1"
+                exit 1
+                ;;
+            *)
+                if [ -n "$target" ]; then
+                    fail "Only one target directory can be provided."
+                    exit 1
+                fi
+                target="$1"
+                shift
+                ;;
+        esac
+    done
+
+    target="${target:-$(pwd)}"
     target="$(cd "$target" 2>/dev/null && pwd || echo "")"
     if [ -z "$target" ] || [ ! -d "$target" ]; then
         fail "Target directory does not exist: ${1:-current dir}"
@@ -90,6 +142,7 @@ cmd_init() {
     echo -e "${BOLD}🚀 harness init${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  Target: $target"
+    echo "  Mode  : $rule_mode"
     echo ""
 
     # 1. Symlink
@@ -104,41 +157,317 @@ cmd_init() {
 
     # 2. Generate + mount
     local g="$HARNESS_GLOBAL/generate.sh"
-    [ -x "$g" ] && { "$g" >/dev/null 2>&1; ok "AGENTS.md generated."; }
+    if [ -x "$g" ]; then
+        if [ "$rule_mode" = "all" ]; then
+            "$g" --all >/dev/null 2>&1 && ok "Rule files generated."
+        else
+            "$g" >/dev/null 2>&1 && ok "AGENTS.md generated."
+        fi
+    fi
     if [ -f "$HARNESS_GLOBAL/scripts/lib-mount-rules.sh" ]; then
         source "$HARNESS_GLOBAL/scripts/lib-mount-rules.sh"
-        mount_rule_files "$HARNESS_GLOBAL" "$target"
+        mount_rule_files "$HARNESS_GLOBAL" "$target" "$rule_mode"
     fi
 
     # 3. .gitignore
     local gi="$target/.gitignore"
     [ ! -f "$gi" ] && touch "$gi"
-    for e in ".harness/" ".harness" ".prompts/" ".prompts" "${HARNESS_OWNED_FILES[@]}"; do
+    for e in ".harness/" ".harness" "${HARNESS_OWNED_FILES[@]}"; do
         grep -qxF "$e" "$gi" 2>/dev/null || echo "$e" >> "$gi"
     done
     ok ".gitignore updated."
 
-    # 4. Config
-    local cf="$target/.harness-config.yaml"
-    if [ ! -f "$cf" ] && [ -f "$HARNESS_GLOBAL/config/.harness-config.template.yaml" ]; then
-        cp "$HARNESS_GLOBAL/config/.harness-config.template.yaml" "$cf"
-    fi
-    ok ".harness-config.yaml ready."
-
-    # 5. Brain + Verify
-    if [ -f "$HARNESS_GLOBAL/scripts/brain-resolve.sh" ]; then
-        source "$HARNESS_GLOBAL/scripts/brain-resolve.sh"
-        resolve_brain_dir "$HARNESS_GLOBAL" 2>/dev/null || true
-        if [ -n "${BRAIN_REPO_REMOTE:-}" ] && [ ! -d "${BRAIN_REPO_LOCAL:-}/.git" ]; then
-            git clone --quiet "$BRAIN_REPO_REMOTE" "${BRAIN_REPO_LOCAL:-$HOME/.mick-brain}" 2>/dev/null || true
+    if [ "$full_mode" = true ]; then
+        # 4. Config
+        local cf="$target/.harness-config.yaml"
+        if [ ! -f "$cf" ] && [ -f "$HARNESS_GLOBAL/config/.harness-config.template.yaml" ]; then
+            cp "$HARNESS_GLOBAL/config/.harness-config.template.yaml" "$cf"
         fi
+        ok ".harness-config.yaml ready."
+
+        # 5. Brain + Verify
+        if [ -f "$HARNESS_GLOBAL/scripts/brain-resolve.sh" ]; then
+            source "$HARNESS_GLOBAL/scripts/brain-resolve.sh"
+            resolve_brain_dir "$HARNESS_GLOBAL" 2>/dev/null || true
+            if [ -n "${BRAIN_REPO_REMOTE:-}" ] && [ ! -d "${BRAIN_REPO_LOCAL:-}/.git" ]; then
+                git clone --quiet "$BRAIN_REPO_REMOTE" "${BRAIN_REPO_LOCAL:-$HOME/.mick-brain}" 2>/dev/null || true
+            fi
+        fi
+        [ -x "$HARNESS_GLOBAL/scripts/brain-check.sh" ] && "$HARNESS_GLOBAL/scripts/brain-check.sh" "$target" 2>&1 || true
     fi
-    [ -x "$HARNESS_GLOBAL/scripts/brain-check.sh" ] && "$HARNESS_GLOBAL/scripts/brain-check.sh" "$target" 2>&1 || true
+
+    local reg="$HARNESS_GLOBAL/.registered-projects"
+    if ! grep -qxF "$target" "$reg" 2>/dev/null; then
+        echo "$target" >> "$reg"
+    fi
 
     echo ""
     echo -e "${GREEN}${BOLD}✅ Done.${NC} 当前项目受 Harness 约束。"
     echo "  验证 Agent: 让它做 Harness Self-Test。"
     echo ""
+}
+
+detect_project_rule_mode() {
+    local project="$1"
+    local f
+    for f in "CLAUDE.md" ".cursorrules" ".windsurfrules" ".clinerules" ".github/copilot-instructions.md" ".trae/rules.md"; do
+        if [ -L "$project/$f" ]; then
+            echo "all"
+            return 0
+        fi
+    done
+    echo "single"
+}
+
+print_core_rules() {
+    local core="$HARNESS_GLOBAL/rules/core.md"
+    if [ -f "$core" ]; then
+        cat "$core"
+    else
+        cat <<'EOF'
+# Mick Harness Core Rules
+
+Harness core rules are not available in this checkout. Load the project AGENTS.md first. If the file is missing, stop and ask the user to run `harness init`.
+EOF
+    fi
+}
+
+print_extended_rules() {
+    local extended="$HARNESS_GLOBAL/rules/extended.md"
+    if [ -f "$extended" ]; then
+        cat "$extended"
+    else
+        cat <<'EOF'
+# Mick Harness Extended Playbook
+
+Extended rules are not available in this checkout. If the task is high-risk, stop and ask the user to provide `.harness/rules/extended.md`.
+EOF
+    fi
+}
+
+print_extended_policy() {
+    local include_extended="$1"
+    if [ "$include_extended" = true ]; then
+        echo ""
+        echo "## Inline Extended Playbook"
+        echo ""
+        print_extended_rules
+    else
+        cat <<'EOF'
+
+## Extended Playbook Loading
+
+Default export includes the Core Rules only to keep everyday context affordable. For high-risk work, repeated bugs, multi-role workflow, CI/CD, git operations, UI interaction QA, external systems, or Brain writes, load `.harness/rules/extended.md` from the project. If there is no filesystem access and full inline context is required, generate this loader with `harness export <surface> --full`.
+EOF
+    fi
+}
+
+print_project_manifest_state() {
+    local target="$1"
+    echo "Project: $target"
+    if [ -f "$target/AGENTS.md" ]; then
+        echo "Manifest: $target/AGENTS.md"
+    elif [ -f "$target/.harness/dist/AGENTS.md" ]; then
+        echo "Manifest: $target/.harness/dist/AGENTS.md"
+    else
+        echo "Manifest: not found. Run \`harness init\` in the project, or inject this exported loader directly."
+    fi
+}
+
+emit_common_contract() {
+    cat <<'EOF'
+## Loading Contract
+
+- This Harness is a context contract plus local verification scripts. It does not rely on one vendor-specific magic file.
+- If project files are accessible, load the project manifest first: `AGENTS.md`, then `.harness/dist/AGENTS.md`, then `.harness/rules/core.md`.
+- If project files are not accessible, use the inline Core Rules below as the active contract and explicitly mark file-dependent checks as unverified.
+- `plan.md` is not a conversation hijacker. It is checked only when the current turn will edit files, generate deliverables, execute an existing plan, or resume workflow state.
+- Pure explanation, direction discussion, brainstorming, and requirement shaping can proceed conversationally while still respecting the evidence, scope, and verification rules.
+- A task is not done until it has a concrete artifact or answer plus reproducible verification evidence, or it is clearly labeled as unverified.
+EOF
+}
+
+cmd_export() {
+    local surface="${1:-agent}"
+    [ $# -gt 0 ] && shift
+    local include_extended=false
+    local target=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --full|--extended)
+                include_extended=true
+                shift
+                ;;
+            -h|--help|help)
+                surface="help"
+                shift
+                ;;
+            -*)
+                fail "Unknown export option: $1"
+                echo "Run 'harness export --help' for usage."
+                exit 1
+                ;;
+            *)
+                if [ -n "$target" ]; then
+                    fail "Only one project directory can be provided."
+                    exit 1
+                fi
+                target="$1"
+                shift
+                ;;
+        esac
+    done
+
+    target="${target:-$(pwd)}"
+    target="$(cd "$target" 2>/dev/null && pwd || pwd)"
+
+    case "$surface" in
+        codex)
+            cat <<'EOF'
+# Mick Harness Loader — Codex Baseline
+
+Use this when Codex is the code agent surface.
+
+EOF
+            print_project_manifest_state "$target"
+            cat <<'EOF'
+
+## Required Behavior
+
+1. On opening a project, read the root `AGENTS.md` if present.
+2. If `AGENTS.md` points to `.harness/rules/core.md` or `.harness/rules/extended.md`, treat those as the source of truth for Harness behavior.
+3. Before editing files or generating deliverables, check whether `plan.md` exists and follow it only when it is active for this turn.
+4. Do not force Planner/PM mode for ordinary discussion. Enter planning only when risk, ambiguity, user request, or an active plan requires it.
+5. Finish delivery turns with what changed, how it was verified, and remaining risk.
+
+EOF
+            emit_common_contract
+            echo ""
+            echo "## Inline Core Rules"
+            echo ""
+            print_core_rules
+            print_extended_policy "$include_extended"
+            ;;
+        agent)
+            cat <<'EOF'
+# Mick Harness Loader — Generic Code Agent
+
+Paste this into a code agent's global/user instructions once.
+
+EOF
+            print_project_manifest_state "$target"
+            cat <<'EOF'
+
+## Required Behavior
+
+When I enter any code project:
+
+1. Read the project-level Harness entry in this order:
+   - `AGENTS.md`
+   - `.harness/dist/AGENTS.md`
+   - `.harness/rules/core.md`
+2. If none exists, continue with the inline Core Rules below and tell the user the project is not initialized.
+3. If a file edit or deliverable is requested, check root `plan.md` before editing. If it has active unchecked steps, act as Executor and stay inside the plan.
+4. If the user is only discussing direction, requirements, architecture, or product thinking, do not mechanically force a plan. Keep the conversation natural and apply the Harness judgment rules.
+5. End delivery/workflow turns with a concise round card or equivalent: what happened, verification, next step, and risk/blocker.
+
+EOF
+            emit_common_contract
+            echo ""
+            echo "## Inline Core Rules"
+            echo ""
+            print_core_rules
+            print_extended_policy "$include_extended"
+            ;;
+        api)
+            cat <<'EOF'
+# Mick Harness Loader — Pure API Prompt
+
+Use this as a system/developer message for API calls that do not have a built-in code-agent environment.
+
+EOF
+            print_project_manifest_state "$target"
+            cat <<'EOF'
+
+## API Integration Contract
+
+The caller must provide task input plus any available project context. If the API model cannot read local files itself, it must not claim that it checked files, tests, `plan.md`, git state, or runtime output.
+
+The model must:
+
+1. Treat this message as the active Harness unless a higher-priority system message conflicts.
+2. Ask the caller to provide `AGENTS.md`, `plan.md`, relevant source files, logs, screenshots, or command output when those are required to make a grounded claim.
+3. Distinguish facts from inference and unverified assumptions.
+4. For code edits, return a patch or exact edit plan and name the verification evidence required.
+5. If tool access is absent, say "unverified" for checks that require filesystem, tests, browser, network, or shell execution.
+6. Never invent command output, file contents, test results, dates, package versions, API behavior, or user-visible screenshots.
+
+EOF
+            emit_common_contract
+            echo ""
+            echo "## Inline Core Rules"
+            echo ""
+            print_core_rules
+            print_extended_policy "$include_extended"
+            ;;
+        ide)
+            cat <<'EOF'
+# Mick Harness Loader — IDE Plugin
+
+Paste this into an IDE AI plugin's custom instructions / rules field.
+
+EOF
+            print_project_manifest_state "$target"
+            cat <<'EOF'
+
+## IDE Plugin Contract
+
+1. Prefer workspace files over memory. Read `AGENTS.md` or `.harness/dist/AGENTS.md` before making changes when the IDE exposes workspace context.
+2. If the plugin can apply edits, read the target file first and preserve unrelated user changes.
+3. If the plugin cannot run tests or inspect the app, label verification as pending and give the exact manual check or command.
+4. If the plugin has partial context windows, prioritize Tripwire, current task files, `plan.md`, and the relevant section of `rules/core.md` over broad docs.
+5. Do not let autocomplete-style suggestions bypass Harness: edits still need scope control, plan awareness, and verification.
+
+EOF
+            emit_common_contract
+            echo ""
+            echo "## Inline Core Rules"
+            echo ""
+            print_core_rules
+            print_extended_policy "$include_extended"
+            ;;
+        all)
+            local s
+            for s in codex agent api ide; do
+                echo ""
+                echo "============================================================"
+                echo "SURFACE: $s"
+                echo "============================================================"
+                if [ "$include_extended" = true ]; then
+                    cmd_export "$s" "$target" --full
+                else
+                    cmd_export "$s" "$target"
+                fi
+            done
+            ;;
+        -h|--help|help)
+            echo "Usage: harness export [codex|agent|api|ide|all] [project-dir] [--full]"
+            echo ""
+            echo "codex  Codex baseline loader"
+            echo "agent  Generic code-agent global loader"
+            echo "api    Pure API system/developer prompt"
+            echo "ide    IDE plugin custom instruction loader"
+            echo "all    Print every loader"
+            echo ""
+            echo "--full Inline rules/extended.md as well as rules/core.md"
+            ;;
+        *)
+            fail "Unknown export surface: $surface"
+            echo "Run 'harness export --help' for usage."
+            exit 1
+            ;;
+    esac
 }
 
 # ============================================================
@@ -171,7 +500,8 @@ cmd_update() {
             info "Refreshing: $proj"
             if [ -f "$HARNESS_GLOBAL/scripts/lib-mount-rules.sh" ]; then
                 source "$HARNESS_GLOBAL/scripts/lib-mount-rules.sh"
-                mount_rule_files "$HARNESS_GLOBAL" "$proj" 2>/dev/null || true
+                mode="$(detect_project_rule_mode "$proj")"
+                mount_rule_files "$HARNESS_GLOBAL" "$proj" "$mode" 2>/dev/null || true
             fi
         done < "$reg"
     fi
@@ -345,19 +675,17 @@ cmd_metrics() {
 case "${1:-}" in
     init)
         shift
-        cmd_init "${1:-}"
-        # Register this project for future updates
-        _target="$(cd "${1:-$(pwd)}" 2>/dev/null && pwd || pwd)"
-        _reg="$HARNESS_GLOBAL/.registered-projects"
-        if ! grep -qxF "$_target" "$_reg" 2>/dev/null; then
-            echo "$_target" >> "$_reg"
-        fi
+        cmd_init "$@"
         ;;
     install)
         cmd_install
         ;;
     update)
         cmd_update
+        ;;
+    export|loader|load)
+        shift
+        cmd_export "$@"
         ;;
     check)
         shift
@@ -379,7 +707,10 @@ case "${1:-}" in
         echo ""
         echo "用法:"
         echo "  harness install          一次性全局安装"
-        echo "  harness init [dir]       在当前（或指定）目录初始化 Harness"
+        echo "  harness init [dir]       在当前（或指定）目录初始化 Harness（默认 AGENTS.md）"
+        echo "  harness init --full      额外启用 config / Brain 检查"
+        echo "  harness init --all-rules 额外挂旧工具入口"
+        echo "  harness export [surface] 输出 Codex / Agent / API / IDE 加载器"
         echo "  harness update           更新全局 Harness + 刷新所有注册项目"
         echo "  harness check [dir]      验证当前项目脚手架完整性"
         echo "  harness report [dir]     查看当前任务计划与执行状态"
@@ -388,6 +719,12 @@ case "${1:-}" in
         echo ""
         echo "安装后进入任意项目目录，一行命令搞定："
         echo "  harness init"
+        echo ""
+        echo "给不同 AI 入口注入 Harness："
+        echo "  harness export codex"
+        echo "  harness export agent"
+        echo "  harness export api"
+        echo "  harness export ide"
         ;;
     *)
         fail "Unknown command: $1"

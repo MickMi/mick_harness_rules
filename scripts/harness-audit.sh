@@ -58,6 +58,7 @@ done
 HARNESS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROJECT_DIR="$(cd "$HARNESS_ROOT/.." && pwd)"
 PLAN="$PROJECT_DIR/plan.md"
+STEP_ID_RE='[A-Za-z0-9][A-Za-z0-9._-]*[.)]?'
 
 # --- Pre-checks ---
 if [ ! -f "$PLAN" ]; then
@@ -66,8 +67,8 @@ if [ ! -f "$PLAN" ]; then
 fi
 
 # --- Count steps ---
-TOTAL_STEPS=$(grep -cE '^\- \[[ x]\] [0-9]+\.' "$PLAN" 2>/dev/null || true)
-COMPLETED_STEPS=$(grep -cE '^\- \[x\] [0-9]+\.' "$PLAN" 2>/dev/null || true)
+TOTAL_STEPS=$(grep -cE "^\- \[[ x]\] ${STEP_ID_RE}[[:space:]]" "$PLAN" 2>/dev/null || true)
+COMPLETED_STEPS=$(grep -cE "^\- \[x\] ${STEP_ID_RE}[[:space:]]" "$PLAN" 2>/dev/null || true)
 TOTAL_STEPS=${TOTAL_STEPS:-0}
 COMPLETED_STEPS=${COMPLETED_STEPS:-0}
 
@@ -105,7 +106,7 @@ fi
 # Check 2: Self-check coverage
 # ============================================================
 echo -e "${CYAN}📋 Check 2: Self-check coverage${NC}"
-SELFCHECK_ENTRIES=$(grep -cE '^### Step [0-9]+' "$PLAN" 2>/dev/null || true)
+SELFCHECK_ENTRIES=$(grep -cE "^### Step ${STEP_ID_RE}" "$PLAN" 2>/dev/null || true)
 SELFCHECK_ENTRIES=${SELFCHECK_ENTRIES:-0}
 
 if [ "$COMPLETED_STEPS" -eq 0 ]; then
@@ -132,7 +133,7 @@ else
     CURRENT_STEP=""
 
     while IFS= read -r line; do
-        if [[ "$line" =~ ^###\ Step\ ([0-9]+) ]]; then
+        if [[ "$line" =~ ^###[[:space:]]Step[[:space:]]([A-Za-z0-9][A-Za-z0-9._-]*) ]]; then
             if [ -n "$CURRENT_STEP" ] && [ "$HAS_VERIFY" = false ]; then
                 ((NO_VERIFY++))
             fi
@@ -201,7 +202,7 @@ fi
 echo -e "${CYAN}📋 Check 5: Step execution order${NC}"
 TIMESTAMPS=()
 while IFS= read -r line; do
-    if [[ "$line" =~ ^###\ Step\ [0-9]+\ —\ ([0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}) ]]; then
+    if [[ "$line" =~ ^###[[:space:]]Step[[:space:]][A-Za-z0-9][A-Za-z0-9._-]*[[:space:]]+—[[:space:]]+([0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]][0-9]{2}:[0-9]{2}) ]]; then
         TIMESTAMPS+=("${BASH_REMATCH[1]}")
     fi
 done < "$PLAN"
@@ -233,7 +234,7 @@ if [ -z "$DIFF_FILES" ]; then
     pass "No git diff to check (or invalid --since ref)"
 else
     # Extract file paths mentioned in plan steps (backtick-quoted)
-    PLAN_FILES=$(grep -E '^\- \[[ x]\] [0-9]+\.' "$PLAN" | grep -oE '`[^`]+`' | tr -d '`' | sort -u || true)
+    PLAN_FILES=$(grep -E "^\- \[[ x]\] ${STEP_ID_RE}[[:space:]]" "$PLAN" | grep -oE '`[^`]+`' | tr -d '`' | sort -u || true)
     # Also extract from self-check files: lines
     SELFCHECK_FILES=$(grep -E '^- files:' "$PLAN" | sed 's/^- files: //' | tr ',' '\n' | sed 's/^ *//;s/ *$//' | sort -u || true)
     ALL_PLAN_FILES=$(echo -e "$PLAN_FILES\n$SELFCHECK_FILES" | sort -u | grep -v '^$' || true)
@@ -313,7 +314,7 @@ if [ "$LOG_MODE" = true ]; then
 
     # Resolve Brain dir if available
     TRAIL_FILE=""
-    if [ -f "$HARNESS_ROOT/brain-resolve.sh" ]; then
+    if [ -f "$HARNESS_ROOT/scripts/brain-resolve.sh" ]; then
         # shellcheck disable=SC1091
         source "$HARNESS_ROOT/scripts/brain-resolve.sh"
         if resolve_brain_dir "$HARNESS_ROOT" 2>/dev/null && [ -n "${BRAIN_DIR:-}" ] && [ -d "$BRAIN_DIR" ]; then

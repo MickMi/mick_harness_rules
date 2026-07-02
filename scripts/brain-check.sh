@@ -74,7 +74,7 @@ if [ -L "$HARNESS_LINK" ]; then
 elif [ -d "$HARNESS_LINK" ]; then
     check_warn ".harness/ exists as a real directory (not a symlink). Consider using symlink for sync."
 else
-    check_fail ".harness/ does not exist. Run 'brain-init.sh' first."
+    check_fail ".harness/ does not exist. Run 'harness init' or '.harness/setup.sh' first."
 fi
 
 # ============================================================
@@ -90,13 +90,13 @@ if [ -L "$AGENTS_MD" ] || [ -f "$AGENTS_MD" ]; then
         check_fail "AGENTS.md exists but is empty!"
     fi
 else
-    check_fail "AGENTS.md does not exist. Run 'brain-init.sh' first."
+    check_fail "AGENTS.md does not exist. Run 'harness init' or '.harness/setup.sh' first."
 fi
 
 # ============================================================
-# Check 3: .prompts/ symlink exists and is valid
+# Check 3: .prompts/ symlink is valid when compatibility mode uses it
 # ============================================================
-echo "📋 Check 3: .prompts/ symlink"
+echo "📋 Check 3: .prompts/ compatibility symlink"
 PROMPTS_LINK="$TARGET_DIR/.prompts"
 if [ -L "$PROMPTS_LINK" ]; then
     PROMPTS_TARGET="$(resolve_link_target "$PROMPTS_LINK")"
@@ -108,7 +108,7 @@ if [ -L "$PROMPTS_LINK" ]; then
 elif [ -d "$PROMPTS_LINK" ]; then
     check_warn ".prompts/ exists as a real directory (not a symlink). Agent prompts may leak into project Git."
 else
-    check_fail ".prompts/ does not exist. Run 'brain-init.sh' first."
+    check_pass ".prompts/ not mounted (OK in default single-entry mode)"
 fi
 
 # ============================================================
@@ -118,7 +118,13 @@ echo "📋 Check 4: .gitignore isolation"
 GITIGNORE="$TARGET_DIR/.gitignore"
 if [ -f "$GITIGNORE" ]; then
     MISSING_ENTRIES=()
-    for entry in ".harness/" ".harness" ".cursorrules" ".prompts/" ".prompts"; do
+    REQUIRED_IGNORE_ENTRIES=(".harness/" ".harness")
+    for owned in "AGENTS.md" "CLAUDE.md" ".cursorrules" ".windsurfrules" ".clinerules" ".github/copilot-instructions.md" ".trae/rules.md" ".prompts" ".prompts/"; do
+        if [ -L "$TARGET_DIR/$owned" ]; then
+            REQUIRED_IGNORE_ENTRIES+=("$owned")
+        fi
+    done
+    for entry in "${REQUIRED_IGNORE_ENTRIES[@]}"; do
         if ! grep -qxF "$entry" "$GITIGNORE" 2>/dev/null; then
             MISSING_ENTRIES+=("$entry")
         fi
@@ -127,11 +133,7 @@ if [ -f "$GITIGNORE" ]; then
         check_pass ".gitignore contains all isolation entries"
     else
         check_warn ".gitignore missing entries: ${MISSING_ENTRIES[*]}"
-        echo -e "         ${YELLOW}Auto-fixing: adding missing entries...${NC}"
-        for entry in "${MISSING_ENTRIES[@]}"; do
-            echo "$entry" >> "$GITIGNORE"
-        done
-        check_pass "Auto-fixed: added ${#MISSING_ENTRIES[@]} entries to .gitignore"
+        echo -e "         ${YELLOW}Run 'harness init' or '.harness/setup.sh' to update it.${NC}"
     fi
 else
     check_warn ".gitignore does not exist. Harness files may leak into project git."
@@ -154,7 +156,7 @@ if [ "$BRAIN_IS_EXTERNAL" = "true" ]; then
                 check_warn "brain/ symlink points to $LINK_TARGET (expected $BRAIN_REPO_LOCAL)"
             fi
         elif [ -d "$BRAIN_LINK" ]; then
-            check_warn "brain/ is a real directory, not a symlink. Run brain-init.sh to fix."
+            check_warn "brain/ is a real directory, not a symlink. Run '.harness/setup.sh --full' to fix."
         fi
         # Check remote sync status
         if git -C "$BRAIN_REPO_LOCAL" remote get-url origin &>/dev/null; then
@@ -164,11 +166,11 @@ if [ "$BRAIN_IS_EXTERNAL" = "true" ]; then
         fi
     else
         check_fail "Brain repo configured but not cloned at: $BRAIN_REPO_LOCAL"
-        echo -e "         ${YELLOW}Run brain-init.sh to clone it.${NC}"
+        echo -e "         ${YELLOW}Run '.harness/setup.sh --full' to clone it.${NC}"
     fi
 else
     if [ -n "$BRAIN_REPO_REMOTE" ]; then
-        check_warn "Brain repo configured ($BRAIN_REPO_REMOTE) but not cloned. Run brain-init.sh."
+        check_warn "Brain repo configured ($BRAIN_REPO_REMOTE) but not cloned. Run '.harness/setup.sh --full'."
     else
         check_pass "Using local brain/ directory (single-repo mode)"
     fi
@@ -264,10 +266,11 @@ fi
 # Check 11: Brain auto-write rules present in AGENTS.md
 # ============================================================
 echo "📋 Check 11: Brain auto-write rules"
-if [ -f "$AGENTS_MD" ] && grep -q "Brain Auto-Write Protocol" "$AGENTS_MD" 2>/dev/null; then
-    check_pass "Brain auto-write rules are present in AGENTS.md"
+EXTENDED_RULES="$HARNESS_ROOT/rules/extended.md"
+if { [ -f "$AGENTS_MD" ] && grep -q "Brain Auto-Write Protocol" "$AGENTS_MD" 2>/dev/null; } || { [ -f "$EXTENDED_RULES" ] && grep -q "Brain Auto-Write Protocol" "$EXTENDED_RULES" 2>/dev/null; }; then
+    check_pass "Brain auto-write rules are reachable from project Harness"
 else
-    check_warn "Brain auto-write rules not found in AGENTS.md. AI won't auto-push memories."
+    check_warn "Brain auto-write rules not found. AI won't auto-push memories."
 fi
 
 # ============================================================
@@ -290,10 +293,10 @@ if [ -f "$BRAIN_OWNER_FILE" ]; then
     elif [ "$CURRENT_OWNER" = "$RECORDED_OWNER" ]; then
         check_pass "Brain owner verified: $CURRENT_OWNER"
     else
-        check_fail "Brain owner mismatch! Recorded: $RECORDED_OWNER, Current: $CURRENT_OWNER. Run brain-init.sh to auto-reset."
+        check_fail "Brain owner mismatch! Recorded: $RECORDED_OWNER, Current: $CURRENT_OWNER. Run '.harness/setup.sh --full --fresh' to auto-reset."
     fi
 else
-    check_warn ".brain-owner file not found. Run brain-init.sh to initialize ownership."
+    check_warn ".brain-owner file not found. Run '.harness/setup.sh --full' to initialize ownership."
 fi
 
 # ============================================================
@@ -318,11 +321,11 @@ else
 fi
 
 # ============================================================
-# Check 14: Harness Self-Test prompt present
+# Check 14: Harness Self-Test prompt present in the default entry
 # ============================================================
 echo "📋 Check 14: Harness Self-Test prompt"
 SELFTEST_MISSING=()
-for dist_target in "AGENTS.md" ".cursorrules"; do
+for dist_target in "AGENTS.md"; do
     DIST_FILE="$HARNESS_ROOT/dist/$dist_target"
     if [ ! -f "$DIST_FILE" ] || ! grep -q "Harness Self-Test" "$DIST_FILE" 2>/dev/null; then
         SELFTEST_MISSING+=("$dist_target")
@@ -342,7 +345,16 @@ echo "📋 Check 15: Constitution ↔ Harness staleness"
 CONSTITUTION_FILE="$BRAIN_DIR/constitution.md"
 if [ -f "$CONSTITUTION_FILE" ]; then
     STALE=false
-    for dist_target in "AGENTS.md" "CLAUDE.md" ".cursorrules"; do
+    CAPSULE_PRESENT=true
+    CAPSULE_SOURCES=(
+        "$BRAIN_DIR/global/agent-capsule.md"
+        "$BRAIN_DIR/constitution.md"
+        "$BRAIN_DIR/global/persona.md"
+        "$BRAIN_DIR/global/preferences.md"
+        "$BRAIN_DIR/global/collaboration-style.md"
+        "$BRAIN_DIR/global/gotchas.md"
+    )
+    for dist_target in "AGENTS.md"; do
         DIST_FILE="$HARNESS_ROOT/dist/$dist_target"
         if [ ! -f "$DIST_FILE" ]; then
             CAPSULE_PRESENT=false

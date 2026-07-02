@@ -19,8 +19,10 @@ set -euo pipefail
 # re-running this script.
 #
 # Usage:
-#   ./generate.sh            # regenerate all targets
-#   ./generate.sh --check    # verify dist/ is up to date (CI guard), no writes
+#   ./generate.sh            # regenerate the default single entry: dist/AGENTS.md
+#   ./generate.sh --all      # regenerate optional compatibility entries too
+#   ./generate.sh --check    # verify default dist/AGENTS.md is up to date, no writes
+#   ./generate.sh --check --all
 # ============================================================
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
@@ -35,7 +37,31 @@ EXTENDED="$HARNESS_ROOT/rules/extended.md"
 DIST="$HARNESS_ROOT/dist"
 
 CHECK_MODE=false
-[ "${1:-}" = "--check" ] && CHECK_MODE=true
+GEN_ALL=false
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --check)
+            CHECK_MODE=true
+            shift
+            ;;
+        --all|--all-rules|--compat)
+            GEN_ALL=true
+            shift
+            ;;
+        -h|--help)
+            echo "Usage: ./generate.sh [--check] [--all]"
+            echo ""
+            echo "Default: generate/check only dist/AGENTS.md."
+            echo "Use --all for legacy tool-specific rule files."
+            exit 0
+            ;;
+        *)
+            fail "Unknown option: $1"
+            exit 1
+            ;;
+    esac
+done
 
 for f in "$CORE" "$EXTENDED"; do
     if [ ! -f "$f" ]; then
@@ -283,7 +309,8 @@ render() {
     fi
 }
 
-# Default: only AGENTS.md (cross-tool standard). Use --all for 7-tool coverage.
+# Default: one project entry. Use --all only for tools that cannot read AGENTS.md
+# through a global loader.
 TARGETS=(
     "AGENTS.md|lean|AGENTS.md 通用标准 (Codex / Zed / Aider)"
 )
@@ -297,16 +324,12 @@ ALL_TARGETS=(
     ".trae/rules.md|lean|Trae"
 )
 
-GEN_ALL=false
-[ "${1:-}" = "--all" ] && GEN_ALL=true
-[ "${2:-}" = "--all" ] && GEN_ALL=true
-
 mkdir -p "$DIST"
 
 GENERATED=0
 if [ "$GEN_ALL" = true ]; then
     TARGETS+=("${ALL_TARGETS[@]}")
-else
+elif [ "$CHECK_MODE" != true ]; then
     # Clean up stale multi-IDE files from previous --all runs
     for f in "CLAUDE.md" ".cursorrules" ".windsurfrules" ".clinerules" ".github/copilot-instructions.md" ".trae/rules.md"; do
         rm -f "$DIST/$f"
