@@ -81,27 +81,17 @@ harness init
 git clone https://github.com/MickMi/mick_harness_rules.git .harness && .harness/setup.sh
 ```
 
-### Harness Self-Test
+### 验证 Agent 是否真的在按 Harness 工作
 
-当你切到任意 Agent 或怀疑它没有真正读懂规则时，直接发：
-
-```text
-请按 Harness Self-Test 用 5 句话证明你理解当前任务约束。
-```
-
-合格回答必须绑定当前任务，说清楚当前模式、最高风险、如何证明完成、撞墙时如何停、以及这轮不会做什么。泛泛复述规则视为未通过。
-
-### Harness Self-Test
-
-当你切到任意 Agent 或怀疑它没有真正读懂规则时，直接发：
+当你怀疑 Agent 没有真正读懂规则时，直接发：
 
 ```text
 请按 Harness Self-Test 用 5 句话证明你理解当前任务约束。
 ```
 
-合格回答必须绑定当前任务，说清楚当前模式、最高风险、如何证明完成、撞墙时如何停、以及这轮不会做什么。泛泛复述规则视为未通过。
+合格回答必须绑定当前任务——说清楚当前模式、最高风险、如何证明完成、撞墙时如何停、以及这轮不会做什么。**泛泛复述规则视为未通过。**
 
-后续运行非交互式 / CI 用：
+### 进阶用法
 
 ```bash
 .harness/setup.sh --non-interactive          # 全部用默认值

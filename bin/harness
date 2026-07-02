@@ -268,6 +268,157 @@ cmd_check() {
 }
 
 # ============================================================
+# harness report — summarize current project plan status
+# ============================================================
+cmd_report() {
+    local target="${1:-$(pwd)}"
+    local plan="$target/plan.md"
+
+    echo ""
+    echo -e "${BOLD}📊 Harness Report${NC}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    if [ ! -f "$plan" ]; then
+        echo ""
+        echo "  当前项目无 plan.md。"
+        echo "  还没有进入 Plan-Execute 流程。"
+        echo ""
+        echo "  建议：用 Planner 角色为当前需求生成 plan.md。"
+        echo ""
+        return 0
+    fi
+
+    # Extract basic info
+    local title status progress
+    title=$(head -1 "$plan" | sed 's/^# Plan: //')
+    status=$(grep "🧭 状态" "$plan" 2>/dev/null | head -1 | sed 's/>.*🧭 状态：//' || echo "未知")
+    local total completed
+    total=$(grep -cE '^- \[[ x]\]' "$plan" 2>/dev/null || echo "0")
+    completed=$(grep -cE '^- \[x\]' "$plan" 2>/dev/null || echo "0")
+    progress="${completed:-0}/${total:-0}"
+
+    echo ""
+    echo "  Feature : ${title:-未命名}"
+    echo "  Status  : ${status}"
+    echo "  Progress: ${progress} steps"
+    echo ""
+
+    # Blocks
+    local blocks
+    blocks=$(sed -n '/^## 阻塞/,/^## /p' "$plan" | grep -c "^## 阻塞 #" 2>/dev/null || echo "0")
+    if [ "${blocks:-0}" -gt 0 ]; then
+        echo -e "  ${RED}Blocks  : $blocks${NC}"
+        sed -n '/^## 阻塞/,/^## /p' "$plan" | grep "^## 阻塞 #" | while read -r line; do
+            echo "    $line"
+        done
+    else
+        echo -e "  ${GREEN}Blocks  : 0${NC}"
+    fi
+    echo ""
+
+    # Self-check log
+    local logs verify_ok verify_missing
+    logs=$(grep -cE '^### Step' "$plan" 2>/dev/null || echo "0")
+    verify_ok=$(grep -cE '^- verify:.*(passed|通过|PASS)' "$plan" 2>/dev/null || echo "0")
+    verify_missing=$((logs - verify_ok))
+    [ "$verify_missing" -lt 0 ] && verify_missing=0
+
+    echo "  Self-check entries : $logs"
+    echo "  Verified            : $verify_ok"
+    [ "$verify_missing" -gt 0 ] && echo -e "  ${YELLOW}Unverified          : $verify_missing${NC}"
+
+    # Last activity
+    local last_step
+    last_step=$(grep '^### Step' "$plan" 2>/dev/null | tail -1 | sed 's/### //')
+    echo ""
+    echo "  Last activity: ${last_step:-无}"
+    echo ""
+
+    # Suggestions
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    if [ "${completed:-0}" -eq "${total:-0}" ] && [ "${total:-0}" -gt 0 ]; then
+        echo "  → 所有步骤已完成。建议运行 Reviewer 审查。"
+    elif [ "${blocks:-0}" -gt 0 ]; then
+        echo "  → 有阻塞项。回到 Planner 裁决后继续。"
+    elif [ "${completed:-0}" -lt "${total:-0}" ]; then
+        echo "  → 继续执行剩余 $((total - completed)) 步。"
+    else
+        echo "  → plan.md 已创建但无步骤。用 Planner 补充步骤。"
+    fi
+    echo ""
+}
+
+# ============================================================
+# harness metrics — aggregate task quality metrics
+# ============================================================
+cmd_metrics() {
+    local target="${1:-$(pwd)}"
+    local plan="$target/plan.md"
+    local audit_log=""
+    for f in "$HARNESS_GLOBAL/audit-log.md" "$HARNESS_GLOBAL/scripts/../audit-log.md" "$HOME/.mick-brain/global/evolution/audit-trail.md"; do
+        [ -f "$f" ] && audit_log="$f" && break
+    done
+
+    echo ""
+    echo -e "${BOLD}📈 Harness Metrics${NC}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    # === Plan-based metrics ===
+    if [ -f "$plan" ]; then
+        local total completed blocks
+        total=$(grep -cE '^- \[[ x]\]' "$plan" 2>/dev/null || echo "0")
+        completed=$(grep -cE '^- \[x\]' "$plan" 2>/dev/null || echo "0")
+
+        # Verification coverage
+        local verify_ok verify_failed verify_missing
+        verify_ok=$(grep -cE '^- verify:.*(passed|通过|PASS)' "$plan" 2>/dev/null || echo "0")
+        verify_failed=$(grep -cE '^- verify:.*(failed|失败|FAIL)' "$plan" 2>/dev/null || echo "0")
+        local log_count
+        log_count=$(grep -cE '^### Step' "$plan" 2>/dev/null || echo "0")
+        verify_missing=$((log_count - verify_ok - verify_failed))
+        [ "$verify_missing" -lt 0 ] && verify_missing=0
+
+        # Plan deviation (steps that mention "偏离" or "deviation" in notes)
+        local deviations
+        deviations=$(grep -cE '偏离|deviation|diverged' "$plan" 2>/dev/null || echo "0")
+
+        echo ""
+        echo "  ── Plan Execution ──"
+        printf "  %-28s %s\n" "Task completion rate" "${completed}/${total}"
+        printf "  %-28s %s\n" "Verification coverage" "${verify_ok}/${log_count} verified"
+        printf "  %-28s %s\n" "Verification missing" "$verify_missing"
+        printf "  %-28s %s\n" "Plan deviations" "$deviations"
+        printf "  %-28s %s\n" "Active blocks" "${blocks:-0}"
+    else
+        echo ""
+        echo "  (无 plan.md — Plan-Execute 指标不可用)"
+    fi
+
+    # === Audit-based metrics ===
+    if [ -n "$audit_log" ] && [ -f "$audit_log" ]; then
+        local scope_creep verify_fail repeated
+        scope_creep=$(grep -c "scope-creep" "$audit_log" 2>/dev/null || echo "0")
+        verify_fail=$(grep -c "verify-missing\|verify-vague\|verify-unverified\|verify-failed" "$audit_log" 2>/dev/null || echo "0")
+        repeated=$(grep -c "repeated\|撞墙" "$audit_log" 2>/dev/null || echo "0")
+
+        echo ""
+        echo "  ── Historical Signals ──"
+        printf "  %-28s %s\n" "Scope creep events" "$scope_creep"
+        printf "  %-28s %s\n" "Verification failures" "$verify_fail"
+        printf "  %-28s %s\n" "Repeated failure signals" "$repeated"
+    else
+        echo ""
+        echo "  ── Historical Signals ──"
+        echo "  (无 audit-log — 运行 harness-audit.sh --log 开始累积)"
+    fi
+
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  → 运行 'harness report' 查看当前任务详情。"
+    echo ""
+}
+
+# ============================================================
 # Main
 # ============================================================
 case "${1:-}" in
@@ -291,6 +442,14 @@ case "${1:-}" in
         shift
         cmd_check "${1:-}"
         ;;
+    report)
+        shift
+        cmd_report "${1:-}"
+        ;;
+    metrics)
+        shift
+        cmd_metrics "${1:-}"
+        ;;
     version|--version|-v)
         cmd_version
         ;;
@@ -302,6 +461,8 @@ case "${1:-}" in
         echo "  harness init [dir]       在当前（或指定）目录初始化 Harness"
         echo "  harness update           更新全局 Harness + 刷新所有注册项目"
         echo "  harness check [dir]      验证当前项目脚手架完整性"
+        echo "  harness report [dir]     查看当前任务计划与执行状态"
+        echo "  harness metrics [dir]    聚合任务质量指标"
         echo "  harness version          查看版本"
         echo ""
         echo "安装后进入任意项目目录，一行命令搞定："
