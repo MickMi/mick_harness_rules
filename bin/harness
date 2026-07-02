@@ -290,12 +290,14 @@ cmd_report() {
 
     # Extract basic info
     local title status progress
-    title=$(head -1 "$plan" | sed 's/^# Plan: //')
-    status=$(grep "🧭 状态" "$plan" 2>/dev/null | head -1 | sed 's/>.*🧭 状态：//' || echo "未知")
-    local total completed
+    title=$(grep "^# Plan:" "$plan" 2>/dev/null | head -1 | sed 's/^# Plan: //')
+    [ -z "$title" ] && title="未命名"
+    status=$(grep "🧭 状态" "$plan" 2>/dev/null | head -1 | sed 's/.*🧭 状态：//' || echo "未知")
     total=$(grep -cE '^- \[[ x]\]' "$plan" 2>/dev/null || echo "0")
+    total=$(echo "$total" | tr -d '[:space:]')
     completed=$(grep -cE '^- \[x\]' "$plan" 2>/dev/null || echo "0")
-    progress="${completed:-0}/${total:-0}"
+    completed=$(echo "$completed" | tr -d '[:space:]')
+    progress="${completed}/${total}"
 
     echo ""
     echo "  Feature : ${title:-未命名}"
@@ -365,22 +367,15 @@ cmd_metrics() {
 
     # === Plan-based metrics ===
     if [ -f "$plan" ]; then
-        local total completed blocks
-        total=$(grep -cE '^- \[[ x]\]' "$plan" 2>/dev/null || echo "0")
-        completed=$(grep -cE '^- \[x\]' "$plan" 2>/dev/null || echo "0")
-
-        # Verification coverage
-        local verify_ok verify_failed verify_missing
-        verify_ok=$(grep -cE '^- verify:.*(passed|通过|PASS)' "$plan" 2>/dev/null || echo "0")
-        verify_failed=$(grep -cE '^- verify:.*(failed|失败|FAIL)' "$plan" 2>/dev/null || echo "0")
-        local log_count
-        log_count=$(grep -cE '^### Step' "$plan" 2>/dev/null || echo "0")
+        _c() { grep -cE "$1" "$2" 2>/dev/null || echo 0; }
+        total=$(_c '^- \[[ x]\]' "$plan")
+        completed=$(_c '^- \[x\]' "$plan")
+        verify_ok=$(_c '^- verify:.*(passed|通过|PASS)' "$plan")
+        verify_failed=$(_c '^- verify:.*(failed|失败|FAIL)' "$plan")
+        log_count=$(_c '^### Step' "$plan")
         verify_missing=$((log_count - verify_ok - verify_failed))
         [ "$verify_missing" -lt 0 ] && verify_missing=0
-
-        # Plan deviation (steps that mention "偏离" or "deviation" in notes)
-        local deviations
-        deviations=$(grep -cE '偏离|deviation|diverged' "$plan" 2>/dev/null || echo "0")
+        deviations=$(_c '偏离|deviation|diverged' "$plan")
 
         echo ""
         echo "  ── Plan Execution ──"
