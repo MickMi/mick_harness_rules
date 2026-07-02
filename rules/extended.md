@@ -265,18 +265,18 @@ Harness 的核心不是把所有代码审美都塞进 Prompt，而是把约束�
 
 ## 9. Brain 记忆自动写入 (Brain Auto-Write Protocol)
 
-> 仅对支持执行 shell 命令的环境生效。无 shell 环境可忽略本节，由用户手动 `.harness/brain-push.sh`。
+> 仅对支持执行 shell 命令的环境生效。无 shell 环境可忽略本节，由用户手动 `.harness/scripts/brain-push.sh`。
 
-本项目挂载了个人记忆库 Brain，CLI 位于 `.harness/brain-push.sh`。当对话中出现以下情况，主动写入一条记忆：
+本项目挂载了个人记忆库 Brain，CLI 位于 `.harness/scripts/brain-push.sh`。当对话中出现以下情况，主动写入一条记忆：
 
-- 🐛 **Gotcha**：非显而易见的 Bug、API 怪癖、库限制、配置坑 → `.harness/brain-push.sh --layer session "gotcha: <一句话>"`
-- 🏗️ **Decision**：在多个方案中选定某个、做了取舍 → `.harness/brain-push.sh --layer session "decision: <选了什么及为什么>"`
-- 💡 **Preference**：用户表达了编码风格/命名/流程偏好 → `.harness/brain-push.sh --layer session "preference: <描述>"`
-- ⚠️ **Env**：OS 特定行为、CI/CD 约束、版本兼容问题 → `.harness/brain-push.sh --layer session "env: <描述>"`
+- 🐛 **Gotcha**：非显而易见的 Bug、API 怪癖、库限制、配置坑 → `.harness/scripts/brain-push.sh --layer session "gotcha: <一句话>"`
+- 🏗️ **Decision**：在多个方案中选定某个、做了取舍 → `.harness/scripts/brain-push.sh --layer session "decision: <选了什么及为什么>"`
+- 💡 **Preference**：用户表达了编码风格/命名/流程偏好 → `.harness/scripts/brain-push.sh --layer session "preference: <描述>"`
+- ⚠️ **Env**：OS 特定行为、CI/CD 约束、版本兼容问题 → `.harness/scripts/brain-push.sh --layer session "env: <描述>"`
 
 写入规则：
 
-- **先查后写**：写之前先 `.harness/brain-search.sh "<关键词>"`，已存在相似条目则跳过。
+- **先查后写**：写之前先 `.harness/scripts/brain-search.sh "<关键词>"`，已存在相似条目则跳过。
 - **一句话**：每条最多两句，带上技术/工具名以便检索，用现在时。
 - **不写**：常规写码/格式化/重构、无跨项目价值的项目配置、临时调试步骤。
 
@@ -466,7 +466,7 @@ Harness 的核心不是强弱模型切换，而是让任何工具里的 Agent �
 
 #### 默认模式：单 Agent 完整执行
 
-如果没有 `plan.md`，按用户请求正常工作；如果有 `plan.md`，当前 Agent 自动进入 Executor 模式，按 §10.3 执行。除非用户明确要求多工具协作，否则不要把任务引导到"切换模型"。
+如果没有 `plan.md`，按用户请求正常工作；如果有 `plan.md` 且本轮要改动文件/生成交付物，当前 Agent 按 §10.3 执行 plan。纯讨论/解释/分析不触发 Executor 模式。
 
 #### 分阶段模式：Planner / Executor / Reviewer
 

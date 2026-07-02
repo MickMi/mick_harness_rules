@@ -191,7 +191,7 @@ render() {
     echo "## ⛔ 停手条件（违反任一条 = 立即停手）"
     echo ""
     echo "**1. 改动前必须先读。** 用 Read 工具读取要改的文件。凭记忆覆盖代码 = 违约。"
-    echo "**2. 改动文件前先查 plan.md。** 用 \`ls\` 检查项目根目录的 \`plan.md\`。若存在 → Executor 模式，按步骤执行，不改 plan 范围外的文件。若不存在 → 正常响应，但 >3 文件改动时建议先出 plan。纯解释、方向讨论无需检查。"
+    echo "**2. 改动文件前先查 plan.md。** 用 \`ls\` 检查项目根目录的 \`plan.md\`。若存在且本轮要改动文件 → 按 plan 步骤执行，不改 plan 范围外的文件。纯解释、方向讨论、头脑风暴无需检查 plan。"
     echo "**3. 没验证 ≠ 完成。** 每条改动必须附带验证证据。禁止说\"应该好了 / 可以了 / 完成了\"。只能说\"已修改，待验证\"或\"已修改，验证通过：<命令> → <结果>\"。"
     echo ""
 
@@ -207,7 +207,7 @@ render() {
         echo ""
         echo "## 项目级约束"
         echo ""
-        echo "**⚡ 前置检查**：开始任何任务前，先看 \`plan.md\` 是否存在。存在则读取它，按其中的步骤逐一执行，每完成一步将 \`[ ]\` 改为 \`[x]\`。不存在则跳过本条，正常工作。"
+        echo "**⚡ 改动前检查 plan.md**：改动文件前先看 \`plan.md\`。存在且本轮要改动文件 → 按步骤执行。不存在 → 正常响应。"
         echo ""
         echo "**锁死技术栈**：不擅自更换语言/框架/库，不擅自引入新依赖。要换先说明原因并等用户确认。"
         echo ""
@@ -255,7 +255,7 @@ render() {
         echo ""
         echo "## Executor 纪律（plan.md 存在时强制生效）"
         echo ""
-        echo "当 \`plan.md\` 存在且含 \`- [ ]\` 未完成步骤时，你自动进入 **Executor 模式**，以下红线不可逾越："
+        echo "当 \`plan.md\` 存在且含 \`- [ ]\` 未完成步骤时，本轮要改动文件时，按 plan 步骤执行，以下红线不可逾越："
         echo ""
         echo "1. **🚫 不做架构决策** — plan 没写的不发明。缺什么写 \`## 阻塞\` 停下，不硬猜。"
         echo "2. **🚫 不改 plan 的目标/约束/步骤/验收标准** — 你只能标完成 \`[x]\`、加执行备注、写沟通区。"
@@ -283,9 +283,12 @@ render() {
     fi
 }
 
-# target_path | profile | display name
+# Default: only AGENTS.md (cross-tool standard). Use --all for 7-tool coverage.
 TARGETS=(
     "AGENTS.md|lean|AGENTS.md 通用标准 (Codex / Zed / Aider)"
+)
+
+ALL_TARGETS=(
     "CLAUDE.md|lean|Claude Code"
     ".cursorrules|full|Cursor"
     ".windsurfrules|full|Windsurf"
@@ -294,9 +297,23 @@ TARGETS=(
     ".trae/rules.md|lean|Trae"
 )
 
+GEN_ALL=false
+[ "${1:-}" = "--all" ] && GEN_ALL=true
+[ "${2:-}" = "--all" ] && GEN_ALL=true
+
 mkdir -p "$DIST"
 
 GENERATED=0
+if [ "$GEN_ALL" = true ]; then
+    TARGETS+=("${ALL_TARGETS[@]}")
+else
+    # Clean up stale multi-IDE files from previous --all runs
+    for f in "CLAUDE.md" ".cursorrules" ".windsurfrules" ".clinerules" ".github/copilot-instructions.md" ".trae/rules.md"; do
+        rm -f "$DIST/$f"
+    done
+    rm -rf "$DIST/.github" "$DIST/.trae" 2>/dev/null || true
+fi
+
 DRIFT=0
 for entry in "${TARGETS[@]}"; do
     IFS='|' read -r rel profile name <<< "$entry"

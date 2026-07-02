@@ -91,129 +91,26 @@ cmd_init() {
     echo -e "${BOLD}🚀 harness init${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  Target: $target"
-    echo "  Source: $HARNESS_GLOBAL"
     echo ""
 
-    # --- 1. Symlink .harness/ into project ---
+    # Symlink .harness/ → global harness, then delegate to setup.sh
     local harness_link="$target/.harness"
     if [ -L "$harness_link" ]; then
-        ok ".harness/ symlink already exists. (idempotent)"
+        ok ".harness/ already exists. (idempotent)"
     elif [ -d "$harness_link" ]; then
-        warn ".harness/ already exists as a real directory. Skipping symlink."
+        warn ".harness/ already exists as a real directory. Skipping."
     else
         ln -s "$HARNESS_GLOBAL" "$harness_link"
         ok ".harness/ → $HARNESS_GLOBAL"
     fi
 
-    # --- 2. Run generate.sh ---
-    if [ -x "$HARNESS_GLOBAL/generate.sh" ]; then
-        info "Generating rule files..."
-        "$HARNESS_GLOBAL/generate.sh" >/dev/null
-        ok "7 IDE rule files generated."
-    fi
-
-    # --- 3. Mount rule files into project ---
-    if [ -f "$HARNESS_GLOBAL/scripts/lib-mount-rules.sh" ]; then
-        source "$HARNESS_GLOBAL/scripts/lib-mount-rules.sh"
-        mount_rule_files "$HARNESS_GLOBAL" "$target" 2>/dev/null || true
-        ok "Rules mounted to project root."
-    fi
-
-    # --- 4. .gitignore ---
-    local gitignore="$target/.gitignore"
-    local entries=(".harness/" ".harness" ".prompts/" ".prompts")
-    entries+=("${HARNESS_OWNED_FILES[@]}")
-    if [ ! -f "$gitignore" ]; then
-        touch "$gitignore"
-    fi
-    for entry in "${entries[@]}"; do
-        if ! grep -qxF "$entry" "$gitignore" 2>/dev/null; then
-            echo "$entry" >> "$gitignore"
-        fi
-    done
-    ok ".gitignore updated."
-
-    # --- 5. Config ---
-    local config="$target/.harness-config.yaml"
-    if [ ! -f "$config" ]; then
-        if [ -f "$HARNESS_GLOBAL/config/.harness-config.template.yaml" ]; then
-            cp "$HARNESS_GLOBAL/config/.harness-config.template.yaml" "$config"
-            ok ".harness-config.yaml created. Edit it to set your preferences."
-        fi
+    # Delegate to setup.sh for all init steps (single source of truth)
+    if [ -x "$harness_link/setup.sh" ]; then
+        "$harness_link/setup.sh" "$@"
     else
-        ok ".harness-config.yaml already exists. (idempotent)"
+        fail "setup.sh not found at $harness_link/setup.sh"
+        exit 1
     fi
-
-    # --- 6. Scaffold files (skip if exist) ---
-    mkdir -p "$target/docs"
-    if [ ! -f "$target/MEMORY.md" ] && [ ! -L "$target/MEMORY.md" ]; then
-        cat > "$target/MEMORY.md" << 'EOF'
-# 项目记忆与经验库 (Memory & Learnings)
-
-## 🏗️ 架构决策记录 (ADR)
-*在这里记录我们在对话中决定引入的新库、核心数据结构变更或重大架构妥协。*
-
-## ⚠️ 已知天坑与环境限制 (Gotchas)
-- (暂无)
-
-## 💡 设计原则备忘
-*从历史讨论中提炼的核心设计原则。*
-EOF
-        ok "MEMORY.md created."
-    fi
-    if [ ! -f "$target/TODO.md" ] && [ ! -L "$target/TODO.md" ]; then
-        cat > "$target/TODO.md" << 'EOF'
-# 项目待办与状态流转
-
-## 🚧 当前进行中 (In Progress)
-- [ ]
-
-## 📋 待办清单 (Backlog)
-- [ ] 编写核心业务逻辑
-
-## ✅ 已完成 (Done)
-- [x] Harness 脚手架初始化
-EOF
-        ok "TODO.md created."
-    fi
-
-    # --- 7. Brain repo — connect if configured ---
-    if [ -f "$HARNESS_GLOBAL/scripts/brain-resolve.sh" ]; then
-        source "$HARNESS_GLOBAL/scripts/brain-resolve.sh"
-        resolve_brain_dir "$HARNESS_GLOBAL" 2>/dev/null || true
-        if [ -n "${BRAIN_REPO_REMOTE:-}" ]; then
-            local brain_local="${BRAIN_REPO_LOCAL:-$HOME/.mick-brain}"
-            if [ -d "$brain_local/.git" ]; then
-                ok "Brain repo already connected: $brain_local"
-            else
-                info "Cloning brain repo..."
-                if git clone --quiet "$BRAIN_REPO_REMOTE" "$brain_local" 2>/dev/null; then
-                    ok "Brain repo connected: $brain_local"
-                else
-                    warn "Brain repo unavailable (OK for fork users). Local fallback will be used."
-                fi
-            fi
-            # Symlink brain/ in harness
-            local brain_link="$HARNESS_GLOBAL/brain"
-            if [ ! -L "$brain_link" ] && [ ! -d "$brain_link" ]; then
-                ln -s "$brain_local" "$brain_link" 2>/dev/null || true
-            fi
-        fi
-    fi
-
-    # --- 8. Verify — run brain-check ---
-    echo ""
-    if [ -x "$HARNESS_GLOBAL/scripts/brain-check.sh" ]; then
-        "$HARNESS_GLOBAL/scripts/brain-check.sh" "$target" 2>&1 || true
-    fi
-
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo -e "${GREEN}${BOLD}✅ Done.${NC} Harness is active."
-    echo ""
-    echo "  当前项目的 AI 助手已经受 Harness 约束。"
-    echo "  打开任意 AI 工具验证：让它做一次 Harness Self-Test。"
-    echo ""
 }
 
 # ============================================================

@@ -13,7 +13,7 @@
 
 1. 上游需求共识（按可用性选择）：用户明确锁定的口述需求 / demo / issue / 设计稿 / `docs/PRD-<feature>.md`。PRD 是高质量上游之一，但不是 plan.md 的必要前置；如果需求还没聊清楚，先回到 PM 式对话澄清，不要硬写 plan。
 2. **现有代码扫描**——这次改动会碰到哪些现有文件 / 表 / 接口？这是侵入评估的基础，Executor 做不了这步。
-3. `.harness/brain-search.sh <关键词>`（若 Brain 启用）——把相关 gotcha 提炼成 plan 里的硬约束，Executor 没有你的记忆。
+3. `.harness/scripts/brain-search.sh <关键词>`（若 Brain 启用）——把相关 gotcha 提炼成 plan 里的硬约束，Executor 没有你的记忆。
 4. `.harness-config.yaml` 的 `dev.tech_stack`——plan 里所有签名 / DDL 都要符合这个栈。
 
 ## 复杂 feature 的 plan.md 富模板

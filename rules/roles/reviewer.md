@@ -117,6 +117,6 @@
 ## 回合卡片收尾
 
 审查完成后，结尾输出回合卡片（格式见 `core.md` 铁律 9）。你的走向：
-- **审查通过** → `➡️` 写「跑 `.harness/harness-audit.sh --since <起点commit>` 验收」，可省 `🆘`
+- **审查通过** → `➡️` 写「跑 `.harness/scripts/harness-audit.sh --since <起点commit>` 验收」，可省 `🆘`
 - **发现问题、要改 plan** → `➡️` 切到 **Planner**，粘贴「审查发现 N 个问题：<清单>，请改 plan 或直接接管」
 - **小问题不值得切回 Executor** → 按 §10.7「Planner 直接接管」自己修完并标记 plan

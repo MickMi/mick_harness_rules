@@ -34,7 +34,7 @@ regenerate_rules() {
     local harness_root="$1"
     local generate="$harness_root/generate.sh"
     if [ -x "$generate" ]; then
-        if "$generate" >/dev/null; then
+        if "$generate" --all >/dev/null; then
             ok "Rule files generated into .harness/dist/ (single source)."
         else
             warn "generate.sh failed — using whatever already exists in dist/."

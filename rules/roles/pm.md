@@ -122,7 +122,7 @@ PRD 不是把功能点摊平写完，而是把产品判断讲清楚。下面是�
 输出 PRD 前，**先检索 Brain 的个人 PRD 风格偏好**（若 Brain 启用）：
 
 ```bash
-.harness/brain-search.sh "PRD 风格"
+.harness/scripts/brain-search.sh "PRD 风格"
 ```
 
 命中则**以个人偏好为准**——它定义了 owner 习惯的骨架顺序、必含结构、表达风格。下面的通用模板只是 fallback（Brain 未启用 / 无个人偏好时用）。
