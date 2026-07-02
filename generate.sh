@@ -66,9 +66,9 @@ EOF
 # ----------------------------------------------------------------
 resolve_capsule_brain_dir() {
     local resolved=""
-    if [ -f "$HARNESS_ROOT/brain-resolve.sh" ]; then
+    if [ -f "$HARNESS_ROOT/scripts/brain-resolve.sh" ]; then
         # shellcheck disable=SC1091
-        source "$HARNESS_ROOT/brain-resolve.sh"
+        source "$HARNESS_ROOT/scripts/brain-resolve.sh"
         if resolve_brain_dir "$HARNESS_ROOT" >/dev/null 2>&1 && [ -n "${BRAIN_DIR:-}" ]; then
             resolved="$BRAIN_DIR"
         fi
@@ -185,6 +185,16 @@ render() {
     echo ""
     echo "# 工程规范 · $tool"
     echo ""
+
+    # ⛔ Tripwire injected FIRST, before everything else — even the capsule.
+    # Weak models that skim long files still hit these 3 lines.
+    echo "## ⛔ 停手条件（违反任一条 = 立即停手）"
+    echo ""
+    echo "**1. 改动前必须先读。** 用 Read 工具读取要改的文件。凭记忆覆盖代码 = 违约。"
+    echo "**2. 先查 plan.md，再动手。** 用 \`ls\` 检查项目根目录的 \`plan.md\`。若存在 → Executor 模式，按步骤执行，不改 plan 范围外的文件。若不存在 → 正常响应，但 >3 文件改动时建议先出 plan。"
+    echo "**3. 没验证 ≠ 完成。** 每条改动必须附带验证证据。禁止说\"应该好了 / 可以了 / 完成了\"。只能说\"已修改，待验证\"或\"已修改，验证通过：<命令> → <结果>\"。"
+    echo ""
+
     agent_capsule_inject
 
     if [ "$profile" = "minimal" ]; then
@@ -254,7 +264,7 @@ render() {
         echo "5. **🚫 不跳步** — 必须按顺序执行，不许并行或跳过。"
         echo "6. **🚫 不在 plan 范围外做额外改动** — 看到项目里有"脏数据/配置遗漏"不要自动清理，plan 决定你干什么。"
         echo "7. **✅ 遇到 plan 没说清的地方** → 停下写阻塞报告（带证据），不要自己猜实现。"
-        echo "8. **✅ 完成后按结构化格式追加自检日志** — 每步必须有 \`### Step N\` + \`files:\` + \`verify:\` 行。\`harness-audit.sh\` 会自动扫描。"
+        echo "8. **✅ 完成后按结构化格式追加自检日志** — 每步必须有 \`### Step N\` + \`files:\` + \`verify:\` 行。\`scripts/harness-audit.sh\` 会自动扫描。"
         echo ""
         echo "违反以上任何一条 = 越权。完整 Executor 协议见 \`.harness/rules/roles/executor.md\` 和 \`extended.md\` §10.3。"
         echo ""

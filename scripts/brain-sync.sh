@@ -19,7 +19,7 @@ set -uo pipefail
 # ============================================================
 
 # --- Paths ---
-HARNESS_ROOT="$(cd "$(dirname "$0")" && pwd)"
+HARNESS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # Resolve transcript directory: use CLAUDE_PROJECT_DIR env var, or auto-detect from
 # the standard Claude Code directory pattern.
@@ -38,7 +38,7 @@ LOG_FILE="$HOME/.claude/logs/brain-sync.log"
 BRAIN_REPO=""
 
 # --- Resolve brain ---
-source "$HARNESS_ROOT/brain-resolve.sh"
+source "$HARNESS_ROOT/scripts/brain-resolve.sh""
 resolve_brain_dir "$HARNESS_ROOT"
 # Use the resolved brain directory from brain-resolve.sh
 if [ -n "${BRAIN_REPO_LOCAL:-}" ]; then
@@ -347,9 +347,9 @@ if [ -n "$LEARNINGS" ] && ! echo "$LEARNINGS" | grep -qi "none"; then
         [ ${#line} -lt 5 ] && continue
 
         if [ -n "$PROJECT_SLUG" ]; then
-            "$HARNESS_ROOT/brain-push.sh" --layer project --project "$PROJECT_SLUG" --source claude-code --no-sync "$line" 2>>"$LOG_FILE" || true
+            "$HARNESS_ROOT/scripts/brain-push.sh" --layer project --project "$PROJECT_SLUG" --source claude-code --no-sync "$line" 2>>"$LOG_FILE" || true
         else
-            "$HARNESS_ROOT/brain-push.sh" --layer session --source claude-code --no-sync "$line" 2>>"$LOG_FILE" || true
+            "$HARNESS_ROOT/scripts/brain-push.sh" --layer session --source claude-code --no-sync "$line" 2>>"$LOG_FILE" || true
         fi
     done <<< "$LEARNINGS"
     log "SessionEnd: $SESSION_SHORT — pushed individual learnings"

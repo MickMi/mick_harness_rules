@@ -135,15 +135,15 @@ git clone https://github.com/MickMi/mick_harness_rules.git ~/mick_harness_rules
 chmod +x ~/mick_harness_rules/*.sh
 
 # 初始化到目标项目
-~/mick_harness_rules/vibe-init.sh /path/to/your/project
+~/mick_harness_rules/scripts/vibe-init.sh /path/to/your/project
 
 # 新用户加 --fresh
-~/mick_harness_rules/vibe-init.sh --fresh /path/to/your/project
+~/mick_harness_rules/scripts/vibe-init.sh --fresh /path/to/your/project
 ```
 
 ### 自动检测机制
 
-`brain-init.sh` 使用三层检测确保新用户拿到干净的 brain：
+`scripts/brain-init.sh` 使用三层检测确保新用户拿到干净的 brain：
 
 | 检测维度 | 触发条件 | 行为 |
 |----------|----------|------|
@@ -187,8 +187,8 @@ flowchart TD
     User["👤 用户项目"] -->|"setup.sh"| Init["🚀 一键初始化"]
     Init -->|"symlink dist/ + roles/"| Harness
     Init -->|"brain-init"| Brain
-    Flow -->|"brain-push.sh"| S
-    Brain -->|"brain-search.sh"| Flow
+    Flow -->|"scripts/brain-push.sh"| S
+    Brain -->|"scripts/brain-search.sh"| Flow
 ```
 
 ## 核心架构
@@ -211,9 +211,9 @@ flowchart TD
 mick_harness_rules/ (公开)         ~/.mick-brain/ (私有)
 ├── .cursorrules                   ├── global/preferences.md
 ├── .prompts/                      ├── global/gotchas.md
-├── brain-init.sh                  ├── projects/<slug>/learnings.md
-├── brain-push.sh                  ├── sessions/YYYY-MM-DD/
-├── brain-resolve.sh               ├── MEMORY.md
+├── scripts/brain-init.sh                  ├── projects/<slug>/learnings.md
+├── scripts/brain-push.sh                  ├── sessions/YYYY-MM-DD/
+├── scripts/brain-resolve.sh               ├── MEMORY.md
 ├── brain/ → symlink               ├── .brain-owner
 └── ...                            └── .gitkeep
 ```
@@ -224,7 +224,7 @@ mick_harness_rules/ (公开)         ~/.mick-brain/ (私有)
 - 位置：`brain/sessions/YYYY-MM-DD/`
 - 保留：90 天后自动归档
 - 内容：每次 AI 对话中产生的 gotcha、decision、preference、env 记录
-- 写入：AI 自动触发或 `brain-push.sh` 手动写入
+- 写入：AI 自动触发或 `scripts/brain-push.sh` 手动写入
 
 ### Project 层
 
@@ -250,13 +250,13 @@ Project（项目级精华）
 Global（跨项目通用经验）
 ```
 
-由 `brain-compound.sh` 执行。支持智能触发、相似检测、合并策略、分类路由和 `--dry-run` 预览。
+由 `scripts/brain-compound.sh` 执行。支持智能触发、相似检测、合并策略、分类路由和 `--dry-run` 预览。
 
 ### 检索
 
 不全量读取记忆文件。推荐顺序：
 
-1. `brain-search.sh <keyword>` — ripgrep 精准搜索
+1. `scripts/brain-search.sh <keyword>` — ripgrep 精准搜索
 2. 定向读取特定文件片段
 3. 只有前面都不够时，才读完整文件
 
@@ -305,20 +305,20 @@ mick_harness_rules/
 │   ├── AGENTS.md  CLAUDE.md  .cursorrules  .windsurfrules  .clinerules
 │   ├── .github/copilot-instructions.md
 │   └── .trae/rules.md
-├── lib-mount-rules.sh        # 共享挂载库（setup.sh / brain-init.sh 共用，防漂移）
+├── scripts/lib-mount-rules.sh        # 共享挂载库（setup.sh / scripts/brain-init.sh 共用，防漂移）
 ├── .brain-config.yaml        # Brain 配置（仓库地址、保留策略、搜索引擎）
 ├── .gitignore                # 忽略 brain 个人数据 + dist/
 ├── brain/                    # → symlink 到 ~/.mick-brain/（私有 brain 仓库）
 ├── setup.sh                  # ⭐ 一键初始化（含交互式问答 + --reconfigure）
-├── brain-init.sh             # 挂载 harness + brain（全局仓库 symlink 模式）
-├── brain-resolve.sh          # 共享库：解析 brain 数据路径（双仓库/单仓库自动适配）
-├── brain-migrate.sh          # 一次性迁移脚本（单仓库 → 双仓库）
-├── brain-check.sh            # 验证脚手架完整性（13 项检查，含单源同步）
-├── brain-push.sh             # 向 brain 写入记忆（CLI / 剪贴板 / 交互模式）
-├── brain-search.sh           # 基于 ripgrep 的记忆检索
-├── brain-compound.sh         # 智能蒸馏（Session → Project → Global）
-├── brain-gc.sh               # 容量治理（归档 + 清理）
-├── vibe-init.sh              # Vibe Coding 脚手架初始化（自动链式调用 brain-init）
+├── scripts/brain-init.sh             # 挂载 harness + brain（全局仓库 symlink 模式）
+├── scripts/brain-resolve.sh          # 共享库：解析 brain 数据路径（双仓库/单仓库自动适配）
+├── scripts/brain-migrate.sh          # 一次性迁移脚本（单仓库 → 双仓库）
+├── scripts/brain-check.sh            # 验证脚手架完整性（13 项检查，含单源同步）
+├── scripts/brain-push.sh             # 向 brain 写入记忆（CLI / 剪贴板 / 交互模式）
+├── scripts/brain-search.sh           # 基于 ripgrep 的记忆检索
+├── scripts/brain-compound.sh         # 智能蒸馏（Session → Project → Global）
+├── scripts/brain-gc.sh               # 容量治理（归档 + 清理）
+├── scripts/vibe-init.sh              # Vibe Coding 脚手架初始化（自动链式调用 brain-init）
 ├── docs/
 │   ├── architecture.md       # Harness 自身的系统架构文档
 │   ├── architecture-template.md  # 新项目架构模板（init 时复制到目标项目）
@@ -333,24 +333,24 @@ mick_harness_rules/
 
 ```bash
 # 搜索记忆
-.harness/brain-search.sh "ripgrep"
+.harness/scripts/brain-search.sh "ripgrep"
 
 # 写入记忆
-.harness/brain-push.sh --layer session --source cursor "gotcha: xxx"
+.harness/scripts/brain-push.sh --layer session --source cursor "gotcha: xxx"
 
 # 运行蒸馏
-.harness/brain-compound.sh --mode auto
+.harness/scripts/brain-compound.sh --mode auto
 
 # 容量治理
-.harness/brain-gc.sh --report
+.harness/scripts/brain-gc.sh --report
 
 # 验证完整性
-.harness/brain-check.sh
+.harness/scripts/brain-check.sh
 ```
 
 ## 多 IDE 支持
 
-所有规则文件都由 `generate.sh` 从单一数据源产出，再由 `setup.sh` / `brain-init.sh` 以 symlink 挂载到项目（`.gitignore` 隔离，只忽略 harness 真正接管的文件）：
+所有规则文件都由 `generate.sh` 从单一数据源产出，再由 `setup.sh` / `scripts/brain-init.sh` 以 symlink 挂载到项目（`.gitignore` 隔离，只忽略 harness 真正接管的文件）：
 
 | 工具 | 规则文件 | profile | 内容 |
 |-----|---------|---------|------|
@@ -404,7 +404,7 @@ AI 会在以下事件发生时自动写入记忆（支持 shell 的环境）：
 
 ## 容量治理
 
-`brain-gc.sh` 防止记忆无限膨胀：
+`scripts/brain-gc.sh` 防止记忆无限膨胀：
 
 - Session 超过 90 天自动归档到 `.archive/sessions/`
 - MEMORY.md 超过 500 行自动归档旧条目到 `MEMORY.archive.md`
@@ -464,12 +464,12 @@ mick_brain/ (私有仓库)
 
 ### 连接机制
 
-`brain-init.sh` 在 Phase 0.5 自动完成：
+`scripts/brain-init.sh` 在 Phase 0.5 自动完成：
 
 1. 读取 `.brain-config.yaml` 中的 `brain_repo.remote` 和 `brain_repo.local_path`
 2. 如果 `~/.mick-brain/` 不存在，自动 `git clone`
 3. 在 harness 仓库中创建 symlink：`brain/` → `~/.mick-brain/`
-4. 所有 brain-*.sh 脚本通过 `brain-resolve.sh` 自动解析正确的路径
+4. 所有 brain-*.sh 脚本通过 `scripts/brain-resolve.sh` 自动解析正确的路径
 
 ### 多机同步流程
 
@@ -484,8 +484,8 @@ mick_brain/ (私有仓库)
     github.com/MickMi/mick_brain (private)
 ```
 
-每次 `brain-push.sh` 写入记忆后，自动 commit + push 到 brain 仓库。
-在另一台机器上运行 `brain-init.sh` 时，自动 pull 最新数据。
+每次 `scripts/brain-push.sh` 写入记忆后，自动 commit + push 到 brain 仓库。
+在另一台机器上运行 `scripts/brain-init.sh` 时，自动 pull 最新数据。
 
 ### 向后兼容
 
@@ -523,5 +523,5 @@ git clone https://github.com/MickMi/mick_harness_rules.git .harness && .harness/
 ```bash
 git clone https://github.com/MickMi/mick_harness_rules.git ~/mick_harness_rules
 chmod +x ~/mick_harness_rules/*.sh
-~/mick_harness_rules/brain-init.sh /path/to/your/project
+~/mick_harness_rules/scripts/brain-init.sh /path/to/your/project
 ```

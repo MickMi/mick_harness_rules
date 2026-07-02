@@ -20,11 +20,11 @@ warn()  { echo -e "${YELLOW}⚠️  $1${NC}"; }
 fail()  { echo -e "${RED}❌ $1${NC}"; }
 
 # --- Resolve harness repo root (where this script lives) ---
-HARNESS_ROOT="$(cd "$(dirname "$0")" && pwd)"
+HARNESS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # --- Source shared brain resolver + rule-mounting library ---
-source "$HARNESS_ROOT/brain-resolve.sh"
-source "$HARNESS_ROOT/lib-mount-rules.sh"
+source "$HARNESS_ROOT/scripts/brain-resolve.sh""
+source "$HARNESS_ROOT/scripts/lib-mount-rules.sh"
 
 # --- Parse arguments ---
 FRESH_MODE=false
@@ -497,7 +497,7 @@ fi
 info "Phase 4/6: Verify — Running brain check..."
 echo ""
 
-BRAIN_CHECK="$HARNESS_ROOT/brain-check.sh"
+BRAIN_CHECK="$HARNESS_ROOT/scripts/brain-check.sh"
 if [ -x "$BRAIN_CHECK" ]; then
     "$BRAIN_CHECK" "$TARGET_DIR"
     CHECK_EXIT=$?
@@ -547,10 +547,10 @@ while IFS= read -r project || [ -n "$project" ]; do
     if [ -x "$project/.harness/generate.sh" ]; then
         "$project/.harness/generate.sh" >/dev/null 2>&1 || true
     fi
-    if [ -f "$project/.harness/lib-mount-rules.sh" ]; then
+    if [ -f "$project/.harness/scripts/lib-mount-rules.sh" ]; then
         info() { :; }; ok() { :; }; warn() { :; }; fail() { :; }
         # shellcheck disable=SC1091
-        source "$project/.harness/lib-mount-rules.sh"
+        source "$project/.harness/scripts/lib-mount-rules.sh"
         mount_rule_files "$project/.harness" "$project" >/dev/null 2>&1 || true
     fi
 done < "$REGISTRY"

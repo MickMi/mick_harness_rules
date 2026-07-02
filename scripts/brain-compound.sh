@@ -35,10 +35,10 @@ fail()  { echo -e "${RED}❌ $1${NC}"; }
 header(){ echo -e "${BOLD}${MAGENTA}$1${NC}"; }
 
 # --- Resolve harness repo root ---
-HARNESS_ROOT="$(cd "$(dirname "$0")" && pwd)"
+HARNESS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # --- Source shared brain resolver ---
-source "$HARNESS_ROOT/brain-resolve.sh"
+source "$HARNESS_ROOT/scripts/brain-resolve.sh""
 resolve_brain_dir "$HARNESS_ROOT"
 
 # --- Configuration defaults ---

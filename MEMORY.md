@@ -31,12 +31,12 @@
   - IDE 内 AI（Cursor/Trae/Windsurf）：AI 直接通过 shell 命令写入
   - Web AI（Claude/ChatGPT）：通过 `brain push` CLI 手动/半自动提交
   - API 调用：对话结束后触发 Webhook 写入
-- [2026-04-14] ADR-008: vibe-init.sh 改造为双模式（harness 加载 + inline 兼容）
+- [2026-04-14] ADR-008: scripts/vibe-init.sh 改造为双模式（harness 加载 + inline 兼容）
   - 默认模式：从 harness 仓库 copy 模板文件到目标项目（单一数据源，不再维护内联副本）
   - `--inline` 模式：保留旧的内联生成方式，作为向后兼容
-  - 串行链式调用：vibe-init.sh 执行完毕后自动调用 brain-init.sh 挂载 brain
+  - 串行链式调用：scripts/vibe-init.sh 执行完毕后自动调用 scripts/brain-init.sh 挂载 brain
   - 幂等安全：已存在的文件备份为 .bak，symlink 文件不覆盖
-- [2026-04-14] ADR-009: 智能蒸馏策略（brain-compound.sh）
+- [2026-04-14] ADR-009: 智能蒸馏策略（scripts/brain-compound.sh）
   - 智能触发：Session 层 ≥5 条未蒸馏条目触发 daily，Project 层本周 ≥3 条新增触发 weekly
   - 相似检测：基于关键词重叠度（≥3 个共享关键词）判断条目相似性
   - 合并策略：相似条目追加为子项（merged），非相似条目直接 append
@@ -47,14 +47,14 @@
   - 通用规则模板：`brain-rules-template.md`，IDE 无关的 Prompt 指令
   - 触发条件：gotcha/decision/preference/env 四类事件自动触发 brain push
   - 去重机制：写入前先 brain-search 检查是否已存在相似条目
-  - 多 IDE 注入：brain-init.sh 自动检测 Cursor/Windsurf/Trae/Copilot 并注入规则
+  - 多 IDE 注入：scripts/brain-init.sh 自动检测 Cursor/Windsurf/Trae/Copilot 并注入规则
   - .cursorrules 已内置完整的 Brain Auto-Write Protocol 段落
-- [2026-04-14] ADR-011: 记忆容量治理（P4-brain-gc.sh）
+- [2026-04-14] ADR-011: 记忆容量治理（P4-scripts/brain-gc.sh）
   - Session 归档：超过 TTL（默认 90 天）的 Session 移至 `.archive/sessions/`
-  - 归档前检查：未蒸馏的 Session 会发出警告，建议先运行 brain-compound.sh
+  - 归档前检查：未蒸馏的 Session 会发出警告，建议先运行 scripts/brain-compound.sh
   - MEMORY.md 长度控制：超过阈值（默认 500 行）自动归档旧条目到 MEMORY.archive.md
-  - 容量报告：`brain-gc.sh --report` 输出各层文件数、大小、过期状态
-  - brain-check.sh 新增 Check 8（MEMORY.md 容量）和 Check 9（自动写入规则检测）
+  - 容量报告：`scripts/brain-gc.sh --report` 输出各层文件数、大小、过期状态
+  - scripts/brain-check.sh 新增 Check 8（MEMORY.md 容量）和 Check 9（自动写入规则检测）
 - [2026-04-14] ADR-012: 强制需求审查协议（Mandatory Requirement Review Protocol）
   - 触发条件：新功能开发、系统重构、架构变更、多模块联动修改
   - 豁免条件：单文件 Bug 修复、文档更新、格式化、用户明确说"跳过审查"
@@ -64,16 +64,16 @@
 - [2026-04-21] ADR-013: Fork 自动检测与 Brain 重置（Fork Auto-Detection & Brain Reset）
   - 新增 `.brain-owner` 文件记录仓库所有者标识（owner + repo + system_user）
   - 三层检测机制：`--fresh` 参数（无条件重置）→ Git remote owner 不一致（自动重置）→ 系统用户名不一致（交互确认）
-  - `brain-init.sh` / `vibe-init.sh` 均支持 `--fresh` 参数，新用户一条命令开箱即用
+  - `scripts/brain-init.sh` / `scripts/vibe-init.sh` 均支持 `--fresh` 参数，新用户一条命令开箱即用
   - 首次运行 + brain 非空时交互式询问是否清空（防止直接 clone 而非 fork 的场景）
   - 非交互模式（如 CI/CD）自动选择重置
-  - `brain-check.sh` Check 11 验证 brain 所有权
+  - `scripts/brain-check.sh` Check 11 验证 brain 所有权
   - 设计目标：fork/clone 即开箱即用，最多一次 Y/n 确认
 - [2026-04-22] ADR-014: Architecture 模板与实例分离（Template vs Instance Separation）
   - `docs/architecture.md` 保留为 Harness 仓库自身的架构文档（填入真实的模块划分、数据模型、数据流）
   - 新增 `docs/architecture-template.md` 作为新项目的空白架构模板
-  - `vibe-init.sh` harness 模式改为复制 `architecture-template.md` → 目标项目的 `docs/architecture.md`
-  - `vibe-init.sh` inline 模式优先使用 template 文件，fallback 到内联生成
+  - `scripts/vibe-init.sh` harness 模式改为复制 `architecture-template.md` → 目标项目的 `docs/architecture.md`
+  - `scripts/vibe-init.sh` inline 模式优先使用 template 文件，fallback 到内联生成
   - 新项目不再继承 Harness 的业务目标，拿到的是干净的待填写模板
   - 解决问题：之前 `safe_copy` 会把 Harness 自身的「业务最终目标」复制到新项目，导致 AI 对齐错误的业务方向
 
@@ -90,7 +90,7 @@
   - Harness 仓库（公开）：工程护栏、脚本工具、框架 ADR → `mick_harness_rules`
   - Brain 仓库（私有）：个人记忆、偏好、项目经验 → `mick_brain`（`https://github.com/MickMi/mick_brain`）
   - Brain 仓库默认 clone 到 `~/.mick-brain/`，harness 中的 `brain/` 目录通过 symlink 指向它
-  - 新增 `brain-resolve.sh` 共享库：所有 brain-*.sh 脚本 source 它来解析 BRAIN_DIR 路径
+  - 新增 `scripts/brain-resolve.sh` 共享库：所有 brain-*.sh 脚本 source 它来解析 BRAIN_DIR 路径
   - `.brain-config.yaml` 新增 `brain_repo.remote` 和 `brain_repo.local_path` 配置
   - 向后兼容：未配置 brain_repo 时，所有脚本 fallback 到本地 `brain/` 目录
   - 变更原因：需要对外分享 harness 仓库，但个人记忆不应公开；多机同步需要 Git，本地存储不够
@@ -101,7 +101,7 @@
   - 智能文件策略：已有文件跳过（不覆盖），不存在则从模板生成
   - 自动尝试拉取 Brain 仓库，失败则 fallback 到本地目录
   - 支持 `--fresh`（清空 brain）和 `--no-vibe`（跳过脚手架文件）参数
-  - 与 `brain-init.sh` / `vibe-init.sh` 共存：setup.sh 是"项目内 clone 模式"入口，后者是"全局仓库 symlink 模式"入口
+  - 与 `scripts/brain-init.sh` / `scripts/vibe-init.sh` 共存：setup.sh 是"项目内 clone 模式"入口，后者是"全局仓库 symlink 模式"入口
   - 更新 harness 版本只需 `cd .harness && git pull`
   - 设计目标：开箱即用，一行命令完成所有初始化，降低使用门槛
 - [2026-06-03] ADR-018: 状态驱动的角色调度（State-Driven Orchestration v2）
@@ -127,7 +127,7 @@
   - **豁免清单收紧**：删除"用户在询问而非要求执行"豁免条件。豁免时必须在回复第一行输出 `[⚡ 豁免 · 理由]`
   - **Anti-Wall Debug Card 内联**：Debug Card 格式模板直接写入 core.md 铁律 5，保证 lean/full 所有 profile 可达
   - **plan.md 缺失时基础约束**：core.md 铁律 0c 增加多文件改动时主动建议用 Planner 产 plan
-  - **修复**：MEMORY.md ADR-018 重复编号修复（ADR-018→ADR-020）；extended.md §10.2 重复段删除；harness-audit.sh 正则修复；README mermaid 图更新
+  - **修复**：MEMORY.md ADR-018 重复编号修复（ADR-018→ADR-020）；extended.md §10.2 重复段删除；scripts/harness-audit.sh 正则修复；README mermaid 图更新
 - [2026-06-04] ADR-019: 工作流配置参数化（Setup Interactive Configuration v3）
   - **痛点**：v2 把工作流串通了，但 Agent 模板里的产物契约对所有用户写死（如 Designer 总是出 HTML），与"用户用 Figma Maker / 有专职设计师 / 纯后端"等真实场景不匹配，导致工作流仍然不契合。
   - **决策**：在 v2 基础上加一层"项目级工作流配置"。setup.sh 首次运行通过**5 题交互式问答**生成 `.harness-config.yaml`；Agent 模板改为**内嵌多分支** + **runtime 读 config** 决定走哪个分支。
@@ -149,10 +149,10 @@
   - **单一数据源**：`rules/core.md`（10 条铁律，弱模型优化，极短极硬）+ `rules/extended.md`（完整工程深度）。
   - **生成器 `generate.sh`**：两套 profile —— lean（core 内联 + extended 指针，省 context：AGENTS/CLAUDE/Copilot/Trae）、full（全量内联：Cursor/Windsurf/Cline）。产物落 `dist/`（gitignore，每次 mount 前重生成）。
   - **AGENTS.md 一等输出**：对接 2025 跨工具标准（Codex/Zed/Aider）。
-  - **共享挂载库 `lib-mount-rules.sh`**：`setup.sh` 与 `brain-init.sh` 都 source 它，避免两入口漂移；只 gitignore harness 真正 symlink 的文件（不误伤项目自有的 AGENTS.md/CLAUDE.md）。
+  - **共享挂载库 `scripts/lib-mount-rules.sh`**：`setup.sh` 与 `scripts/brain-init.sh` 都 source 它，避免两入口漂移；只 gitignore harness 真正 symlink 的文件（不误伤项目自有的 AGENTS.md/CLAUDE.md）。
   - **角色路由简化**：弱模型不做自动路由，改显式点名（extended.md 第 8 节）；`.prompts/` → `rules/roles/`，补齐一直缺失的 `designer.md`。
   - **Brain 写入下沉**：并入 extended.md 第 9 节，随生成器流入 full-profile 文件，弃用 `brain-rules-template.md` + 各脚本的 inject 逻辑。
-  - **顺带修复**：`brain-resolve.sh` 双源守卫在 `set -u` 下崩溃（`$BRAIN_RESOLVE_LOADED` → `${BRAIN_RESOLVE_LOADED:-}`），此前会让 brain-check 整体失败。
+  - **顺带修复**：`scripts/brain-resolve.sh` 双源守卫在 `set -u` 下崩溃（`$BRAIN_RESOLVE_LOADED` → `${BRAIN_RESOLVE_LOADED:-}`），此前会让 brain-check 整体失败。
   - **删除**：根 `.cursorrules`、`brain-rules-template.md`（均被单源取代）。
   - **新增检查**：brain-check Check 13 验证 dist/ 与单源同步 + AGENTS.md 已挂载。
 

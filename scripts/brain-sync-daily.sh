@@ -16,7 +16,7 @@ set -uo pipefail
 # ============================================================
 
 # --- Paths ---
-HARNESS_ROOT="$(cd "$(dirname "$0")" && pwd)"
+HARNESS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # Auto-detect: use env var or find most recent Claude Code project dir
 if [ -n "${CLAUDE_PROJECT_DIR:-}" ]; then
     TRANSCRIPT_DIR="$CLAUDE_PROJECT_DIR"
@@ -33,7 +33,7 @@ BRAIN_REPO=""
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"; }
 
 # --- Resolve brain ---
-source "$HARNESS_ROOT/brain-resolve.sh"
+source "$HARNESS_ROOT/scripts/brain-resolve.sh""
 resolve_brain_dir "$HARNESS_ROOT"
 if [ -n "${BRAIN_REPO_LOCAL:-}" ]; then
     BRAIN_REPO="$BRAIN_REPO_LOCAL"
@@ -235,9 +235,9 @@ PROMPTEOF
             [ -z "$line" ] && continue
             [ ${#line} -lt 5 ] && continue
             if [ -n "$PROJECT_SLUG" ]; then
-                "$HARNESS_ROOT/brain-push.sh" --layer project --project "$PROJECT_SLUG" --source claude-code --no-sync "$line" 2>/dev/null || true
+                "$HARNESS_ROOT/scripts/brain-push.sh" --layer project --project "$PROJECT_SLUG" --source claude-code --no-sync "$line" 2>/dev/null || true
             else
-                "$HARNESS_ROOT/brain-push.sh" --layer session --source claude-code --no-sync "$line" 2>/dev/null || true
+                "$HARNESS_ROOT/scripts/brain-push.sh" --layer session --source claude-code --no-sync "$line" 2>/dev/null || true
             fi
         done <<< "$LEARNINGS"
     fi
@@ -252,12 +252,12 @@ done
 
 # --- Run brain-compound ---
 log "Running brain-compound..."
-"$HARNESS_ROOT/brain-compound.sh" --daily 2>>"$LOG_FILE" || log "brain-compound --daily had errors"
+"$HARNESS_ROOT/scripts/brain-compound.sh" --daily 2>>"$LOG_FILE" || log "brain-compound --daily had errors"
 
 # Sunday: also run weekly
 if [ "$(date +%u)" = "7" ]; then
     log "Sunday: running brain-compound --weekly"
-    "$HARNESS_ROOT/brain-compound.sh" --weekly 2>>"$LOG_FILE" || log "brain-compound --weekly had errors"
+    "$HARNESS_ROOT/scripts/brain-compound.sh" --weekly 2>>"$LOG_FILE" || log "brain-compound --weekly had errors"
 fi
 
 # --- Final push ---

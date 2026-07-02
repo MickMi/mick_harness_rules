@@ -23,10 +23,10 @@ warn()  { echo -e "${YELLOW}⚠️  $1${NC}"; }
 fail()  { echo -e "${RED}❌ $1${NC}"; }
 
 # --- Resolve harness repo root (where this script lives) ---
-HARNESS_ROOT="$(cd "$(dirname "$0")" && pwd)"
+HARNESS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # --- Source shared brain resolver ---
-source "$HARNESS_ROOT/brain-resolve.sh"
+source "$HARNESS_ROOT/scripts/brain-resolve.sh""
 resolve_brain_dir "$HARNESS_ROOT"
 
 # --- Default values ---

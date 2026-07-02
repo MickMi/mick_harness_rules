@@ -188,7 +188,7 @@ if [ "$QUICK_MODE" != true ]; then
 fi
 
 # --- Source shared rule-mounting library ---
-source "$HARNESS_ROOT/lib-mount-rules.sh"
+source "$HARNESS_ROOT/scripts/lib-mount-rules.sh"
 
 # ============================================================
 # Phase 0.5: Regenerate rule files from single source
@@ -332,7 +332,7 @@ if [ "$QUICK_MODE" != true ]; then
 fi
 
 CONFIG_FILE="$TARGET_DIR/.harness-config.yaml"
-TEMPLATE_FILE="$HARNESS_ROOT/.harness-config.template.yaml"
+TEMPLATE_FILE="$HARNESS_ROOT/config/.harness-config.template.yaml"
 
 if [ -f "$CONFIG_FILE" ] && [ "$RECONFIGURE" = false ]; then
     if [ "$QUICK_MODE" != true ]; then
@@ -402,7 +402,7 @@ fi
 info "Phase 5/6: Setting up Brain repository..."
 
 # Source the shared brain resolver
-source "$HARNESS_ROOT/brain-resolve.sh"
+source "$HARNESS_ROOT/scripts/brain-resolve.sh"
 resolve_brain_dir "$HARNESS_ROOT"
 
 if [ -n "$BRAIN_REPO_REMOTE" ]; then
@@ -419,7 +419,7 @@ if [ -n "$BRAIN_REPO_REMOTE" ]; then
         else
             warn "Could not clone brain repo. This is normal for fork users."
             warn "Brain will use local fallback. You can configure your own brain repo later"
-            warn "by editing .harness/.brain-config.yaml"
+            warn "by editing .harness/config/.brain-config.yaml"
         fi
     fi
 
@@ -567,7 +567,7 @@ record_owner() {
 
     cat << OWNER_EOF > "$BRAIN_OWNER_FILE"
 # Brain Owner Identity
-# Managed by setup.sh / brain-init.sh — DO NOT edit manually.
+# Managed by setup.sh / scripts/brain-init.sh — DO NOT edit manually.
 owner: $owner
 repo: $new_repo
 system_user: $sys_user
@@ -657,12 +657,12 @@ echo ""
 info "Phase 6/6: Running integrity check..."
 echo ""
 
-BRAIN_CHECK="$HARNESS_ROOT/brain-check.sh"
+BRAIN_CHECK="$HARNESS_ROOT/scripts/brain-check.sh"
 if [ -x "$BRAIN_CHECK" ]; then
     "$BRAIN_CHECK" "$TARGET_DIR"
     CHECK_EXIT=$?
 else
-    warn "brain-check.sh not found or not executable. Skipping verification."
+    warn "scripts/brain-check.sh not found or not executable. Skipping verification."
     CHECK_EXIT=0
 fi
 
@@ -697,8 +697,8 @@ echo "    1. Fill in Tech Stack Constraints in .harness/rules/extended.md, then"
 echo "       re-run '.harness/generate.sh' to propagate to every tool."
 echo "    2. Start your first AI conversation — it will auto-detect the blank"
 echo "       architecture.md and guide you through Goal Discovery."
-echo "    3. Use '.harness/brain-push.sh' to write learnings."
-echo "    4. Use '.harness/brain-search.sh <keyword>' to search memory."
+echo "    3. Use '.harness/scripts/brain-push.sh' to write learnings."
+echo "    4. Use '.harness/scripts/brain-search.sh <keyword>' to search memory."
 echo ""
 echo "  Edit rules once, regenerate everywhere:"
 echo "    vim .harness/rules/core.md   # the 10 core rules (weak-model optimized)"

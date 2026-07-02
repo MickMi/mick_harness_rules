@@ -27,9 +27,9 @@ fail()  { echo -e "${RED}❌ $1${NC}"; }
 
 # --- Resolve harness repo root ---
 # Can be called from:
-#   1. Directly: /path/to/harness/brain-search.sh
-#   2. Via symlink: .harness/brain-search.sh
-HARNESS_ROOT="$(cd "$(dirname "$0")" && pwd)"
+#   1. Directly: /path/to/harness/scripts/brain-search.sh
+#   2. Via symlink: .harness/scripts/brain-search.sh
+HARNESS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # If called via symlink, resolve the real path
 if [ -L "$0" ]; then
     REAL_SCRIPT="$(readlink "$0")"
@@ -37,7 +37,7 @@ if [ -L "$0" ]; then
 fi
 
 # --- Source shared brain resolver ---
-source "$HARNESS_ROOT/brain-resolve.sh"
+source "$HARNESS_ROOT/scripts/brain-resolve.sh""
 resolve_brain_dir "$HARNESS_ROOT"
 
 # --- Default values ---

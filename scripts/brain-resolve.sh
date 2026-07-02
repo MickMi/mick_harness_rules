@@ -23,7 +23,7 @@ BRAIN_RESOLVE_LOADED=true
 # --- Resolve brain repo configuration from .brain-config.yaml ---
 resolve_brain_dir() {
     local harness_root="$1"
-    local config_file="$harness_root/.brain-config.yaml"
+    local config_file="$harness_root/config/.brain-config.yaml"
 
     BRAIN_IS_EXTERNAL="false"
     BRAIN_REPO_LOCAL=""

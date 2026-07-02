@@ -15,7 +15,7 @@ set -euo pipefail
 #   7. Plan integrity (required sections exist)
 #
 # Usage:
-#   .harness/harness-audit.sh [--since <commit>] [--log]
+#   .harness/scripts/harness-audit.sh [--since <commit>] [--log]
 #
 # Run from your project root (parent of .harness/).
 # ============================================================
@@ -41,7 +41,7 @@ while [[ $# -gt 0 ]]; do
         --since) shift; SINCE="${1:-HEAD~1}"; shift ;;
         --log) LOG_MODE=true; shift ;;
         -h|--help)
-            echo "Usage: .harness/harness-audit.sh [--since <commit>] [--log]"
+            echo "Usage: .harness/scripts/harness-audit.sh [--since <commit>] [--log]"
             echo ""
             echo "Options:"
             echo "  --since <commit>  Git diff base (default: HEAD~1)"
@@ -55,7 +55,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # --- Resolve paths ---
-HARNESS_ROOT="$(cd "$(dirname "$0")" && pwd)"
+HARNESS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROJECT_DIR="$(cd "$HARNESS_ROOT/.." && pwd)"
 PLAN="$PROJECT_DIR/plan.md"
 
@@ -315,7 +315,7 @@ if [ "$LOG_MODE" = true ]; then
     TRAIL_FILE=""
     if [ -f "$HARNESS_ROOT/brain-resolve.sh" ]; then
         # shellcheck disable=SC1091
-        source "$HARNESS_ROOT/brain-resolve.sh"
+        source "$HARNESS_ROOT/scripts/brain-resolve.sh""
         if resolve_brain_dir "$HARNESS_ROOT" 2>/dev/null && [ -n "${BRAIN_DIR:-}" ] && [ -d "$BRAIN_DIR" ]; then
             mkdir -p "$BRAIN_DIR/global/evolution"
             TRAIL_FILE="$BRAIN_DIR/global/evolution/audit-trail.md"

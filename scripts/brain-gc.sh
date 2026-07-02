@@ -35,10 +35,10 @@ fail()  { echo -e "${RED}❌ $1${NC}"; }
 header(){ echo -e "${BOLD}${MAGENTA}$1${NC}"; }
 
 # --- Resolve harness repo root ---
-HARNESS_ROOT="$(cd "$(dirname "$0")" && pwd)"
+HARNESS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # --- Source shared brain resolver ---
-source "$HARNESS_ROOT/brain-resolve.sh"
+source "$HARNESS_ROOT/scripts/brain-resolve.sh""
 resolve_brain_dir "$HARNESS_ROOT"
 
 ARCHIVE_DIR="$BRAIN_DIR/.archive"
@@ -49,7 +49,7 @@ MEMORY_MAX_LINES=200
 MEMORY_FILE="$BRAIN_DIR/MEMORY.md"
 
 # --- Try to read config from .brain-config.yaml ---
-BRAIN_CONFIG="$HARNESS_ROOT/.brain-config.yaml"
+BRAIN_CONFIG="$HARNESS_ROOT/config/.brain-config.yaml"
 if [ -f "$BRAIN_CONFIG" ]; then
     # Simple YAML parsing for our known keys
     config_ttl=$(grep 'session_ttl_days:' "$BRAIN_CONFIG" 2>/dev/null | awk '{print $2}' | tr -d ' ')

@@ -11,7 +11,7 @@ set -euo pipefail
 #   3. plan compliance audit passes, or warns in soft mode
 #
 # Usage:
-#   .harness/harness-guard.sh [--since <commit>] [--strict|--soft]
+#   .harness/scripts/harness-guard.sh [--since <commit>] [--strict|--soft]
 # ============================================================
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
@@ -33,14 +33,14 @@ while [[ $# -gt 0 ]]; do
         --strict) MODE_OVERRIDE="strong"; shift ;;
         --soft) MODE_OVERRIDE="soft"; shift ;;
         -h|--help)
-            echo "Usage: .harness/harness-guard.sh [--since <commit>] [--strict|--soft]"
+            echo "Usage: .harness/scripts/harness-guard.sh [--since <commit>] [--strict|--soft]"
             exit 0
             ;;
         *) echo "Unknown option: $1"; exit 1 ;;
     esac
 done
 
-HARNESS_ROOT="$(cd "$(dirname "$0")" && pwd)"
+HARNESS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROJECT_DIR="$(cd "$HARNESS_ROOT/.." && pwd)"
 CONFIG="$PROJECT_DIR/.harness-config.yaml"
 PLAN="$PROJECT_DIR/plan.md"
@@ -107,8 +107,8 @@ fi
 echo -e "${CYAN}Check 3: plan compliance${NC}"
 if [ ! -f "$PLAN" ]; then
     pass "no plan.md found; plan audit skipped"
-elif [ -x "$HARNESS_ROOT/harness-audit.sh" ]; then
-    if "$HARNESS_ROOT/harness-audit.sh" --since "$SINCE"; then
+elif [ -x "$HARNESS_ROOT/scripts/harness-audit.sh" ]; then
+    if "$HARNESS_ROOT/scripts/harness-audit.sh" --since "$SINCE"; then
         pass "harness-audit passed"
     else
         if [ "$STRICTNESS" = "strong" ]; then

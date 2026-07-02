@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# lib-mount-rules.sh — Shared rule-mounting logic (sourced, not executed)
+# scripts/lib-mount-rules.sh — Shared rule-mounting logic (sourced, not executed)
 #
 # Single source of truth for how generated rule files get mounted into a
 # target project. Sourced by both setup.sh (clone-in-place mode) and

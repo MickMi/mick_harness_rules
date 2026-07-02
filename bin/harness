@@ -113,8 +113,8 @@ cmd_init() {
     fi
 
     # --- 3. Mount rule files into project ---
-    if [ -f "$HARNESS_GLOBAL/lib-mount-rules.sh" ]; then
-        source "$HARNESS_GLOBAL/lib-mount-rules.sh"
+    if [ -f "$HARNESS_GLOBAL/scripts/lib-mount-rules.sh" ]; then
+        source "$HARNESS_GLOBAL/scripts/lib-mount-rules.sh"
         mount_rule_files "$HARNESS_GLOBAL" "$target" 2>/dev/null || true
         ok "Rules mounted to project root."
     fi
@@ -136,8 +136,8 @@ cmd_init() {
     # --- 5. Config ---
     local config="$target/.harness-config.yaml"
     if [ ! -f "$config" ]; then
-        if [ -f "$HARNESS_GLOBAL/.harness-config.template.yaml" ]; then
-            cp "$HARNESS_GLOBAL/.harness-config.template.yaml" "$config"
+        if [ -f "$HARNESS_GLOBAL/config/.harness-config.template.yaml" ]; then
+            cp "$HARNESS_GLOBAL/config/.harness-config.template.yaml" "$config"
             ok ".harness-config.yaml created. Edit it to set your preferences."
         fi
     else
@@ -178,8 +178,8 @@ EOF
     fi
 
     # --- 7. Brain repo — connect if configured ---
-    if [ -f "$HARNESS_GLOBAL/brain-resolve.sh" ]; then
-        source "$HARNESS_GLOBAL/brain-resolve.sh"
+    if [ -f "$HARNESS_GLOBAL/scripts/brain-resolve.sh" ]; then
+        source "$HARNESS_GLOBAL/scripts/brain-resolve.sh"
         resolve_brain_dir "$HARNESS_GLOBAL" 2>/dev/null || true
         if [ -n "${BRAIN_REPO_REMOTE:-}" ]; then
             local brain_local="${BRAIN_REPO_LOCAL:-$HOME/.mick-brain}"
@@ -203,8 +203,8 @@ EOF
 
     # --- 8. Verify — run brain-check ---
     echo ""
-    if [ -x "$HARNESS_GLOBAL/brain-check.sh" ]; then
-        "$HARNESS_GLOBAL/brain-check.sh" "$target" 2>&1 || true
+    if [ -x "$HARNESS_GLOBAL/scripts/brain-check.sh" ]; then
+        "$HARNESS_GLOBAL/scripts/brain-check.sh" "$target" 2>&1 || true
     fi
 
     echo ""
@@ -244,8 +244,8 @@ cmd_update() {
             [ ! -d "$proj" ] && continue
             local link="$proj/.harness"
             info "Refreshing: $proj"
-            if [ -f "$HARNESS_GLOBAL/lib-mount-rules.sh" ]; then
-                source "$HARNESS_GLOBAL/lib-mount-rules.sh"
+            if [ -f "$HARNESS_GLOBAL/scripts/lib-mount-rules.sh" ]; then
+                source "$HARNESS_GLOBAL/scripts/lib-mount-rules.sh"
                 mount_rule_files "$HARNESS_GLOBAL" "$proj" 2>/dev/null || true
             fi
         done < "$reg"
@@ -259,10 +259,10 @@ cmd_update() {
 # ============================================================
 cmd_check() {
     local target="${1:-$(pwd)}"
-    if [ -x "$HARNESS_GLOBAL/brain-check.sh" ]; then
-        "$HARNESS_GLOBAL/brain-check.sh" "$target"
+    if [ -x "$HARNESS_GLOBAL/scripts/brain-check.sh" ]; then
+        "$HARNESS_GLOBAL/scripts/brain-check.sh" "$target"
     else
-        fail "brain-check.sh not found."
+        fail "scripts/brain-check.sh not found."
         exit 1
     fi
 }

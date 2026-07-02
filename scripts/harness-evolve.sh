@@ -17,7 +17,7 @@ set -euo pipefail
 #   <project>/docs/evolution/proposal-YYYY-MM-DD.md
 #
 # Usage:
-#   .harness/harness-evolve.sh [--since 30d] [--threshold 3]
+#   .harness/scripts/harness-evolve.sh [--since 30d] [--threshold 3]
 #
 # Design principles:
 #   - Proposes, never auto-applies (human gate = no drift)
@@ -38,7 +38,7 @@ while [[ $# -gt 0 ]]; do
         --since) shift; SINCE_DAYS="${1:-30}"; SINCE_DAYS="${SINCE_DAYS%d}"; shift ;;
         --threshold) shift; THRESHOLD="${1:-3}"; shift ;;
         -h|--help)
-            echo "Usage: .harness/harness-evolve.sh [--since 30d] [--threshold 3]"
+            echo "Usage: .harness/scripts/harness-evolve.sh [--since 30d] [--threshold 3]"
             echo ""
             echo "Aggregates execution signal from Brain and proposes rule changes."
             echo "Writes a proposal to docs/evolution/ — never edits rules/*.md."
@@ -54,7 +54,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # --- Resolve paths ---
-HARNESS_ROOT="$(cd "$(dirname "$0")" && pwd)"
+HARNESS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROJECT_DIR="$(cd "$HARNESS_ROOT/.." && pwd)"
 
 # --- Resolve signal source: first existing candidate wins ---
@@ -62,7 +62,7 @@ PROJECT_DIR="$(cd "$HARNESS_ROOT/.." && pwd)"
 CANDIDATES=()
 if [ -f "$HARNESS_ROOT/brain-resolve.sh" ]; then
     # shellcheck disable=SC1091
-    source "$HARNESS_ROOT/brain-resolve.sh"
+    source "$HARNESS_ROOT/scripts/brain-resolve.sh""
     if resolve_brain_dir "$HARNESS_ROOT" 2>/dev/null && [ -n "${BRAIN_DIR:-}" ]; then
         CANDIDATES+=("$BRAIN_DIR/global/evolution/audit-trail.md")
     fi
@@ -75,7 +75,7 @@ for c in "${CANDIDATES[@]}"; do
 done
 
 if [ -z "$TRAIL_FILE" ]; then
-    warn "No audit signal found. Run '.harness/harness-audit.sh --log' a few times first."
+    warn "No audit signal found. Run '.harness/scripts/harness-audit.sh --log' a few times first."
     exit 0
 fi
 

@@ -3,7 +3,7 @@ set -uo pipefail
 
 # ============================================================
 # brain-check.sh — Verify harness + brain mount integrity
-# Usage: /path/to/mick_harness_rules/brain-check.sh [target_project_dir]
+# Usage: /path/to/mick_harness_rules/scripts/brain-check.sh [target_project_dir]
 # If no target dir is given, uses current working directory.
 #
 # Exit codes:
@@ -28,10 +28,10 @@ check_warn() { echo -e "  ${YELLOW}⚠️  WARN${NC}: $1"; ((WARN++)); }
 check_fail() { echo -e "  ${RED}❌ FAIL${NC}: $1"; ((FAIL++)); }
 
 # --- Resolve harness repo root ---
-HARNESS_ROOT="$(cd "$(dirname "$0")" && pwd)"
+HARNESS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # --- Source shared brain resolver ---
-source "$HARNESS_ROOT/brain-resolve.sh"
+source "$HARNESS_ROOT/scripts/brain-resolve.sh""
 resolve_brain_dir "$HARNESS_ROOT"
 
 # --- Resolve target project directory ---
@@ -197,7 +197,7 @@ fi
 # Check 7: .brain-config.yaml exists
 # ============================================================
 echo "📋 Check 7: .brain-config.yaml"
-BRAIN_CONFIG="$HARNESS_ROOT/.brain-config.yaml"
+BRAIN_CONFIG="$HARNESS_ROOT/config/.brain-config.yaml"
 if [ -f "$BRAIN_CONFIG" ]; then
     check_pass ".brain-config.yaml exists"
 else
@@ -244,8 +244,8 @@ MEMORY_FILE="$BRAIN_DIR/MEMORY.md"
 MEMORY_MAX_LINES=200
 
 # Try to read config
-if [ -f "$HARNESS_ROOT/.brain-config.yaml" ]; then
-    config_max=$(grep 'max_memory_file_lines:' "$HARNESS_ROOT/.brain-config.yaml" 2>/dev/null | awk '{print $2}' | tr -d ' ')
+if [ -f "$HARNESS_ROOT/config/.brain-config.yaml" ]; then
+    config_max=$(grep 'max_memory_file_lines:' "$HARNESS_ROOT/config/.brain-config.yaml" 2>/dev/null | awk '{print $2}' | tr -d ' ')
     [ -n "$config_max" ] && MEMORY_MAX_LINES="$config_max"
 fi
 
@@ -373,11 +373,11 @@ fi
 # Check 16: Harness Guard available
 # ============================================================
 echo "📋 Check 16: Harness Guard"
-GUARD="$HARNESS_ROOT/harness-guard.sh"
+GUARD="$HARNESS_ROOT/scripts/harness-guard.sh"
 if [ -x "$GUARD" ]; then
     check_pass "harness-guard.sh is available and executable"
 else
-    check_warn "harness-guard.sh is missing or not executable. Run 'chmod +x .harness/harness-guard.sh'."
+    check_warn "harness-guard.sh is missing or not executable. Run 'chmod +x .harness/scripts/harness-guard.sh'."
 fi
 
 # ============================================================
