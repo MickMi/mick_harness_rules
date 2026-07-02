@@ -354,6 +354,7 @@ cmd_report() {
 # harness metrics — aggregate task quality metrics
 # ============================================================
 cmd_metrics() {
+    set +e  # grep -c returns 1 on zero matches, don't abort
     local target="${1:-$(pwd)}"
     local plan="$target/plan.md"
     local audit_log=""
@@ -373,8 +374,8 @@ cmd_metrics() {
         verify_failed=$(grep -cE '^- verify:.*(failed|失败|FAIL)' "$plan" 2>/dev/null); verify_failed=${verify_failed:-0}
         log_count=$(grep -cE '^### Step' "$plan" 2>/dev/null); log_count=${log_count:-0}
         deviations=$(grep -cE '偏离|deviation|diverged' "$plan" 2>/dev/null); deviations=${deviations:-0}
-        verify_missing=$((log_count - verify_ok - verify_failed))
-        [ "$verify_missing" -lt 0 ] && verify_missing=0
+        verify_missing=$(( ${log_count:-0} - ${verify_ok:-0} - ${verify_failed:-0} ))
+        [ "${verify_missing:-0}" -lt 0 ] && verify_missing=0
 
         echo ""
         echo "  ── Plan Execution ──"
@@ -410,6 +411,7 @@ cmd_metrics() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  → 运行 'harness report' 查看当前任务详情。"
     echo ""
+    set -e
 }
 
 # ============================================================
