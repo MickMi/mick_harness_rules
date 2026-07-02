@@ -74,7 +74,6 @@ cmd_install() {
 # harness init [project-dir] — one-command project bootstrap
 # ============================================================
 cmd_init() {
-    # Ensure harness is installed globally
     if [ ! -d "$HARNESS_GLOBAL/.git" ]; then
         info "Harness not yet installed. Installing first..."
         cmd_install || { fail "Install failed."; exit 1; }
@@ -93,24 +92,53 @@ cmd_init() {
     echo "  Target: $target"
     echo ""
 
-    # Symlink .harness/ → global harness, then delegate to setup.sh
-    local harness_link="$target/.harness"
-    if [ -L "$harness_link" ]; then
-        ok ".harness/ already exists. (idempotent)"
-    elif [ -d "$harness_link" ]; then
-        warn ".harness/ already exists as a real directory. Skipping."
+    # 1. Symlink
+    local hl="$target/.harness"
+    if [ -L "$hl" ]; then
+        ok ".harness/ already exists."
+    elif [ -d "$hl" ]; then
+        warn ".harness/ is a real directory. Skipping symlink."
     else
-        ln -s "$HARNESS_GLOBAL" "$harness_link"
-        ok ".harness/ → $HARNESS_GLOBAL"
+        ln -s "$HARNESS_GLOBAL" "$hl" && ok ".harness/ → $HARNESS_GLOBAL"
     fi
 
-    # Delegate to setup.sh for all init steps (single source of truth)
-    if [ -x "$harness_link/setup.sh" ]; then
-        "$harness_link/setup.sh" "$@"
-    else
-        fail "setup.sh not found at $harness_link/setup.sh"
-        exit 1
+    # 2. Generate + mount
+    local g="$HARNESS_GLOBAL/generate.sh"
+    [ -x "$g" ] && { "$g" --all >/dev/null 2>&1; ok "AGENTS.md generated."; }
+    if [ -f "$HARNESS_GLOBAL/scripts/lib-mount-rules.sh" ]; then
+        source "$HARNESS_GLOBAL/scripts/lib-mount-rules.sh"
+        mount_rule_files "$HARNESS_GLOBAL" "$target"
     fi
+
+    # 3. .gitignore
+    local gi="$target/.gitignore"
+    [ ! -f "$gi" ] && touch "$gi"
+    for e in ".harness/" ".harness" ".prompts/" ".prompts" "${HARNESS_OWNED_FILES[@]}"; do
+        grep -qxF "$e" "$gi" 2>/dev/null || echo "$e" >> "$gi"
+    done
+    ok ".gitignore updated."
+
+    # 4. Config
+    local cf="$target/.harness-config.yaml"
+    if [ ! -f "$cf" ] && [ -f "$HARNESS_GLOBAL/config/.harness-config.template.yaml" ]; then
+        cp "$HARNESS_GLOBAL/config/.harness-config.template.yaml" "$cf"
+    fi
+    ok ".harness-config.yaml ready."
+
+    # 5. Brain + Verify
+    if [ -f "$HARNESS_GLOBAL/scripts/brain-resolve.sh" ]; then
+        source "$HARNESS_GLOBAL/scripts/brain-resolve.sh"
+        resolve_brain_dir "$HARNESS_GLOBAL" 2>/dev/null || true
+        if [ -n "${BRAIN_REPO_REMOTE:-}" ] && [ ! -d "${BRAIN_REPO_LOCAL:-}/.git" ]; then
+            git clone --quiet "$BRAIN_REPO_REMOTE" "${BRAIN_REPO_LOCAL:-$HOME/.mick-brain}" 2>/dev/null || true
+        fi
+    fi
+    [ -x "$HARNESS_GLOBAL/scripts/brain-check.sh" ] && "$HARNESS_GLOBAL/scripts/brain-check.sh" "$target" 2>&1 || true
+
+    echo ""
+    echo -e "${GREEN}${BOLD}✅ Done.${NC} 当前项目受 Harness 约束。"
+    echo "  验证 Agent: 让它做 Harness Self-Test。"
+    echo ""
 }
 
 # ============================================================
