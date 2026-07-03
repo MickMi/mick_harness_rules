@@ -7,6 +7,26 @@ All notable changes to Mick Harness Rules are documented in this file.
 This project follows Semantic Versioning 2.0. Git tags in the form `vX.Y.Z`
 are the release source of truth.
 
+## [0.9.1] - 2026-07-03
+
+### Changed
+
+- Refined the round card into five fixed one-line slots: current round, overall
+  state, next step, context/status, and blocker.
+- Moved reasoning depth into the current-round line instead of keeping it as a
+  separate card row.
+- Replaced optional SOS wording with a mandatory blocker row.
+- Added a mandatory context load status format using either an approximate range
+  with structural sources or a measured percentage with category distribution.
+
+### Notes
+
+- Approximate context status uses the format
+  `上下文负载约 70-85%（长线程 + 多轮工具输出 + 多轮决策）`.
+- Measured context status uses the format
+  `上下文负载 72%（工具输出 38% / 对话 34% / 规则 18% / 文件 10%）`.
+- The status line reports state only; any action belongs in the next-step line.
+
 ## [0.9.0] - 2026-07-03
 
 ### Status
