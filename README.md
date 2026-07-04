@@ -7,25 +7,54 @@
 ## 阶段一：安装（新机器一次，30 秒）
 
 ```bash
+harness install
+harness version
+```
+
+如果你还没有 `harness` 命令，先手动引导一次：
+
+```bash
 git clone https://github.com/MickMi/mick_harness_rules.git ~/.mick-harness
-ln -s ~/.mick-harness/bin/harness ~/.local/bin/harness
-harness version   # 验证
+mkdir -p ~/.local/bin
+ln -sf ~/.mick-harness/bin/harness ~/.local/bin/harness
+~/.local/bin/harness install
+```
+
+安装会自动扫描本机可用的文件型 Code Agent 入口，并注入 Harness loader。当前支持：
+
+| Agent | 自动入口 |
+|---|---|
+| Claude / Claude Code | `~/.claude/CLAUDE.md` |
+| Codex / Codex CLI | `~/.codex/AGENTS.md` |
+
+扫描和注入也可以手动运行：
+
+```bash
+harness agents scan
+harness agents sync
 ```
 
 ---
 
-## 阶段二：加载到 AI 工具（每个工具一次）
+## 阶段二：加载到 AI 工具（默认自动）
 
-| 你用什么 | 做什么 |
-|---------|--------|
-| Codex / Zed / Aider | `harness init`（在项目里） |
-| Claude Code | `harness export agent >> ~/.claude/CLAUDE.md` |
-| Cursor | `harness export ide \| pbcopy` → 粘贴到 Settings → Rules for AI |
-| WorkBuddy / 其他 Agent | `harness export agent \| pbcopy` → 粘贴到自定义指令 |
-| 纯 API 调用 | `harness export api \| pbcopy` → 粘贴到 system prompt |
-| Windsurf / Cline / Copilot / Trae | `harness export agent \| pbcopy` → 粘贴到全局规则 |
+`harness install`、`harness init`、`harness update` 都会自动执行 `harness agents sync`：
 
-> 需要完整 Playbook 时加 `--full`：`harness export agent --full`
+- 已识别且有文件型全局入口的 Agent，会自动注入或刷新 managed block。
+- 已经由 Harness 管理的旧 block，会自动替换成最新版本。
+- 不可安全识别的旧手工粘贴内容不会强删；先用 `harness agents scan` 看状态，再手动清理。
+
+需要复制到不支持文件注入的工具时，再用手动导出：
+
+| 场景 | 命令 |
+|---|---|
+| Codex loader | `harness export codex \| pbcopy` |
+| 通用 Code Agent | `harness export agent \| pbcopy` |
+| IDE Plugin | `harness export ide \| pbcopy` |
+| 纯 API 调用 | `harness export api \| pbcopy` |
+| 全部导出 | `harness export all` |
+
+需要完整 Playbook 时加 `--full`：`harness export agent --full`
 
 ---
 
@@ -41,7 +70,11 @@ harness init --all-rules  # 加 Cursor/Windsurf 等旧工具入口
 
 项目多出三个文件：`.harness/`（symlink）、`AGENTS.md`（symlink）、`.harness-config.yaml`。前两个不占 git，只有 config 需要 commit。
 
-> 如果项目之前装过旧版 Harness：`rm -rf .harness && harness init` 即可迁移到 symlink 模式。之后 `harness update` 统一刷新所有项目。
+如果项目之前装过旧版 Harness，不需要手动 `rm -rf`：
+
+- `.harness/` 是兼容的旧 Harness checkout：`harness init` 会自动移到 `.harness.legacy-<timestamp>`，再挂载全局 symlink。
+- `.harness/` 是未知目录：Harness 不会自动删除，只会提示你人工确认。
+- 旧的 Harness 管理 symlink / 注入块会在 `harness init` 或 `harness update` 时自动刷新或清理。
 
 ---
 
@@ -51,10 +84,18 @@ harness init --all-rules  # 加 Cursor/Windsurf 等旧工具入口
 harness report     # 看当前 plan 进度、阻塞、验证状态
 harness metrics    # 看完成率、验证覆盖率、scope creep
 harness check      # 验证脚手架完整性
-harness update     # 拉新版 Harness → 所有项目同步
+harness update     # 拉新版 Harness → 刷新注册项目 → 自动扫描并注入本机 Agent
 ```
 
 Agent 打开项目时自动读 `AGENTS.md`。Tripwire 第 11 行就位——改动文件前先读、先查 plan、没验证 ≠ 完成。闲聊不触发。
+
+更新时的自动化顺序：
+
+1. 拉取最新 Harness。
+2. 重新生成规则。
+3. 刷新所有注册项目的规则入口。
+4. 自动扫描 Claude / Codex 等本机 Code Agent。
+5. 自动注入或刷新可安全管理的全局 loader。
 
 ---
 
