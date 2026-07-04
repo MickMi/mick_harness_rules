@@ -15,6 +15,7 @@ dist/
 # OS files
 .DS_Store
 audit-log.md
+.registered-projects
 .harness/
 .harness
 .cursorrules
