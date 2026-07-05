@@ -2,9 +2,44 @@
 
 语言：[English](CHANGELOG.md) | 简体中文
 
-Mick Harness Rules 的重要变更都会记录在本文件中。
+Mick Agent Harness 的重要变更都会记录在本文件中。
 
 本项目遵循 Semantic Versioning 2.0。形如 `vX.Y.Z` 的 Git tag 是最终发布事实源。
+
+## [0.10.0] - 2026-07-06
+
+### 产品
+
+- 从 "Mick Harness Rules" 更名为 **Mick Agent Harness**——定位为个人 Agent 协作层，补充而非覆盖 Code Agent 的编码能力。
+- README 重写为完整产品文档，覆盖安装 → 初始化 → 同步 → 验证 → Brain → 进化六阶段，新增英文版 (`README.en.md`)。
+- 明确保证边界：Harness 是先验注入 + 后验检查 + 长期记忆 + 人工门禁的协作系统，不是魔法强制器。
+
+### Brain 架构
+
+- 引入 `ensure_brain_available`——Brain 不可用时不再阻断 `harness init`、`harness check` 或主 Harness 工作流，自动降级为本地私有 Brain。
+- 新增 `init_brain_skeleton` 统一 Brain 目录骨架创建。
+- 重构 Brain 解析逻辑：`BRAIN_REMOTE_STATUS` 独立追踪远程连接状态（connected / local / unavailable / none）。
+
+### Hook Adapter
+
+- 将工具专属 hook 逻辑提取到 `scripts/hook-adapters.sh`，命令入口保持 `harness brain install` 和 `harness brain status`。
+- 在 `config/.brain-config.yaml` 中新增 adapter registry——Claude Code 默认启用，Codex 和通用 adapter 需主动开启。
+- 新增 `scripts/brain-ingest.sh` 作为工具无关的 Brain 写入端点，支持 session 摘要、learning 和 failure 信号。
+
+### 规则生成
+
+- `generate.sh` 现在会跳过仅含占位文本的 Brain 源文件，不再注入空胶囊。
+- 新增 `generated_file_matches` 和 `strip_capsule_block`，使 dist 漂移检测忽略无害的胶囊块差异。
+
+### Harness 进化
+
+- `harness-evolve.sh` 现在除 audit trail 外还聚合可选信号文件（`harness-failures.md`、`corrections.md`、`banned-patterns.md`）。
+- 新增 9 个失败标签：`tripwire-missed`、`self-test-fake`、`fake-verification`、`plan-hijack`、`repeated-failure`、`under-asking`、`over-asking`、`executor-correction`、`banned-pattern`。
+
+### 内部
+
+- 安装和更新时对 `scripts/*.sh` 统一设置可执行权限。
+- Brain commit fallback 改为写入私有 Brain 仓库而非 Harness 仓库。
 
 ## [0.9.1] - 2026-07-03
 

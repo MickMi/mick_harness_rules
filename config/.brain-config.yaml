@@ -51,3 +51,39 @@ write_sources:
   cli: true
   # Webhook: post-conversation trigger
   webhook: false
+
+# --- Optional Hook Adapters ---
+# These adapters are installed through the existing command:
+#   harness brain install
+#
+# Defaults stay conservative:
+# - Claude Code keeps the current SessionEnd behavior.
+# - Codex / generic hooks are available but opt-in.
+# - Enabling an adapter must not break Harness install/init/update.
+hooks:
+  claude_code:
+    enabled: true
+    events:
+      - SessionEnd
+      - daily
+    content:
+      - session_digest
+      - learnings
+      - verification
+      - harness_failures
+
+  codex:
+    enabled: false
+    mode: inbox
+    content:
+      - session_digest
+      - learnings
+      - harness_failures
+
+  generic:
+    enabled: false
+    mode: command
+    content:
+      - session_digest
+      - learning
+      - failure

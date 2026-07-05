@@ -2,10 +2,61 @@
 
 Language: English | [简体中文](CHANGELOG.zh-CN.md)
 
-All notable changes to Mick Harness Rules are documented in this file.
+All notable changes to Mick Agent Harness are documented in this file.
 
 This project follows Semantic Versioning 2.0. Git tags in the form `vX.Y.Z`
 are the release source of truth.
+
+## [0.10.0] - 2026-07-06
+
+### Product
+
+- Renamed from "Mick Harness Rules" to **Mick Agent Harness** — a personal Agent
+  collaboration layer that supplements, not overrides, code-agent capability.
+- Rewrote README as a full product document covering install → init → sync →
+  verify → Brain → evolution, with a new English translation (`README.en.md`).
+- Clarified the guarantee boundary: Harness is prior injection + posterior checks
+  + long-term memory + human gatekeeping, not a magic enforcement layer.
+
+### Brain Architecture
+
+- Introduced `ensure_brain_available` — Brain unavailability never blocks
+  `harness init`, `harness check`, or the main Harness workflow. Falls back to a
+  private local Brain when the configured remote is unreachable.
+- Added `init_brain_skeleton` for consistent Brain directory structure.
+- Refactored Brain resolution: `BRAIN_REMOTE_STATUS` tracks connectivity
+  (connected / local / unavailable / none) separately from directory existence.
+
+### Hook Adapters
+
+- Extracted tool-specific hook logic into `scripts/hook-adapters.sh` so the
+  command surface stays `harness brain install` and `harness brain status`.
+- Added adapter registry in `config/.brain-config.yaml` — Claude Code defaults to
+  enabled; Codex and generic adapters are opt-in.
+- Added `scripts/brain-ingest.sh` as a tool-neutral ingestion endpoint supporting
+  session digests, learnings, and failure signals from any tool.
+
+### Rule Generation
+
+- `generate.sh` now skips capsule injection when Brain source files contain only
+  placeholder text (no meaningful user content).
+- Added `generated_file_matches` with capsule-stripping so dist drift detection
+  ignores harmless capsule-block differences.
+
+### Harness Evolution
+
+- `harness-evolve.sh` now aggregates optional signal files
+  (`harness-failures.md`, `corrections.md`, `banned-patterns.md`) alongside the
+  audit trail.
+- Added nine new failure tags: `tripwire-missed`, `self-test-fake`,
+  `fake-verification`, `plan-hijack`, `repeated-failure`, `under-asking`,
+  `over-asking`, `executor-correction`, `banned-pattern`.
+
+### Internal
+
+- `scripts/*.sh` are now made executable on install and update.
+- Brain commit fallback writes to the private Brain repo rather than the Harness
+  repo.
 
 ## [0.9.1] - 2026-07-03
 

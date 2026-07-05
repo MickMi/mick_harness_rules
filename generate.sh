@@ -117,7 +117,29 @@ agent_capsule_inject() {
     collaboration="$brain_dir/global/collaboration-style.md"
     gotchas="$brain_dir/global/gotchas.md"
 
-    if [ ! -f "$capsule" ] && [ ! -f "$constitution" ] && [ ! -f "$persona" ] && [ ! -f "$preferences" ] && [ ! -f "$collaboration" ]; then
+    has_meaningful_capsule_file() {
+        local file="$1"
+        [ -f "$file" ] || return 1
+        awk '
+            /^[[:space:]]*$/ { next }
+            /^[[:space:]]*#/ { next }
+            /^Record cross-project user preferences here\./ { next }
+            /^Record cross-project pitfalls here\./ { next }
+            /^<!--/ { next }
+            { found=1 }
+            END { exit(found ? 0 : 1) }
+        ' "$file"
+    }
+
+    local has_capsule_source=false
+    for f in "$capsule" "$constitution" "$persona" "$preferences" "$collaboration" "$gotchas"; do
+        if has_meaningful_capsule_file "$f"; then
+            has_capsule_source=true
+            break
+        fi
+    done
+
+    if [ "$has_capsule_source" != true ]; then
         return 0
     fi
 
@@ -187,12 +209,12 @@ DEFAULT_CAPSULE
     echo ""
     echo "**Capsule source files（存在即代表可进一步读取）**："
     for f in "$constitution" "$persona" "$preferences" "$collaboration" "$gotchas"; do
-        if [ -f "$f" ]; then
+        if has_meaningful_capsule_file "$f"; then
             echo "- \`${f/#$HOME/~}\`"
         fi
     done
 
-    if [ -f "$gotchas" ]; then
+    if has_meaningful_capsule_file "$gotchas"; then
         echo ""
         echo "**Gotchas policy**：复杂任务、重复失败、macOS/工具链/多模型协作问题，先检索 Brain gotchas；不要默认把 gotchas 原文注入项目文件，避免私人上下文泄漏。"
     fi
@@ -338,6 +360,53 @@ elif [ "$CHECK_MODE" != true ]; then
 fi
 
 DRIFT=0
+
+strip_capsule_block() {
+    local file="$1"
+    awk '
+        /^<!-- =+ -->$/ { pending_banner=$0; next }
+        pending_banner != "" && /Mick Agent Capsule/ {
+            pending_banner=""
+            in_capsule=1
+            next
+        }
+        pending_banner != "" {
+            print pending_banner
+            pending_banner=""
+        }
+        /Mick Agent Capsule/ { in_capsule=1; next }
+        in_capsule && /^---[[:space:]]*$/ { in_capsule=0; next }
+        in_capsule { next }
+        { print }
+        END {
+            if (pending_banner != "") print pending_banner
+        }
+    ' "$file"
+}
+
+generated_file_matches() {
+    local expected="$1" actual="$2"
+    local expected_body actual_body
+
+    [ -f "$actual" ] || return 1
+    if diff -q "$expected" "$actual" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    expected_body="$(mktemp)"
+    actual_body="$(mktemp)"
+    strip_capsule_block "$expected" > "$expected_body"
+    strip_capsule_block "$actual" > "$actual_body"
+
+    if diff -q "$expected_body" "$actual_body" >/dev/null 2>&1; then
+        rm -f "$expected_body" "$actual_body"
+        return 0
+    fi
+
+    rm -f "$expected_body" "$actual_body"
+    return 1
+}
+
 for entry in "${TARGETS[@]}"; do
     IFS='|' read -r rel profile name <<< "$entry"
     out="$DIST/$rel"
@@ -346,7 +415,7 @@ for entry in "${TARGETS[@]}"; do
     render "$profile" "$name" > "$tmp"
 
     if [ "$CHECK_MODE" = true ]; then
-        if [ ! -f "$out" ] || ! diff -q "$tmp" "$out" >/dev/null 2>&1; then
+        if ! generated_file_matches "$tmp" "$out"; then
             warn "Out of date: dist/$rel"
             ((DRIFT++))
         fi

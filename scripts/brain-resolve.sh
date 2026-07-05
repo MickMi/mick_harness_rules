@@ -5,11 +5,13 @@
 # Shared utility sourced by all brain-*.sh scripts.
 # Determines where brain data lives:
 #   1. External brain repo (dual-repo model) — preferred
-#   2. Local brain/ directory (fallback for backward compatibility)
+#   2. ~/.mick-brain local repo (private local fallback)
+#   3. Local harness/brain directory (legacy fallback only)
 #
 # After sourcing, the following variables are available:
 #   BRAIN_DIR       — absolute path to the brain data root
-#   BRAIN_IS_EXTERNAL — "true" if using external brain repo
+#   BRAIN_IS_EXTERNAL — "true" if using a configured external brain repo
+#   BRAIN_REMOTE_STATUS — connected | local | unavailable | none
 #   BRAIN_REPO_LOCAL — local clone path of brain repo (if external)
 #   BRAIN_REPO_REMOTE — remote URL of brain repo (if configured)
 # ============================================================
@@ -26,6 +28,7 @@ resolve_brain_dir() {
     local config_file="$harness_root/config/.brain-config.yaml"
 
     BRAIN_IS_EXTERNAL="false"
+    BRAIN_REMOTE_STATUS="none"
     BRAIN_REPO_LOCAL=""
     BRAIN_REPO_REMOTE=""
 
@@ -44,19 +47,109 @@ resolve_brain_dir() {
         BRAIN_REPO_LOCAL="$HOME/.mick-brain"
     fi
 
-    # Check if external brain repo exists (must have .git directory)
-    if [ -n "$BRAIN_REPO_REMOTE" ] && [ -d "$BRAIN_REPO_LOCAL/.git" ]; then
+    # Prefer the configured/private brain path when it already exists.
+    # Remote connectivity is tracked separately so a local-only brain does not
+    # block the Harness main flow.
+    if [ -d "$BRAIN_REPO_LOCAL/.git" ]; then
         BRAIN_DIR="$BRAIN_REPO_LOCAL"
-        BRAIN_IS_EXTERNAL="true"
-    elif [ -d "$harness_root/brain" ]; then
-        # Fallback to local brain/ directory
+        if [ -n "$BRAIN_REPO_REMOTE" ] && git -C "$BRAIN_REPO_LOCAL" remote get-url origin >/dev/null 2>&1; then
+            BRAIN_IS_EXTERNAL="true"
+            BRAIN_REMOTE_STATUS="connected"
+        else
+            BRAIN_IS_EXTERNAL="false"
+            BRAIN_REMOTE_STATUS="local"
+        fi
+    elif [ -z "$BRAIN_REPO_REMOTE" ] && [ -d "$harness_root/brain" ]; then
+        # Legacy fallback for older installs that stored brain/ inside Harness.
         BRAIN_DIR="$harness_root/brain"
         BRAIN_IS_EXTERNAL="false"
+        BRAIN_REMOTE_STATUS="local"
     else
-        # No brain directory found
-        BRAIN_DIR="$harness_root/brain"
+        # No brain exists yet. Point to the private local path; callers that
+        # need a usable Brain should call ensure_brain_available.
+        BRAIN_DIR="$BRAIN_REPO_LOCAL"
         BRAIN_IS_EXTERNAL="false"
+        if [ -n "$BRAIN_REPO_REMOTE" ]; then
+            BRAIN_REMOTE_STATUS="unavailable"
+        else
+            BRAIN_REMOTE_STATUS="none"
+        fi
     fi
+}
+
+init_brain_skeleton() {
+    local brain_dir="$1"
+
+    mkdir -p \
+        "$brain_dir/global/evolution" \
+        "$brain_dir/projects" \
+        "$brain_dir/sessions" \
+        "$brain_dir/inbox/codex" \
+        "$brain_dir/inbox/generic"
+
+    [ -f "$brain_dir/global/preferences.md" ] || cat > "$brain_dir/global/preferences.md" <<'EOF'
+# Global Preferences
+
+Record cross-project user preferences here.
+EOF
+
+    [ -f "$brain_dir/global/gotchas.md" ] || cat > "$brain_dir/global/gotchas.md" <<'EOF'
+# Global Gotchas
+
+Record cross-project pitfalls here.
+EOF
+
+    [ -f "$brain_dir/MEMORY.md" ] || cat > "$brain_dir/MEMORY.md" <<'EOF'
+# Brain Memory
+
+Private long-term memory for Agent collaboration.
+EOF
+
+    touch \
+        "$brain_dir/global/evolution/audit-trail.md" \
+        "$brain_dir/global/evolution/harness-failures.md" \
+        "$brain_dir/global/evolution/corrections.md" \
+        "$brain_dir/global/evolution/banned-patterns.md" \
+        "$brain_dir/projects/.gitkeep" \
+        "$brain_dir/sessions/.gitkeep" \
+        "$brain_dir/inbox/codex/.gitkeep" \
+        "$brain_dir/inbox/generic/.gitkeep"
+}
+
+ensure_brain_available() {
+    local harness_root="$1"
+
+    resolve_brain_dir "$harness_root"
+
+    if [ -d "$BRAIN_DIR" ]; then
+        init_brain_skeleton "$BRAIN_DIR"
+        if [ ! -d "$BRAIN_DIR/.git" ]; then
+            git -C "$BRAIN_DIR" init --quiet 2>/dev/null || true
+        fi
+        resolve_brain_dir "$harness_root"
+        return 0
+    fi
+
+    if [ -n "$BRAIN_REPO_REMOTE" ] && command -v git >/dev/null 2>&1; then
+        if git clone --quiet "$BRAIN_REPO_REMOTE" "$BRAIN_REPO_LOCAL" 2>/dev/null; then
+            BRAIN_DIR="$BRAIN_REPO_LOCAL"
+            init_brain_skeleton "$BRAIN_DIR"
+            resolve_brain_dir "$harness_root"
+            return 0
+        fi
+    fi
+
+    mkdir -p "$BRAIN_REPO_LOCAL"
+    git -C "$BRAIN_REPO_LOCAL" init --quiet 2>/dev/null || true
+    BRAIN_DIR="$BRAIN_REPO_LOCAL"
+    BRAIN_IS_EXTERNAL="false"
+    if [ -n "$BRAIN_REPO_REMOTE" ]; then
+        BRAIN_REMOTE_STATUS="unavailable"
+    else
+        BRAIN_REMOTE_STATUS="local"
+    fi
+    init_brain_skeleton "$BRAIN_DIR"
+    return 0
 }
 
 # --- Clone brain repo if not present ---
@@ -77,13 +170,14 @@ clone_brain_repo() {
     echo "Cloning brain repo: $BRAIN_REPO_REMOTE → $BRAIN_REPO_LOCAL"
     if git clone "$BRAIN_REPO_REMOTE" "$BRAIN_REPO_LOCAL" 2>/dev/null; then
         # Clone succeeded
+        init_brain_skeleton "$BRAIN_REPO_LOCAL"
         return 0
     else
-        # Clone failed — likely an empty repo. Initialize locally and set remote.
-        echo "Remote appears to be empty. Initializing local brain repo..."
+        # Clone failed. Do not block Harness; create a private local Brain.
+        echo "Brain remote is unavailable. Initializing local brain repo..."
         mkdir -p "$BRAIN_REPO_LOCAL"
         git -C "$BRAIN_REPO_LOCAL" init --quiet 2>/dev/null
-        git -C "$BRAIN_REPO_LOCAL" remote add origin "$BRAIN_REPO_REMOTE" 2>/dev/null || true
+        init_brain_skeleton "$BRAIN_REPO_LOCAL"
         return 0
     fi
 }
@@ -111,14 +205,21 @@ commit_brain_changes() {
             fi
         fi
     else
-        # Fallback: commit in harness repo
-        local harness_root
-        harness_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-        cd "$harness_root"
-        if [ -d ".git" ]; then
-            git add brain/ 2>/dev/null
+        if [ -d "$BRAIN_DIR/.git" ]; then
+            cd "$BRAIN_DIR"
+            git add -A 2>/dev/null
             git commit -m "$commit_msg" --quiet 2>/dev/null || true
-            if [ "$no_sync" = false ]; then
+            if [ "$no_sync" = false ] && git remote get-url origin &>/dev/null; then
+                git push --quiet 2>/dev/null && return 0 || return 1
+            fi
+        else
+            # Last legacy fallback: commit harness/brain if it exists.
+            local harness_root
+            harness_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+            cd "$harness_root"
+            if [ -d ".git" ] && [ -d "brain" ]; then
+                git add brain/ 2>/dev/null
+                git commit -m "$commit_msg" --quiet 2>/dev/null || true
                 if git remote get-url origin &>/dev/null; then
                     git push --quiet 2>/dev/null && return 0 || return 1
                 fi

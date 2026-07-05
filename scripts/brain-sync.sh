@@ -39,15 +39,8 @@ BRAIN_REPO=""
 
 # --- Resolve brain ---
 source "$HARNESS_ROOT/scripts/brain-resolve.sh"
-resolve_brain_dir "$HARNESS_ROOT"
-# Use the resolved brain directory from brain-resolve.sh
-if [ -n "${BRAIN_REPO_LOCAL:-}" ]; then
-    BRAIN_REPO="$BRAIN_REPO_LOCAL"
-elif [ -n "${BRAIN_DIR:-}" ]; then
-    BRAIN_REPO="$BRAIN_DIR"
-else
-    BRAIN_REPO="$HOME/.mick-brain"
-fi
+ensure_brain_available "$HARNESS_ROOT" >/dev/null 2>&1 || true
+BRAIN_REPO="${BRAIN_DIR:-$HOME/.mick-brain}"
 
 log()   { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"; }
 
@@ -65,15 +58,9 @@ if ! command -v python3 >/dev/null 2>&1; then
     exit 0
 fi
 
-# Clone brain repo if needed
-if [ ! -d "$BRAIN_REPO/.git" ] && [ -n "${BRAIN_REPO_REMOTE:-}" ]; then
-    log "Brain repo not cloned. Cloning..."
-    if ! git clone --config http.proxy= --config https.proxy= "$BRAIN_REPO_REMOTE" "$BRAIN_REPO" 2>>"$LOG_FILE"; then
-        log "ERROR: Failed to clone brain repo"
-        exit 1
-    fi
-    resolve_brain_dir "$HARNESS_ROOT"
-fi
+# Brain must never block the hook path. Private remote failures are handled
+# by ensure_brain_available with a local fallback.
+mkdir -p "$BRAIN_REPO"
 
 # --- Parse session_id ---
 SESSION_ID=""

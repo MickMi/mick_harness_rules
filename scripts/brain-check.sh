@@ -169,8 +169,10 @@ if [ "$BRAIN_IS_EXTERNAL" = "true" ]; then
         echo -e "         ${YELLOW}Run '.harness/setup.sh --full' to clone it.${NC}"
     fi
 else
-    if [ -n "$BRAIN_REPO_REMOTE" ]; then
-        check_warn "Brain repo configured ($BRAIN_REPO_REMOTE) but not cloned. Run '.harness/setup.sh --full'."
+    if [ -n "$BRAIN_REPO_REMOTE" ] && [ -d "${BRAIN_DIR:-}/.git" ]; then
+        check_warn "Brain remote configured but unavailable; using local fallback: $BRAIN_DIR"
+    elif [ -n "$BRAIN_REPO_REMOTE" ]; then
+        check_warn "Brain remote configured ($BRAIN_REPO_REMOTE) but local Brain is not initialized. Run 'harness brain install'."
     else
         check_pass "Using local brain/ directory (single-repo mode)"
     fi

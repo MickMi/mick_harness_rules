@@ -36,14 +36,8 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"; }
 
 # --- Resolve brain ---
 source "$HARNESS_ROOT/scripts/brain-resolve.sh"
-resolve_brain_dir "$HARNESS_ROOT"
-if [ -n "${BRAIN_REPO_LOCAL:-}" ]; then
-    BRAIN_REPO="$BRAIN_REPO_LOCAL"
-elif [ -n "${BRAIN_DIR:-}" ]; then
-    BRAIN_REPO="$BRAIN_DIR"
-else
-    BRAIN_REPO="$HOME/.mick-brain"
-fi
+ensure_brain_available "$HARNESS_ROOT" >/dev/null 2>&1 || true
+BRAIN_REPO="${BRAIN_DIR:-$HOME/.mick-brain}"
 
 # --- Lock ---
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
@@ -62,16 +56,11 @@ fi
 
 log "=== Daily Brain Sync START ==="
 
-# --- Pull latest brain ---
-if [ -d "$BRAIN_REPO/.git" ]; then
-    git -C "$BRAIN_REPO" pull --rebase --quiet origin main 2>/dev/null || log "Pull failed (will try push later)"
+# --- Pull latest brain if a remote exists; otherwise stay local ---
+if [ -d "$BRAIN_REPO/.git" ] && git -C "$BRAIN_REPO" remote get-url origin >/dev/null 2>&1; then
+    git -C "$BRAIN_REPO" pull --rebase --quiet origin main 2>/dev/null || log "Pull failed (will keep local fallback)"
 else
-    log "Brain repo not found at $BRAIN_REPO — attempting clone"
-    if ! git clone --config http.proxy= --config https.proxy= "$BRAIN_REPO_REMOTE" "$BRAIN_REPO" 2>>"$LOG_FILE"; then
-        log "Clone failed, exiting"
-        rmdir "$LOCK_DIR" 2>/dev/null
-        exit 1
-    fi
+    log "Brain remote unavailable; using local brain at $BRAIN_REPO"
 fi
 
 # --- Find unsynced transcripts ---

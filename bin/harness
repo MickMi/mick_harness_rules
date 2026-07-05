@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ============================================================
-# harness — Mick Harness 全局 CLI
+# harness — Mick Agent Harness 全局 CLI
 #
 # 一次全局安装，任何项目中一键初始化。
 #
@@ -81,11 +81,11 @@ cmd_version() {
     if [ -d "$HARNESS_GLOBAL/.git" ]; then
         local ver
         ver=$(git -C "$HARNESS_GLOBAL" describe --tags --always 2>/dev/null || echo "unknown")
-        echo "Mick Harness $ver  ($HARNESS_GLOBAL)"
+        echo "Mick Agent Harness $ver  ($HARNESS_GLOBAL)"
     elif harness_available; then
-        echo "Mick Harness local checkout  ($HARNESS_GLOBAL)"
+        echo "Mick Agent Harness local checkout  ($HARNESS_GLOBAL)"
     else
-        echo "Mick Harness (not installed. Run: harness install)"
+        echo "Mick Agent Harness (not installed. Run: harness install)"
     fi
 }
 
@@ -107,9 +107,9 @@ cmd_install() {
         return 1
     fi
 
-    info "Installing Mick Harness to $HARNESS_GLOBAL ..."
+    info "Installing Mick Agent Harness to $HARNESS_GLOBAL ..."
     git clone "$HARNESS_REPO" "$HARNESS_GLOBAL" || { fail "git clone failed."; return 1; }
-    chmod +x "$HARNESS_GLOBAL"/*.sh "$HARNESS_GLOBAL"/bin/* 2>/dev/null || true
+    chmod +x "$HARNESS_GLOBAL"/*.sh "$HARNESS_GLOBAL"/bin/* "$HARNESS_GLOBAL"/scripts/*.sh 2>/dev/null || true
 
     # Add to PATH hint
     local bin_dir="$HARNESS_GLOBAL/bin"
@@ -238,10 +238,7 @@ cmd_init() {
         # 5. Brain + Verify
         if [ -f "$HARNESS_GLOBAL/scripts/brain-resolve.sh" ]; then
             source "$HARNESS_GLOBAL/scripts/brain-resolve.sh"
-            resolve_brain_dir "$HARNESS_GLOBAL" 2>/dev/null || true
-            if [ -n "${BRAIN_REPO_REMOTE:-}" ] && [ ! -d "${BRAIN_REPO_LOCAL:-}/.git" ]; then
-                git clone --quiet "$BRAIN_REPO_REMOTE" "${BRAIN_REPO_LOCAL:-$HOME/.mick-brain}" 2>/dev/null || true
-            fi
+            ensure_brain_available "$HARNESS_GLOBAL" 2>/dev/null || true
         fi
         [ -x "$HARNESS_GLOBAL/scripts/brain-check.sh" ] && "$HARNESS_GLOBAL/scripts/brain-check.sh" "$target" 2>&1 || true
     fi
@@ -273,7 +270,7 @@ print_core_rules() {
         cat "$core"
     else
         cat <<'EOF'
-# Mick Harness Core Rules
+# Mick Agent Harness Core Rules
 
 Harness core rules are not available in this checkout. Load the project AGENTS.md first. If the file is missing, stop and ask the user to run `harness init`.
 EOF
@@ -286,7 +283,7 @@ print_extended_rules() {
         cat "$extended"
     else
         cat <<'EOF'
-# Mick Harness Extended Playbook
+# Mick Agent Harness Extended Playbook
 
 Extended rules are not available in this checkout. If the task is high-risk, stop and ask the user to provide `.harness/rules/extended.md`.
 EOF
@@ -373,7 +370,7 @@ cmd_export() {
     case "$surface" in
         codex)
             cat <<'EOF'
-# Mick Harness Loader — Codex Baseline
+# Mick Agent Harness Loader — Codex Baseline
 
 Use this when Codex is the code agent surface.
 
@@ -399,7 +396,7 @@ EOF
             ;;
         agent)
             cat <<'EOF'
-# Mick Harness Loader — Generic Code Agent
+# Mick Agent Harness Loader — Generic Code Agent
 
 Paste this into a code agent's global/user instructions once.
 
@@ -430,7 +427,7 @@ EOF
             ;;
         api)
             cat <<'EOF'
-# Mick Harness Loader — Pure API Prompt
+# Mick Agent Harness Loader — Pure API Prompt
 
 Use this as a system/developer message for API calls that do not have a built-in code-agent environment.
 
@@ -461,7 +458,7 @@ EOF
             ;;
         ide)
             cat <<'EOF'
-# Mick Harness Loader — IDE Plugin
+# Mick Agent Harness Loader — IDE Plugin
 
 Paste this into an IDE AI plugin's custom instructions / rules field.
 
@@ -662,85 +659,33 @@ cmd_brain() {
             echo ""
             echo -e "${BOLD}Brain Status${NC}"
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            # Check brain repo
-            if [ -d "$HOME/.mick-brain/.git" ]; then
-                echo -e "  Brain repo  : ${GREEN}connected${NC} ($HOME/.mick-brain)"
-            elif [ -d "$HOME/.mick-brain" ]; then
-                echo -e "  Brain repo  : ${YELLOW}local directory (no git)${NC}"
-            else
-                echo -e "  Brain repo  : ${RED}not found${NC}"
-            fi
-            # Check SessionEnd hook
-            local hook_file="$HOME/.claude/settings.json"
-            local brain_sync_path="$HARNESS_GLOBAL/scripts/brain-sync.sh"
-            local hook_status
-            hook_status=$(HOOK_FILE="$hook_file" BRAIN_SYNC_PATH="$brain_sync_path" python3 <<'PY' 2>/dev/null || echo "invalid"
-import json, os
-
-hook_file = os.environ["HOOK_FILE"]
-brain_sync = os.environ["BRAIN_SYNC_PATH"]
-
-def iter_commands(hooks):
-    if isinstance(hooks, dict):
-        entries = hooks.get("SessionEnd", [])
-    elif isinstance(hooks, list):
-        entries = hooks
-    else:
-        entries = []
-    if not isinstance(entries, list):
-        entries = []
-    for entry in entries:
-        if not isinstance(entry, dict):
-            continue
-        if isinstance(entry.get("hooks"), list):
-            for sub in entry["hooks"]:
-                if isinstance(sub, dict) and sub.get("command"):
-                    yield sub.get("command", "")
-        if entry.get("command"):
-            yield entry.get("command", "")
-
-if not os.path.exists(hook_file):
-    print("missing")
-else:
-    with open(hook_file) as fh:
-        data = json.load(fh)
-    commands = list(iter_commands(data.get("hooks", {})))
-    if brain_sync in commands:
-        print("installed")
-    elif any("brain-sync" in c for c in commands):
-        print("other")
-    else:
-        print("missing")
-PY
-)
-            if [ "$hook_status" = "installed" ]; then
-                echo -e "  SessionEnd  : ${GREEN}installed${NC}"
-            elif [ "$hook_status" = "other" ]; then
-                echo -e "  SessionEnd  : ${YELLOW}other brain-sync hook found — run 'harness brain install'${NC}"
-            else
-                echo -e "  SessionEnd  : ${YELLOW}not installed — run 'harness brain install'${NC}"
-            fi
-            # Check launchd
-            local plist="$HOME/Library/LaunchAgents/com.mick.brain-daily-distill.plist"
-            if [ -f "$plist" ]; then
-                local loaded_check
-                loaded_check=$(launchctl print "gui/$(id -u)/com.mick.brain-daily-distill" >/dev/null 2>&1 && echo "loaded" || true)
-                if [ -z "$loaded_check" ]; then
-                    loaded_check=$(launchctl list 2>/dev/null | grep "com.mick.brain-daily-distill" || true)
-                fi
-                if [ -n "$loaded_check" ]; then
-                    echo -e "  Daily sync  : ${GREEN}installed & loaded${NC}"
+            if [ -f "$HARNESS_GLOBAL/scripts/brain-resolve.sh" ]; then
+                source "$HARNESS_GLOBAL/scripts/brain-resolve.sh"
+                resolve_brain_dir "$HARNESS_GLOBAL" 2>/dev/null || true
+                if [ -d "${BRAIN_DIR:-}" ]; then
+                    if [ "${BRAIN_REMOTE_STATUS:-none}" = "connected" ]; then
+                        echo -e "  Brain repo  : ${GREEN}connected${NC} ($BRAIN_DIR)"
+                    elif [ -d "$BRAIN_DIR/.git" ]; then
+                        echo -e "  Brain repo  : ${YELLOW}local fallback${NC} ($BRAIN_DIR)"
+                    else
+                        echo -e "  Brain repo  : ${YELLOW}directory only${NC} ($BRAIN_DIR)"
+                    fi
                 else
-                    echo -e "  Daily sync  : ${YELLOW}plist exists but not loaded — run 'harness brain install'${NC}"
+                    echo -e "  Brain repo  : ${YELLOW}not initialized — run 'harness brain install'${NC}"
                 fi
             else
-                echo -e "  Daily sync  : ${YELLOW}not installed — run 'harness brain install'${NC}"
+                echo -e "  Brain repo  : ${RED}resolver missing${NC}"
+            fi
+            if [ -f "$HARNESS_GLOBAL/scripts/hook-adapters.sh" ]; then
+                source "$HARNESS_GLOBAL/scripts/hook-adapters.sh"
+                hook_adapters_status
             fi
             # Check evolution data
-            local trail="$HOME/.mick-brain/global/evolution/audit-trail.md"
+            local trail="${BRAIN_DIR:-$HOME/.mick-brain}/global/evolution/audit-trail.md"
             if [ -f "$trail" ]; then
                 local entries
-                entries=$(grep -c "^## " "$trail" 2>/dev/null || echo "0")
+                entries=$(grep -c "^## " "$trail" 2>/dev/null || true)
+                entries="${entries:-0}"
                 echo -e "  Audit data  : ${GREEN}$entries sessions${NC}"
             else
                 echo -e "  Audit data  : ${YELLOW}empty — run 'harness-audit.sh --log' to start${NC}"
@@ -751,126 +696,15 @@ PY
             echo ""
             echo -e "${BOLD}Brain Install${NC}"
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            # Install SessionEnd hook — check for exact brain-sync.sh path, not substring
-            local hook_file="$HOME/.claude/settings.json"
-            local brain_sync_path="$HARNESS_GLOBAL/scripts/brain-sync.sh"
-            local already_hooked=false
-            if [ -f "$hook_file" ] && HOOK_FILE="$hook_file" BRAIN_SYNC_PATH="$brain_sync_path" python3 <<'PY' >/dev/null 2>&1
-import json, os, sys
-hook_file = os.environ["HOOK_FILE"]
-brain_sync = os.environ["BRAIN_SYNC_PATH"]
-with open(hook_file) as fh:
-    data = json.load(fh)
-hooks = data.get("hooks", {})
-entries = hooks.get("SessionEnd", []) if isinstance(hooks, dict) else hooks if isinstance(hooks, list) else []
-for entry in entries if isinstance(entries, list) else []:
-    if isinstance(entry, dict) and entry.get("command") == brain_sync:
-        sys.exit(0)
-    for sub in entry.get("hooks", []) if isinstance(entry, dict) else []:
-        if isinstance(sub, dict) and sub.get("command") == brain_sync:
-            sys.exit(0)
-sys.exit(1)
-PY
-            then
-                already_hooked=true
-            fi
-            if [ "$already_hooked" = true ]; then
-                echo -e "  ${GREEN}SessionEnd hook already installed.${NC}"
+            if [ -f "$HARNESS_GLOBAL/scripts/hook-adapters.sh" ]; then
+                source "$HARNESS_GLOBAL/scripts/hook-adapters.sh"
+                hook_adapters_install
+                echo -e "  ${GREEN}Brain directory and enabled hook adapters are ready.${NC}"
+                hook_adapters_status
             else
-                echo "  Adding SessionEnd hook to $hook_file ..."
-                mkdir -p "$(dirname "$hook_file")"
-                HOOK_FILE="$hook_file" BRAIN_SYNC_PATH="$brain_sync_path" python3 <<'PY' 2>/dev/null && echo -e "  ${GREEN}SessionEnd hook installed.${NC}" || echo -e "  ${YELLOW}Hook install failed. Add manually: $brain_sync_path${NC}"
-import json, os
-
-f = os.environ["HOOK_FILE"]
-brain_sync = os.environ["BRAIN_SYNC_PATH"]
-data = {}
-if os.path.exists(f) and os.path.getsize(f) > 0:
-    with open(f) as fh:
-        try: data = json.load(fh)
-        except: data = {}
-
-raw_hooks = data.get("hooks", {})
-if isinstance(raw_hooks, dict):
-    hooks = raw_hooks
-    session_end = hooks.get("SessionEnd", [])
-elif isinstance(raw_hooks, list):
-    # Repair legacy/damaged list form by treating it as SessionEnd entries.
-    hooks = {}
-    session_end = raw_hooks
-else:
-    hooks = {}
-    session_end = []
-
-if not isinstance(session_end, list):
-    session_end = []
-
-def entry_has_command(entry, command):
-    if not isinstance(entry, dict):
-        return False
-    if entry.get("command") == command:
-        return True
-    for sub in entry.get("hooks", []):
-        if isinstance(sub, dict) and sub.get("command") == command:
-            return True
-    return False
-
-already = any(entry_has_command(entry, brain_sync) for entry in session_end)
-if not already:
-    session_end.append({
-        "hooks": [{
-            "type": "command",
-            "command": brain_sync,
-            "description": "Auto-distill session learnings to Brain"
-        }]
-    })
-hooks["SessionEnd"] = session_end
-data["hooks"] = hooks
-with open(f, 'w') as fh:
-    json.dump(data, fh, indent=2, ensure_ascii=False)
-PY
+                fail "hook-adapters.sh not found."
+                exit 1
             fi
-            # Install launchd plist
-            local plist_dir="$HOME/Library/LaunchAgents"
-            local plist="$plist_dir/com.mick.brain-daily-distill.plist"
-            mkdir -p "$plist_dir" "$HOME/.claude/logs"
-            # Always write plist (idempotent), unload+reload to fix stale state
-            launchctl bootout "gui/$(id -u)" "$plist" 2>/dev/null || launchctl unload "$plist" 2>/dev/null || true
-            cat > "$plist" << PLISTEOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.mick.brain-daily-distill</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>$HARNESS_GLOBAL/scripts/brain-sync-daily.sh</string>
-    </array>
-    <key>StartCalendarInterval</key>
-    <dict>
-        <key>Hour</key>
-        <integer>3</integer>
-        <key>Minute</key>
-        <integer>7</integer>
-    </dict>
-    <key>StandardOutPath</key>
-    <string>$HOME/.claude/logs/brain-sync-daily.log</string>
-    <key>StandardErrorPath</key>
-    <string>$HOME/.claude/logs/brain-sync-daily.log</string>
-    <key>RunAtLoad</key>
-    <false/>
-</dict>
-</plist>
-PLISTEOF
-            if launchctl bootstrap "gui/$(id -u)" "$plist" 2>/dev/null || launchctl load "$plist" 2>/dev/null; then
-                echo -e "  ${GREEN}Daily sync installed (3:07 AM).${NC}"
-            else
-                echo -e "  ${YELLOW}Daily sync plist written but launchctl did not load it. Run 'harness brain status'.${NC}"
-            fi
-            echo ""
-            echo "  SessionEnd hook + daily batch sync installed."
-            echo "  Run 'harness brain status' to verify."
             echo ""
             ;;
         sync)
@@ -924,7 +758,7 @@ cmd_update() {
     info "Updating harness..."
     stash_legacy_registry_if_dirty
     git -C "$HARNESS_GLOBAL" pull --rebase origin main
-    chmod +x "$HARNESS_GLOBAL"/*.sh "$HARNESS_GLOBAL"/bin/* 2>/dev/null || true
+    chmod +x "$HARNESS_GLOBAL"/*.sh "$HARNESS_GLOBAL"/bin/* "$HARNESS_GLOBAL"/scripts/*.sh 2>/dev/null || true
 
     # Regenerate dist/
     if [ -x "$HARNESS_GLOBAL/generate.sh" ]; then
@@ -1157,7 +991,7 @@ case "${1:-}" in
         cmd_version
         ;;
     help|--help|-h|"")
-        echo "Mick Harness — 全局工程护栏 CLI"
+        echo "Mick Agent Harness — 个人 Agent 协作层 CLI"
         echo ""
         echo "用法:"
         echo "  harness install          一次性全局安装"
