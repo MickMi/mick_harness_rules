@@ -7,6 +7,79 @@ All notable changes to Mick Agent Harness are documented in this file.
 This project follows Semantic Versioning 2.0. Git tags in the form `vX.Y.Z`
 are the release source of truth.
 
+## [0.11.0] - 2026-07-06
+
+### Kernel Uplift (`rules/core.md`)
+
+- **Rule 1** renamed from "先读后改" to **"先读后改，新建前先查复用"** — before
+  creating a new function/interface/service/UI component, Executor must grep for
+  similar existing capability. Reuse is default; creating new requires explicit
+  justification. Reverses the burden of proof for "new".
+- **Rule 5** (Anti-Wall Debug Card) now requires a mandatory follow-up question
+  after any fix: **"Can this be turned into an automated check?"** — routing to
+  `verify.d/` checker (auto), Rule (semi-auto), or brain gotcha (manual). No more
+  fix-and-forget.
+- **Rule 7** (完成必须验证) adds **Baseline First** discipline and a
+  `.harness/verify.sh` contract entry point — verify/debug/regression tasks must
+  save a pre-change baseline and diff against it, so "not my bug / historical
+  issue / just a warning" can no longer be answered verbally.
+
+### Playbook Additions (`rules/extended.md`)
+
+- **§3.1 Anti-Wall Debug Controller** — added two disciplines: *Baseline First*
+  (report-diff over verbal excuses) and *修复后必问自动化* (fix-and-forget ban).
+- **§10.3 Executor 自检 ritual** expanded from 5 steps to 7 — added "grep for
+  reuse before creating new" and "verify tasks save baseline first". Both aim
+  at the two most common Executor failure modes: reinventing wheels and
+  scapegoating pre-existing failures.
+
+### Skills Layer (`rules/skills/`)
+
+- **New third layer between Kernel and Playbook** — Skills are runnable playbooks
+  for high-frequency fixed actions (compile, test, post-verify, release, sign)
+  that must not be improvised each time. Rule says "you must do this"; Skill
+  says "here's exactly how".
+- Harness ships **framework only, not content**: `rules/skills/README.md`
+  (positioning, when to write, how to be referenced, evolution-including-deletion)
+  and `rules/skills/_template.md` (frontmatter + 6 mandatory sections). Concrete
+  skills (compile-what, test-what) are project-owned since tech stacks vary too
+  widely for canned content.
+- Three reference mechanisms: Rule points to Skill / plan step invokes Skill /
+  role contract mandates Skill.
+- Skills are subject to same evolution-with-deletion loop as Rules — 6-monthly
+  review, retire long-untriggered ones.
+
+### Verify Contract (`docs/VERIFY-CONTRACT.md`)
+
+- Formalizes `.harness/verify.sh` (orchestrator) + `.harness/verify.d/*.sh`
+  (pluggable checkers) + `.harness/verify.disabled/` (retired) architecture.
+  One check per file, add/remove = add/remove file, orchestrator does no
+  business logic.
+- Checker naming convention: `NN-<category>-<what>.sh`. Exit codes: 0 pass /
+  1 fail / 2 unknown / 77 skip. Supports `--profile`, `--changed`, `--only`,
+  `--skip` flags.
+- Explicitly wires the verify layer into the §10.9 self-evolution loop —
+  checkers grow from real Debug Cards (fix → "can this be automated?" →
+  `verify.d/NN-xxx.sh`), and long-untriggered ones retire to `verify.disabled/`
+  every 6 months. Prevents both bloat and blind-spot regression.
+- Project-tier bootstrap guidance: 3 checkers for personal / 10-15 for
+  mid-size / 20+ profile-sharded for large multi-module.
+
+### Compatibility
+
+- Fully backward compatible. All changes are additive.
+- Existing projects using Rules 1/5/7 continue to work; the additions are new
+  clauses that surface only when their triggers appear (creating new code /
+  Debug Card / verify tasks).
+- Skills layer and verify.d/ are opt-in — projects without them behave exactly
+  as before.
+
+### Verification
+
+- `./generate.sh` regenerated dist/AGENTS.md; `--check` passes.
+- `bash -n` syntax check on `bin/harness scripts/*.sh generate.sh` passes.
+- Kernel changes propagated to dist/AGENTS.md (verified via grep).
+
 ## [0.10.0] - 2026-07-06
 
 ### Product

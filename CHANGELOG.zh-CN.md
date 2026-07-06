@@ -6,6 +6,65 @@ Mick Agent Harness 的重要变更都会记录在本文件中。
 
 本项目遵循 Semantic Versioning 2.0。形如 `vX.Y.Z` 的 Git tag 是最终发布事实源。
 
+## [0.11.0] - 2026-07-06
+
+### Kernel 强化 (`rules/core.md`)
+
+- **铁律 1** 改名 "先读后改" → **"先读后改，新建前先查复用"**——新建函数/接口/服务/UI
+  组件前，Executor 必须先 grep 项目里是否已有类似能力。默认复用，新建需要举证说明为
+  什么不复用（把举证责任反过来）。
+- **铁律 5** (Anti-Wall Debug Card) 收尾必问一句：**"这类问题能不能变成自动检查？"**
+  ——三分支落地：能 → `verify.d/` checker；不能自动判定但有明确规则 → Rule；都不行 →
+  brain-push 成 gotcha。禁止修完就走。
+- **铁律 7** (完成必须验证) 新增 **Baseline First** 纪律 + `.harness/verify.sh`
+  契约入口——verify / debug / 回归类任务动手前先跑一次留基线，改完做 diff。
+  「不是我引入的 / 是历史遗留 / 只是警告不影响」不再能用嘴解释。
+
+### Playbook 扩充 (`rules/extended.md`)
+
+- **§3.1 Anti-Wall Debug Controller** 新增两条纪律：*Baseline First*（报告 diff
+  代替嘴解释）+ *修复后必问自动化*（禁止修完就走）。
+- **§10.3 Executor 自检 ritual** 从 5 步扩到 7 步——新增「动手前 grep 复用可能」
+  和「verify 类步骤先留 baseline」。这两步专门拦 Executor 最常见的两种翻车方式：
+  重复造轮子，以及把老问题当挡箭牌。
+
+### Skills 层 (`rules/skills/`)
+
+- **在 Kernel 和 Playbook 之间新增第三层**——Skill 是高频固定动作（编译、测试、
+  事后验证、发布、签名）的可复用剧本，不允许 AI 每次临场发挥。Rule 说"必须做"，
+  Skill 说"具体怎么做"。
+- **Harness 只提供框架，不提供内容**：`rules/skills/README.md`（定位、何时写、
+  如何被引用、进化含删除）+ `rules/skills/_template.md`（frontmatter + 6 段必备
+  结构）。具体 Skill（编译什么、测试什么）由项目自己长——技术栈差异太大，硬塞
+  会变成噪音。
+- 三种引用机制：Rule 引用 Skill / plan 步骤调用 Skill / 角色契约强制 Skill。
+- Skills 与 Rules 走同一条进化含删除闭环——半年 review 一次，长期未触发的退役。
+
+### Verify 契约 (`docs/VERIFY-CONTRACT.md`)
+
+- 形式化 `.harness/verify.sh` (orchestrator) + `.harness/verify.d/*.sh`
+  （可插拔 checker）+ `.harness/verify.disabled/`（退役）架构。一条检查一个文件，
+  加/删检查 = 加/删文件，orchestrator 不做业务判断。
+- Checker 命名规范 `NN-<category>-<what>.sh`；退出码 0 通过 / 1 失败 / 2 无法判定 /
+  77 跳过；支持 `--profile`、`--changed`、`--only`、`--skip` 参数。
+- **显式接入 §10.9 自进化闭环**——checker 从真实 Debug Card 长出来（修复 →
+  "能不能变成自动检查？" → `verify.d/NN-xxx.sh`），长期未触发的每半年退役到
+  `verify.disabled/`。同时避免臃肿和漏检两种退化。
+- 项目分层起步建议：个人项目 3 条 / 中型 10-15 条 / 大型 20+ 按 profile 分片。
+
+### 兼容性
+
+- 完全向后兼容，全部为增量能力。
+- 使用铁律 1/5/7 的现有项目继续正常工作；新增内容只在对应触发条件出现时（新建代码 /
+  Debug Card / verify 任务）才浮现。
+- Skills 层和 verify.d/ 均为可选启用——未采用的项目行为与之前完全一致。
+
+### 验证证据
+
+- `./generate.sh` 重新生成 dist/AGENTS.md；`--check` 通过。
+- `bin/harness scripts/*.sh generate.sh` 的 `bash -n` 语法检查通过。
+- Kernel 变更已同步到 dist/AGENTS.md（grep 验证）。
+
 ## [0.10.0] - 2026-07-06
 
 ### 产品
