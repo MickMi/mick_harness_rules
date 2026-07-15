@@ -31,7 +31,7 @@ hook_adapter_enabled() {
 
 iter_claude_hook_commands() {
     local hook_file="$1"
-    python3 <<'PY' "$hook_file" 2>/dev/null || true
+    python3 - "$hook_file" 2>/dev/null <<'PY' || true
 import json, sys, os
 path = sys.argv[1]
 if not os.path.exists(path):
@@ -137,6 +137,105 @@ with open(path, "w") as fh:
 PY
 }
 
+iter_claude_session_start_commands() {
+    local hook_file="$1"
+    python3 - "$hook_file" 2>/dev/null <<'PY' || true
+import json, sys, os
+path = sys.argv[1]
+if not os.path.exists(path):
+    sys.exit(0)
+with open(path) as fh:
+    data = json.load(fh)
+hooks = data.get("hooks", {})
+if isinstance(hooks, dict):
+    entries = hooks.get("SessionStart", [])
+else:
+    entries = []
+if not isinstance(entries, list):
+    entries = []
+for entry in entries:
+    if not isinstance(entry, dict):
+        continue
+    if entry.get("command"):
+        print(entry["command"])
+    for sub in entry.get("hooks", []):
+        if isinstance(sub, dict) and sub.get("command"):
+            print(sub["command"])
+PY
+}
+
+claude_session_start_status() {
+    local hook_file="$HOME/.claude/settings.json"
+    local session_start_path="$HARNESS_ROOT/hooks/session-start.sh"
+
+    [ -f "$hook_file" ] || { echo "missing"; return 0; }
+
+    if iter_claude_session_start_commands "$hook_file" | grep -qxF "$session_start_path"; then
+        echo "installed"
+    else
+        echo "missing"
+    fi
+}
+
+install_claude_code_session_start_hook() {
+    local hook_file="$HOME/.claude/settings.json"
+    local session_start_path="$HARNESS_ROOT/hooks/session-start.sh"
+
+    if [ ! -x "$session_start_path" ]; then
+        echo "  ⚠ session-start hook script missing or not executable: $session_start_path" >&2
+        return 1
+    fi
+
+    mkdir -p "$(dirname "$hook_file")"
+
+    HOOK_FILE="$hook_file" SESSION_START_PATH="$session_start_path" python3 <<'PY'
+import json, os
+
+path = os.environ["HOOK_FILE"]
+cmd = os.environ["SESSION_START_PATH"]
+
+data = {}
+if os.path.exists(path) and os.path.getsize(path) > 0:
+    with open(path) as fh:
+        try:
+            data = json.load(fh)
+        except Exception:
+            data = {}
+
+raw_hooks = data.get("hooks", {})
+hooks = raw_hooks if isinstance(raw_hooks, dict) else {}
+session_start = hooks.get("SessionStart", [])
+if not isinstance(session_start, list):
+    session_start = []
+
+def has_command(entry, command):
+    if not isinstance(entry, dict):
+        return False
+    if entry.get("command") == command:
+        return True
+    for sub in entry.get("hooks", []):
+        if isinstance(sub, dict) and sub.get("command") == command:
+            return True
+    return False
+
+if not any(has_command(entry, cmd) for entry in session_start):
+    session_start.append({
+        "matcher": "startup|clear|compact",
+        "hooks": [{
+            "type": "command",
+            "command": cmd,
+            "description": "Inject Mick Agent Harness Tripwire + Self-Test triggers"
+        }]
+    })
+
+hooks["SessionStart"] = session_start
+data["hooks"] = hooks
+
+with open(path, "w") as fh:
+    json.dump(data, fh, indent=2, ensure_ascii=False)
+PY
+}
+
 install_daily_sync() {
     local plist_dir="$HOME/Library/LaunchAgents"
     local plist="$plist_dir/com.mick.brain-daily-distill.plist"
@@ -218,6 +317,7 @@ hook_adapters_install() {
 
     if [ "$claude_enabled" = "true" ]; then
         install_claude_code_hook
+        install_claude_code_session_start_hook
         install_daily_sync
     fi
     [ "$codex_enabled" = "true" ] && install_inbox_adapter "codex"
@@ -235,7 +335,7 @@ hook_adapters_status() {
     generic_enabled="$(hook_adapter_enabled generic false)"
 
     if [ "$claude_enabled" = "true" ]; then
-        echo "    Claude Code : enabled ($(claude_hook_status))"
+        echo "    Claude Code : enabled (SessionEnd: $(claude_hook_status), SessionStart: $(claude_session_start_status))"
     else
         echo "    Claude Code : disabled"
     fi

@@ -7,6 +7,138 @@ All notable changes to Mick Agent Harness are documented in this file.
 This project follows Semantic Versioning 2.0. Git tags in the form `vX.Y.Z`
 are the release source of truth.
 
+## [0.12.0] - 2026-07-16
+
+### Kernel Uplift (`rules/core.md`) — Rebuttal Tables & Verification Gate
+
+- **Rule 5 (撞墙熔断) — new "撞墙合理化反驳表"**: 6 rows of common
+  self-rationalizations ("再试一次就好了" / "这次的原因不一样" / "改这里应该就行")
+  paired with the required behavior. Triggers Debug Card instead of another
+  guess-and-check cycle. Inspired by superpowers' "Common Rationalizations"
+  pattern, localized to the actual failure modes seen in Chinese-language
+  Executor sessions.
+- **Rule 7 (完成必须验证) — new "验证 Gate" (5 steps)**: `IDENTIFY → RUN →
+  READ → VERIFY → THEN claim`. Skipping any step = lying, not efficiency.
+  Explicitly names the failure of trusting memory over fresh execution.
+- **Rule 7 — new "完成话术反驳表"**: 7 rows of banned phrases ("应该好了" /
+  "配置好了" / "只是警告不影响" / "Subagent 报告 success") paired with the
+  reality (verify independently, evidence over claim).
+- **Rule 7 — new "Claim / Requires / Not Sufficient" table**: 10 rows mapping
+  claim types (test pass / build OK / bug fixed / config effective / UI works /
+  deployed / requirement met) to their real evidence vs common fake evidence.
+  Makes "what counts as proof" concrete instead of aspirational.
+
+### Playbook Additions (`rules/extended.md`)
+
+- **§3.4 Interaction QA — new "UI 完成话术反驳表"**: 6 rows targeting UI-specific
+  failure modes ("按钮已加上了" / "开关切换正常" / "本地测通了") that don't
+  fit under general verification. Complements the existing 五要素 checklist.
+
+### SessionStart Hook (`hooks/session-start.sh`, `scripts/hook-adapters.sh`)
+
+- **New Claude Code SessionStart hook** — fires on `startup|clear|compact`,
+  injects Tripwire + Self-Test trigger conditions + turn-card format as
+  `hookSpecificOutput.additionalContext`. Solves the "AGENTS.md may not be read
+  by every tool on entry" problem that used to depend on convention alone.
+- **Silent no-op outside Harness projects** — walks up 8 parent dirs looking
+  for `.harness/`, `AGENTS.md`, or `CLAUDE.md` markers; exits 0 without JSON
+  if none found, so the hook doesn't pollute unrelated sessions.
+- **`hook-adapters.sh` extended** — new
+  `install_claude_code_session_start_hook()`, `claude_session_start_status()`,
+  `iter_claude_session_start_commands()`. `harness brain install` now installs
+  both SessionEnd (brain-sync) and SessionStart (Tripwire injection) hooks.
+- **Fix (SessionEnd status detection)** — `iter_claude_hook_commands()` and
+  the new SessionStart iterator both switched from `python3 <<PY "$file"`
+  to `python3 - "$file" <<PY`. The old form silently swallowed the JSON
+  parse (python3 treated the path as a script file, not argv[1]),
+  causing `harness brain status` to always report SessionEnd as "missing"
+  even when the hook was installed correctly.
+
+### Compatibility
+
+- Fully backward compatible. All rule additions are new clauses; the tables
+  surface only when their triggers appear (撞墙 signals / 完成 claims / UI QA).
+- SessionStart hook is opt-in via `harness brain install` (already gated on
+  `hooks.claude_code.enabled` in `config/.brain-config.yaml`).
+- Fixed SessionEnd detection may cause `harness brain status` to change from
+  "missing" to "installed" for users who had the hook installed but never saw
+  it acknowledged — this is a bug fix, not a behavior change.
+
+### Verification
+
+- `hooks/session-start.sh` tested in three CWDs: harness project → valid JSON,
+  home dir with CLAUDE.md → valid JSON, `/tmp` → silent exit 0.
+- `harness brain status` now correctly reports
+  `Claude Code : enabled (SessionEnd: installed, SessionStart: installed)`
+  after install. Both entries verified in `~/.claude/settings.json`.
+- `./generate.sh --check` passes; `dist/AGENTS.md` regenerated with new tables.
+
+## [0.12.0] - 2026-07-16
+
+### Kernel Uplift (`rules/core.md`) — Rebuttal Tables & Verification Gate
+
+- **Rule 5 (撞墙熔断) — new "撞墙合理化反驳表"**: 6 rows of common
+  self-rationalizations ("再试一次就好了" / "这次的原因不一样" / "改这里应该就行")
+  paired with the required behavior. Triggers Debug Card instead of another
+  guess-and-check cycle. Inspired by superpowers' "Common Rationalizations"
+  pattern, localized to the actual failure modes seen in Chinese-language
+  Executor sessions.
+- **Rule 7 (完成必须验证) — new "验证 Gate" (5 steps)**: `IDENTIFY → RUN →
+  READ → VERIFY → THEN claim`. Skipping any step = lying, not efficiency.
+  Explicitly names the failure of trusting memory over fresh execution.
+- **Rule 7 — new "完成话术反驳表"**: 7 rows of banned phrases ("应该好了" /
+  "配置好了" / "只是警告不影响" / "Subagent 报告 success") paired with the
+  reality (verify independently, evidence over claim).
+- **Rule 7 — new "Claim / Requires / Not Sufficient" table**: 10 rows mapping
+  claim types (test pass / build OK / bug fixed / config effective / UI works /
+  deployed / requirement met) to their real evidence vs common fake evidence.
+  Makes "what counts as proof" concrete instead of aspirational.
+
+### Playbook Additions (`rules/extended.md`)
+
+- **§3.4 Interaction QA — new "UI 完成话术反驳表"**: 6 rows targeting UI-specific
+  failure modes ("按钮已加上了" / "开关切换正常" / "本地测通了") that don't
+  fit under general verification. Complements the existing 五要素 checklist.
+
+### SessionStart Hook (`hooks/session-start.sh`, `scripts/hook-adapters.sh`)
+
+- **New Claude Code SessionStart hook** — fires on `startup|clear|compact`,
+  injects Tripwire + Self-Test trigger conditions + turn-card format as
+  `hookSpecificOutput.additionalContext`. Solves the "AGENTS.md may not be read
+  by every tool on entry" problem that used to depend on convention alone.
+- **Silent no-op outside Harness projects** — walks up 8 parent dirs looking
+  for `.harness/`, `AGENTS.md`, or `CLAUDE.md` markers; exits 0 without JSON
+  if none found, so the hook doesn't pollute unrelated sessions.
+- **`hook-adapters.sh` extended** — new
+  `install_claude_code_session_start_hook()`, `claude_session_start_status()`,
+  `iter_claude_session_start_commands()`. `harness brain install` now installs
+  both SessionEnd (brain-sync) and SessionStart (Tripwire injection) hooks.
+- **Fix (SessionEnd status detection)** — `iter_claude_hook_commands()` and
+  the new SessionStart iterator both switched from `python3 <<PY "$file"`
+  to `python3 - "$file" <<PY`. The old form silently swallowed the JSON
+  parse (python3 treated the path as a script file, not argv[1]),
+  causing `harness brain status` to always report SessionEnd as "missing"
+  even when the hook was installed correctly.
+
+### Compatibility
+
+- Fully backward compatible. All rule additions are new clauses; the tables
+  surface only when their triggers appear (撞墙 signals / 完成 claims / UI QA).
+- SessionStart hook is opt-in via `harness brain install` (already gated on
+  `hooks.claude_code.enabled` in `config/.brain-config.yaml`).
+- Fixed SessionEnd detection may cause `harness brain status` to change from
+  "missing" to "installed" for users who had the hook installed but never saw
+  it acknowledged — this is a bug fix, not a behavior change.
+
+### Verification
+
+- `hooks/session-start.sh` tested in three CWDs: harness project → valid JSON,
+  home dir with CLAUDE.md → valid JSON, `/tmp` → silent exit 0.
+- `harness brain status` now correctly reports
+  `Claude Code : enabled (SessionEnd: installed, SessionStart: installed)`
+  after install. Both entries verified in `~/.claude/settings.json`.
+- `./generate.sh --check` passes; `dist/AGENTS.md` regenerated with new tables.
+
 ## [0.11.0] - 2026-07-06
 
 ### Kernel Uplift (`rules/core.md`)
