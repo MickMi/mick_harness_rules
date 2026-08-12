@@ -127,6 +127,7 @@ Agent 应该知道：
 harness check
 harness report
 harness metrics
+harness observe status
 ```
 
 ## 它会改哪些文件
@@ -137,6 +138,8 @@ harness metrics
 | `harness agents sync` | `~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md` | 注入 managed loader | 删除 `MICK-HARNESS-GLOBAL` 标记块 |
 | `harness init` | 项目内 `AGENTS.md`、`.harness/`、`.gitignore` | 项目挂载 Harness | 删除 `.harness`；移除 `AGENTS.md` symlink 或 `HARNESS:BEGIN` 标记块 |
 | `harness init --full` | 项目内 `.harness-config.yaml` | 启用完整配置和检查 | 删除该配置文件 |
+| `harness observe init` | 项目内 `.harness-runtime/` | 保存 Agent 工作事件账本和可重建 snapshot | 停止 `watch` 后删除 `.harness-runtime/` |
+| `harness observe service install` | `~/Library/LaunchAgents/com.mick.harness.observer.plist`、`~/.local/state/mick-harness/observer/` | 在 `127.0.0.1:6425` 自动启动并保活本地工作服务器与统一项目工作台 | `harness observe service uninstall` |
 | `harness brain install` | `~/.mick-brain`、可选 Claude hook/LaunchAgent | 创建 Brain 和启用同步 | 删除 Brain 目录或关闭对应 hook |
 
 项目文件如果已有同名规则文件，Harness 会用标记块注入，不会直接丢弃原内容。
@@ -153,6 +156,8 @@ Prompt 约束不能让任何模型 100% 服从。Mick Agent Harness 的保证边
 | 发现未加载/未验证 | 支持 | 通过 Self-Test、`harness check`、回合卡片和验证证据检查。 |
 | 阻止所有错误代码合入 | 不承诺 | 需要结合测试、CI、review 或更硬的工程门禁。 |
 | 长期记忆沉淀 | 支持 | 通过 Private Brain 和可选 hook adapter。 |
+| 跨项目统一进度 | 支持 | 所有 `harness init` 项目进入 6425 本地工作台。 |
+| Agent 工作自动回写 | 支持 | lifecycle 自动回写；结构化角色工作由注入规则调用 `harness observe emit`，失败时本地降级。 |
 | 自动改写 Harness 规则 | 不支持 | 只生成进化提案，由人 review 后合并。 |
 
 换句话说：Harness 不是魔法强制器，而是一套**先验注入 + 后验检查 + 长期记忆 + 人工门禁**的协作系统。
@@ -178,13 +183,14 @@ harness export ide --full
 
 ## 工作原理
 
-Mick Agent Harness 由四层组成：
+Mick Agent Harness 由五层组成：
 
 | 层 | 作用 | 典型文件/命令 |
 |---|---|---|
 | Global Harness | 安装在本机的一套公共规则和工具 | `~/.mick-harness`、`harness install` |
 | Agent Loader | 注入到 Code Agent 的全局入口 | `harness agents sync`、`harness export codex` |
 | Project Manifest | 项目里的最小入口，指向全局 Harness | `AGENTS.md`、`.harness/` |
+| Local Work Server | 接收并聚合所有已注入项目的工作事件 | `127.0.0.1:6425`、`harness observe service` |
 | Private Brain | 私有长期记忆和规则进化信号 | `~/.mick-brain`、`harness brain install` |
 
 推荐形态：
@@ -193,6 +199,9 @@ Mick Agent Harness 由四层组成：
 一台机器安装一次 Harness
   -> 每个项目运行一次 harness init
   -> 每个 Agent 通过 loader 或 export 读取同一套规则
+  -> Agent lifecycle 与结构化工作摘要回写本地工作服务器
+  -> 在 6425 统一工作台查看项目目标、当前版本和五角色办公室
+  -> 点击角色阅读需求上下文、决策、执行记录与交付物
   -> 交付时用 check / audit / verification 做后验约束
   -> 重要经验写入 Private Brain
   -> 周期性生成 Harness 规则进化提案
@@ -206,6 +215,7 @@ Mick Agent Harness 由四层组成：
 harness check
 harness report
 harness metrics
+harness observe service status
 harness update
 ```
 
@@ -214,9 +224,36 @@ harness update
 | `harness check [dir]` | 检查项目 Harness / Brain / 规则生成状态。 |
 | `harness report [dir]` | 查看 `plan.md` 进度、阻塞和验证状态。 |
 | `harness metrics [dir]` | 聚合完成率、验证覆盖率和 audit 信号。 |
+| `harness observe service status` | 检查自动启动的 Mick Harness 本地工作服务器、6425 统一工作台、接收与扫描状态；详见 [Observer 文档](docs/OBSERVE.md)。 |
+| `harness observe service [install\|start\|stop\|restart\|status\|logs\|uninstall]` | 管理本地后台服务生命周期。 |
+| `harness observe [init\|sync\|status\|replay\|watch\|hook-config\|emit]` | 整理项目目标与需求、重放进展、启动临时工作台、配置 Agent Hook 或回写结构化角色工作。 |
 | `harness update` | 更新全局 Harness、重新生成规则、刷新注册项目、同步 Agent loader。 |
 | `harness agents scan` | 查看本机可自动管理的 Agent 入口。 |
 | `harness agents sync` | 把 managed loader 同步到支持的 Agent 入口。 |
+
+### 用角色办公室查看项目进展
+
+项目首页把信息分成三层：`docs/PROJECT.md` 记录稳定项目目标，`docs/VERSIONS.md` 记录当前版本目标与需求归属，`plan.md` 保留技术执行步骤。这样版本变化不会覆盖项目的长期方向。
+
+PM、设计、开发、测试、Review 五个角色固定显示在办公室中。角色状态只来自真实工作事件；当前流转会高亮，点击角色可以查看其需求上下文、关联决策、执行记录和交付物。真实 `handoff.created` 与 work round 的建议 `next_role` 会分别标明，不会把建议伪装成已经接手。
+
+### 在工作台阅读产物与版本路线
+
+Agent 交付文档、代码或报告时，可以把项目相对路径一并回写：
+
+```bash
+harness observe emit work.round_completed --ref task-39-turn-1 --role Executor \
+  --requirement task-39 --summary "产物阅读器已验证" \
+  --artifact docs/OBSERVE.md --artifact scripts/harness-observe.py
+```
+
+打开 `http://127.0.0.1:6425/`，进入项目后：
+
+- “产物”页把 Markdown 渲染成阅读页面，把 Python 等源代码显示为可折叠、可滚动并带行号的代码块；
+- “版本规划”页读取 PM 维护的 `docs/VERSIONS.md`，展示每个版本的目标和需求清单；
+- 同一页面读取真实 Git 状态，显示当前分支、本地分支、Tag 和未提交改动，让不熟悉 Git 的用户也能理解项目所在位置。
+
+工作台只读取已登记的项目内文本产物，拒绝路径穿越、项目外软链接、二进制文件和大文件。Git 能力也是只读的：不会创建、切换、合并或删除分支，不会打 Tag 或 push。完整格式和安全边界见 [Observer 文档](docs/OBSERVE.md)。
 
 ## Advanced: Private Brain
 
@@ -311,7 +348,7 @@ harness brain evolve
 
 - Prompt 约束无法保证所有模型 100% 遵守，仍需要后验检查和用户 review。
 - 自动 loader 管理目前主要覆盖文件型入口；部分 IDE 插件需要手动 export。
-- Brain hook 自动化在 Claude Code 上最完整；Codex、IDE、API 通过可选 adapter / ingest 接入。
+- lifecycle 自动化取决于各 Agent 的 Hook 能力；没有 Hook 的 Agent 通过注入规则调用 `harness observe emit` 回写结构化工作摘要。
 - `harness brain evolve` 生成的是提案，不会自动改写规则。
 - 私有 Brain 的远程同步取决于用户自己的私有仓库权限和网络状态。
 

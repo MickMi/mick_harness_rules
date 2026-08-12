@@ -22,3 +22,5 @@ audit-log.md
 .prompts/
 .prompts
 AGENTS.md
+# Observer runtime data (per-project append-only ledger, never tracked)
+.harness-runtime/

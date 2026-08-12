@@ -7,6 +7,113 @@ All notable changes to Mick Agent Harness are documented in this file.
 This project follows Semantic Versioning 2.0. Git tags in the form `vX.Y.Z`
 are the release source of truth.
 
+## [0.15.0] - 2026-08-12
+
+### Structured Artifact Stage Navigation
+
+- **Traceable stage headings** (`rules/core.md`): evolving Markdown documents
+  now use `## vX.Y.Z · YYYY-MM-DD · Stage title`. The version comes from
+  `docs/VERSIONS.md`, the date is the actual discussion/decision date, and
+  neither may be invented.
+- **Deterministic parser** (`scripts/harness-observe.py`): new
+  `parse_markdown_stages()` reads H2–H4 headings only — dates in body text or
+  fenced code never create stage entries. Legacy headings with parenthesized
+  or dashed dates remain navigable, keep every date, and are marked
+  `traceable=false` with "未标版本" instead of a guessed version.
+- **Dashboard**: the artifact page replaces event-based version/date filters
+  with a stage outline that scrolls to the matching heading in the current
+  document. Code artifacts keep the collapsible line-number reader and never
+  show Markdown stages.
+
+Compatibility: the artifact API gains an additive `stages` field; legacy
+`artifact_mode` / `artifact_scope` URL parameters are ignored and removed on
+the next state write. No new dependencies, no mutation endpoints.
+
+Verification: 43 unittests, shell/Python/JSON/JavaScript syntax,
+`generate.sh --check`, `git diff --check`, Harness Audit 8 PASS / 0 FAIL,
+real RaliTennis parse (38 stages, multi-date legacy heading preserved).
+
+## [0.14.0] - 2026-08-12
+
+### Artifact Records by Version and Date
+
+- Artifact metadata now aggregates **every work-round reference** for the
+  same path (`records`, `versions`, `dates`) instead of deduplicating away
+  delivery context.
+- The artifact page shows each record's goal, result, role, date, and the
+  key decisions of the linked requirement; Markdown readers gained a heading
+  outline for in-document jumps.
+- **Post-delivery correction**: version/date navigation scopes to the
+  selected file's stage records only — the left file list is never filtered,
+  and the page states clearly that the current file is not a historical
+  snapshot.
+
+Verification: 42 unittests, Harness Audit 8 PASS / 0 WARN / 0 FAIL,
+installed runtime checksums match source, Observer `/healthz` ok.
+
+## [0.13.0] - 2026-08-12
+
+### Role Offices and Layered Goals
+
+- **Three-layer goals**: the stable project goal lives in `docs/PROJECT.md`
+  (new, PM-owned), version goals in `docs/VERSIONS.md`, and plan phase goals
+  are no longer mislabeled as the overall goal.
+- **Five role offices**: the project home shows PM / Designer / Executor /
+  QA / Reviewer with real states (active / waiting / completed / idle)
+  projected only from `work.round_*` and `handoff.created` events; Planner
+  and Orchestrator fold into the PM group.
+- **Real vs. suggested flow**: explicit handoffs and `next_role` suggestions
+  render differently; a delivered version says "本版本已交付，等待 PM 定义下一版本"
+  instead of a generic "current requirement undetermined".
+- Role detail pages merge requirement context, execution summaries,
+  artifacts, decisions, and history; the four duplicated home modules were
+  removed.
+
+Verification: 40 unittests, Harness Audit 8 PASS / 0 WARN / 0 FAIL, live
+workspace API returns the stable project goal, five roles, and the real
+`Reviewer → PM` suggested handoff.
+
+## [0.12.0] - 2026-08-12
+
+### From Rule Injector to Local Work Server + Unified Workbench
+
+- **Observer V0**: append-only per-project event ledger
+  (`.harness-runtime/`), plan/STATE collectors, deterministic snapshot
+  replay, and a localhost read-only dashboard — observation only, no
+  orchestration.
+- **Portfolio**: `harness observe watch --all` aggregates every registered
+  project with valid/invalid/missing states; project ids resolve only
+  through the Harness registry.
+- **Mick Harness Observer service**: launchd agent
+  (`com.mick.harness.observer`) keeps a scanner alive on `127.0.0.1:6425`;
+  `harness observe service install|start|stop|restart|status|logs|uninstall`
+  manages the lifecycle.
+- **Requirement navigation**: the default project view shows the overall
+  goal, plan-derived requirements, and `定义 → 实现 → 验证 → 交付` nodes;
+  raw events move to "技术记录".
+- **Work server ingest**: the single mutation endpoint `POST /api/v1/events`
+  (Bearer token, registry-scoped, idempotent) receives `work.round_started /
+  work.round_completed / decision.recorded / handoff.created`; agents and the
+  CLI fall back to the local ledger when the service is unreachable, without
+  changing exit codes. Prompts, chat transcripts, command arguments, and
+  secrets are never stored.
+- **Artifact reading + PM version workbench**: authorized Markdown/code
+  artifacts render in the dashboard (safe DOM, 512 KiB text cap, path
+  escape/symlink/binary rejection); `docs/VERSIONS.md` becomes the PM-owned
+  version plan, displayed against read-only Git branch/tag/HEAD/dirty facts.
+- **Codex hook** (`scripts/harness-observe-hook.py`): lifecycle events are
+  redacted to session/turn state, project id, and time; hook config is
+  printed for review, never auto-installed.
+
+Migration notes: the dashboard port moved from `4317` to **`127.0.0.1:6425`**;
+run `harness observe service install` once to keep the observer alive across
+terminals. All event-ledger, HTTP GET, and CLI surfaces stay backward
+compatible.
+
+Verification: 37 unittests at freeze, end-to-end two-project ingest →
+aggregate → refresh → restart recovery, LaunchAgent health checks, installed
+runtime checksums match source.
+
 ## [0.11.0] - 2026-07-06
 
 ### Kernel Uplift (`rules/core.md`)

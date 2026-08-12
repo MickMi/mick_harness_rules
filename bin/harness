@@ -17,6 +17,7 @@ set -euo pipefail
 #   harness export api        # 输出纯 API 可注入的 Harness Prompt
 #   harness update             # 更新全局 harness + 注册项目
 #   harness check              # 验证当前项目完整性
+#   harness observe status     # 查看只读运行观察状态
 #   harness version            # 查看版本
 # ============================================================
 
@@ -74,6 +75,19 @@ stash_legacy_registry_if_dirty() {
     fi
 }
 
+install_observer_service() {
+    [ "${MICK_HARNESS_OBSERVER_AUTO_INSTALL:-1}" != "0" ] || return 0
+    [ "$(uname -s)" = "Darwin" ] || return 0
+    command -v python3 >/dev/null 2>&1 || { warn "Python 3 unavailable; Observer service was not installed."; return 0; }
+    local observer="$HARNESS_GLOBAL/scripts/harness-observe.py"
+    [ -f "$observer" ] || { warn "Observer runtime missing; service was not installed."; return 0; }
+    if MICK_HARNESS_ACTIVITY=0 python3 "$observer" service install >/dev/null; then
+        ok "Mick Harness Observer installed at http://127.0.0.1:6425/."
+    else
+        warn "Harness installed, but Observer service setup failed. Retry: harness observe service install"
+    fi
+}
+
 # ============================================================
 # harness version
 # ============================================================
@@ -96,11 +110,13 @@ cmd_install() {
     if [ -d "$HARNESS_GLOBAL/.git" ]; then
         ok "Harness already installed at $HARNESS_GLOBAL"
         info "Run 'harness update' to pull latest."
+        install_observer_service
         return 0
     fi
     if [ -e "$HARNESS_GLOBAL" ]; then
         if harness_available; then
             ok "Harness available at $HARNESS_GLOBAL"
+            install_observer_service
             return 0
         fi
         fail "Install target exists but is not a harness repo: $HARNESS_GLOBAL"
@@ -120,6 +136,7 @@ cmd_install() {
     echo ""
     ok "Harness installed."
     cmd_agents sync --quiet
+    install_observer_service
     echo ""
     echo "  确保 ~/.local/bin 在 PATH 中（大多数 macOS 已默认包含）："
     echo "    export PATH=\"\$HOME/.local/bin:\$PATH\""
@@ -785,6 +802,7 @@ cmd_update() {
     fi
 
     cmd_agents sync --quiet
+    install_observer_service
 
     ok "All registered projects refreshed."
 }
@@ -950,8 +968,71 @@ cmd_metrics() {
 }
 
 # ============================================================
+# harness observe — local Harness work server and portfolio
+# ============================================================
+cmd_observe() {
+    if ! command -v python3 >/dev/null 2>&1; then
+        fail "harness observe requires Python 3."
+        return 1
+    fi
+
+    local observe_script="$HARNESS_GLOBAL/scripts/harness-observe.py"
+    if [ ! -f "$observe_script" ]; then
+        fail "Observe runtime not found: $observe_script"
+        return 1
+    fi
+
+    python3 "$observe_script" "$@"
+}
+
+# ============================================================
+# Harness CLI activity — best-effort, argument-free lifecycle
+# ============================================================
+HARNESS_ACTIVITY_COMMAND=""
+HARNESS_ACTIVITY_PROJECT=""
+HARNESS_ACTIVITY_INVOCATION=""
+
+record_harness_activity() {
+    local state="$1"
+    local exit_code="${2:-}"
+    [ "${MICK_HARNESS_ACTIVITY:-1}" != "0" ] || return 0
+    [ -n "$HARNESS_ACTIVITY_COMMAND" ] || return 0
+    command -v python3 >/dev/null 2>&1 || return 0
+    local observe_script="$HARNESS_GLOBAL/scripts/harness-observe.py"
+    [ -f "$observe_script" ] || return 0
+    local args=(
+        activity
+        --project "$HARNESS_ACTIVITY_PROJECT"
+        --command "$HARNESS_ACTIVITY_COMMAND"
+        --state "$state"
+        --invocation "$HARNESS_ACTIVITY_INVOCATION"
+    )
+    if [ -n "$exit_code" ]; then
+        args+=(--exit-code "$exit_code")
+    fi
+    python3 "$observe_script" "${args[@]}" >/dev/null 2>&1 || true
+}
+
+start_harness_activity() {
+    HARNESS_ACTIVITY_COMMAND="${1:-help}"
+    HARNESS_ACTIVITY_PROJECT="$(pwd -P)"
+    HARNESS_ACTIVITY_INVOCATION="cli-$(date -u +%Y%m%d%H%M%S)-$$"
+    record_harness_activity started
+}
+
+finish_harness_activity() {
+    local exit_code=$?
+    trap - EXIT
+    record_harness_activity completed "$exit_code"
+    exit "$exit_code"
+}
+
+# ============================================================
 # Main
 # ============================================================
+start_harness_activity "${1:-help}"
+trap finish_harness_activity EXIT
+
 case "${1:-}" in
     init)
         shift
@@ -987,6 +1068,10 @@ case "${1:-}" in
         shift
         cmd_metrics "${1:-}"
         ;;
+    observe)
+        shift
+        cmd_observe "$@"
+        ;;
     version|--version|-v)
         cmd_version
         ;;
@@ -1004,6 +1089,7 @@ case "${1:-}" in
         echo "  harness check [dir]      验证当前项目脚手架完整性"
         echo "  harness report [dir]     查看当前任务计划与执行状态"
         echo "  harness metrics [dir]    聚合任务质量指标"
+        echo "  harness observe [cmd]    汇总项目进度并向本地工作服务器回写 Agent 事件"
         echo "  harness brain [cmd]      Brain 状态/安装/同步/蒸馏/进化"
         echo "  harness version          查看版本"
         echo ""

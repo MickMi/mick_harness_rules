@@ -1,0 +1,1354 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mick Harness · 项目导航</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: light-dark(#f6f7f9, #111317);
+      --surface: light-dark(#ffffff, #191c22);
+      --surface-2: light-dark(#eef1f5, #232730);
+      --text: light-dark(#17191d, #f1f3f5);
+      --muted: light-dark(#616977, #a9b0bd);
+      --border: light-dark(#d9dee7, #353b47);
+      --accent: light-dark(#2457d6, #89a9ff);
+      --accent-soft: light-dark(#e7edff, #24335d);
+      --danger: light-dark(#b3261e, #ffaaa4);
+      --warning: light-dark(#8a5800, #ffd089);
+      --success: light-dark(#1c6b3c, #88d3a6);
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); }
+    button { font: inherit; }
+    button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+    .app { min-height: 100vh; display: grid; grid-template-columns: 290px minmax(0, 1fr); }
+    .sidebar { border-right: 1px solid var(--border); background: var(--surface); padding: 22px 16px; }
+    .brand { margin: 0 0 4px; font-size: 18px; font-weight: 650; }
+    .subtitle { margin: 0 0 20px; color: var(--muted); font-size: 13px; }
+    .section-label { margin: 20px 8px 8px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .project-list, .run-list { display: grid; gap: 8px; }
+    .project-button, .run-button {
+      width: 100%; text-align: left; border: 1px solid transparent; border-radius: 10px;
+      background: transparent; color: inherit; padding: 11px 12px; cursor: pointer;
+    }
+    .project-button:hover, .run-button:hover { background: var(--surface-2); }
+    .project-button[aria-current="true"], .run-button[aria-current="true"] { border-color: var(--accent); background: var(--accent-soft); }
+    .project-button[data-validation]:not([data-validation="valid"]) { border-color: var(--danger); }
+    .run-name { display: block; font-weight: 600; overflow-wrap: anywhere; }
+    .run-meta { display: flex; gap: 8px; margin-top: 5px; color: var(--muted); font-size: 12px; }
+    .main { min-width: 0; padding: 24px clamp(16px, 3vw, 42px) 48px; }
+    .topline { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+    h1 { margin: 0; font-size: clamp(24px, 4vw, 36px); line-height: 1.15; }
+    .eyebrow { color: var(--muted); font-size: 13px; margin-bottom: 6px; }
+    .freshness { color: var(--muted); font-size: 13px; }
+    .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin: 22px 0; }
+    .metric { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 13px 15px; }
+    .metric-label { color: var(--muted); font-size: 12px; }
+    .metric-value { display: block; margin-top: 4px; font-size: 22px; font-weight: 650; }
+    .tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+    .tab { border: 0; border-bottom: 3px solid transparent; background: transparent; color: var(--muted); padding: 10px 12px; cursor: pointer; }
+    .tab[aria-selected="true"] { border-bottom-color: var(--accent); color: var(--text); font-weight: 600; }
+    .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
+    .panel { min-width: 0; }
+    .detail { position: sticky; top: 18px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); padding: 17px; }
+    .detail h2 { margin: 0 0 4px; font-size: 18px; }
+    .detail h3 { margin: 18px 0 7px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    .detail p { margin: 5px 0; overflow-wrap: anywhere; }
+    .empty { border: 1px dashed var(--border); border-radius: 12px; padding: 28px; color: var(--muted); text-align: center; }
+    .project-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-top: 20px; }
+    .project-card { border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: inherit; padding: 17px; text-align: left; cursor: pointer; }
+    .project-card:hover { border-color: var(--accent); }
+    .project-card[data-validation]:not([data-validation="valid"]) { border-color: var(--danger); }
+    .project-path { margin-top: 7px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+    .goal-card { border: 1px solid var(--border); border-radius: 16px; background: linear-gradient(135deg, var(--surface), var(--accent-soft)); padding: 20px; margin: 20px 0; }
+    .goal-label { color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .05em; }
+    .goal-text { margin: 7px 0 0; max-width: 900px; font-size: clamp(17px, 2.2vw, 23px); line-height: 1.45; font-weight: 620; }
+    .progress-line { display: flex; justify-content: space-between; gap: 14px; margin-top: 18px; color: var(--muted); font-size: 13px; }
+    .progress-track { height: 7px; margin-top: 8px; overflow: hidden; border-radius: 999px; background: var(--surface-2); }
+    .progress-fill { height: 100%; border-radius: inherit; background: var(--accent); transition: width .2s ease; }
+    .overview-grid { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 18px; align-items: start; }
+    .section-card { border: 1px solid var(--border); border-radius: 14px; background: var(--surface); padding: 17px; }
+    .section-card h2 { margin: 0; font-size: 18px; }
+    .section-help { margin: 5px 0 15px; color: var(--muted); font-size: 13px; }
+    .attention-list { display: grid; gap: 8px; margin-top: 12px; }
+    .attention-item { border-left: 3px solid var(--warning); border-radius: 8px; background: var(--surface-2); padding: 10px 12px; font-size: 13px; }
+    .attention-item.error { border-left-color: var(--danger); color: var(--text); }
+    .role-chip, .material-chip { display: inline-flex; align-items: center; border-radius: 999px; background: var(--surface-2); padding: 5px 9px; color: var(--muted); font-size: 12px; }
+    .detail-section { margin-top: 17px; }
+    .detail-section h3 { margin: 0 0 7px; color: var(--muted); font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
+    .detail-section p { margin: 5px 0; line-height: 1.45; }
+    .material-list { display: flex; flex-wrap: wrap; gap: 7px; }
+    .material-button { border: 1px solid var(--border); cursor: pointer; color: var(--text); }
+    .material-button:hover { border-color: var(--accent); background: var(--accent-soft); }
+    .project-goal-source { margin-top: 10px; color: var(--muted); font-size: 12px; }
+    .version-focus { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: end; margin-top: 18px; border-top: 1px solid var(--border); padding-top: 16px; }
+    .version-name { font-size: 13px; color: var(--muted); }
+    .version-goal { margin: 5px 0 0; font-size: 15px; line-height: 1.5; font-weight: 580; }
+    .version-progress { text-align: right; white-space: nowrap; }
+    .version-progress strong { display: block; font-size: 22px; }
+    .version-progress span { color: var(--muted); font-size: 12px; }
+    .office-shell { margin-top: 18px; }
+    .office-head { display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+    .current-transition { display: flex; align-items: center; gap: 10px; border: 1px solid var(--accent); border-radius: 12px; background: var(--accent-soft); padding: 10px 13px; }
+    .current-transition[data-kind="suggested"] { border-style: dashed; }
+    .transition-role { font-weight: 700; }
+    .transition-arrow { color: var(--accent); font-size: 18px; }
+    .transition-kind { color: var(--muted); font-size: 11px; }
+    .office-scroll { overflow-x: auto; padding: 4px 1px 8px; }
+    .office-grid { min-width: 760px; display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr)); gap: 10px; margin-top: 17px; }
+    .office-role { position: relative; min-height: 145px; border: 1px solid var(--border); border-radius: 15px; background: var(--surface); color: inherit; padding: 14px; text-align: left; cursor: pointer; transition: border-color .18s ease, transform .18s ease, background .18s ease; }
+    .office-role:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .office-role[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+    .office-role[data-flow="source"] { box-shadow: inset 0 -3px 0 var(--warning); }
+    .office-role[data-flow="target"] { box-shadow: inset 0 -3px 0 var(--accent); }
+    .office-role[data-status="active"] .role-dot { background: var(--accent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 18%, transparent); }
+    .office-role[data-status="waiting"] .role-dot { background: var(--warning); }
+    .office-role[data-status="completed"] .role-dot { background: var(--success); }
+    .office-role[data-status="idle"] { color: var(--muted); }
+    .office-role[data-status="idle"] .role-dot { background: var(--border); }
+    .role-top { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+    .role-avatar { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: var(--surface-2); font-size: 12px; font-weight: 760; letter-spacing: .02em; }
+    .role-dot { width: 9px; height: 9px; border-radius: 50%; }
+    .role-name { display: block; margin-top: 14px; font-weight: 720; }
+    .role-state { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
+    .role-summary { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-top: 9px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+    .transition-trail { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+    .transition-pill { border-radius: 999px; background: var(--surface-2); padding: 5px 9px; color: var(--muted); font-size: 11px; }
+    .transition-pill[data-current="true"] { background: var(--accent-soft); color: var(--text); }
+    .role-detail-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(280px, .9fr); gap: 18px; margin-top: 18px; align-items: start; }
+    .role-detail-card { min-width: 0; }
+    .role-detail-title { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+    .work-history { display: grid; gap: 9px; margin-top: 12px; }
+    .work-entry { border-left: 3px solid var(--border); border-radius: 9px; background: var(--surface-2); padding: 11px 12px; }
+    .work-entry[data-status="active"] { border-left-color: var(--accent); }
+    .work-entry[data-status="completed"] { border-left-color: var(--success); }
+    .work-entry-title { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; font-weight: 650; }
+    .work-entry p { margin: 6px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .requirement-context { border: 1px solid var(--border); border-radius: 11px; padding: 12px; margin-top: 10px; }
+    .requirement-context h3 { margin: 0; font-size: 14px; }
+    .requirement-context > p { margin: 5px 0 0; color: var(--muted); font-size: 12px; }
+    .decision-note { margin-top: 9px; border-left: 3px solid var(--accent); padding: 7px 10px; background: var(--surface-2); font-size: 12px; line-height: 1.45; }
+    .artifact-layout { display: grid; grid-template-columns: minmax(220px, 320px) minmax(0, 1fr); gap: 18px; align-items: start; }
+    .artifact-list { display: grid; gap: 8px; }
+    .artifact-item { width: 100%; border: 1px solid var(--border); border-radius: 11px; background: var(--surface); color: inherit; padding: 11px 12px; text-align: left; cursor: pointer; }
+    .artifact-item:hover, .artifact-item[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+    .artifact-kind { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
+    .artifact-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+    .artifact-tag { border-radius: 999px; background: var(--surface-2); padding: 3px 7px; color: var(--muted); font-size: 10px; }
+    .artifact-viewer { min-width: 0; display: grid; gap: 12px; }
+    .markdown-shell { min-width: 0; display: grid; grid-template-columns: minmax(160px, 220px) minmax(0, 1fr); gap: 12px; align-items: start; }
+    .document-outline { position: sticky; top: 18px; max-height: calc(100vh - 36px); overflow: auto; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); padding: 13px; }
+    .document-outline-title { margin: 0 0 8px; font-size: 13px; font-weight: 700; }
+    .document-outline-title:not(:first-child) { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 13px; }
+    .stage-list { display: grid; gap: 6px; }
+    .stage-link { width: 100%; border: 1px solid transparent; border-radius: 9px; background: var(--surface-2); color: var(--text); padding: 8px; text-align: left; cursor: pointer; }
+    .stage-link:hover { border-color: var(--accent); background: var(--accent-soft); }
+    .stage-link-title { display: block; font-size: 11px; font-weight: 650; line-height: 1.35; }
+    .stage-link-meta { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; color: var(--muted); font-size: 9px; }
+    .stage-link[data-format="structured"] .stage-format { color: var(--success); }
+    .stage-link[data-format="legacy"] .stage-format { color: var(--warning); }
+    .stage-empty { color: var(--muted); font-size: 10px; line-height: 1.45; }
+    .outline-link { display: block; width: 100%; border: 0; border-radius: 7px; background: transparent; color: var(--muted); padding: 6px 7px; text-align: left; cursor: pointer; font-size: 11px; line-height: 1.35; }
+    .outline-link:hover { background: var(--surface-2); color: var(--text); }
+    .outline-link[data-level="2"] { padding-left: 14px; }
+    .outline-link[data-level="3"], .outline-link[data-level="4"] { padding-left: 22px; }
+    .document-reader { min-width: 0; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); padding: clamp(16px, 3vw, 28px); }
+    .document-reader [id] { scroll-margin-top: 18px; }
+    .document-reader [data-stage-active="true"] { border-radius: 8px; background: var(--accent-soft); box-shadow: 0 0 0 5px var(--accent-soft); }
+    .document-reader h1, .document-reader h2, .document-reader h3 { margin: 1.2em 0 .45em; line-height: 1.25; }
+    .document-reader h1:first-child, .document-reader h2:first-child { margin-top: 0; }
+    .document-reader p, .document-reader li { line-height: 1.65; }
+    .document-reader blockquote { margin: 14px 0; border-left: 4px solid var(--accent); padding: 4px 14px; color: var(--muted); }
+    .document-reader table { margin: 14px 0; }
+    .document-reader hr { border: 0; border-top: 1px solid var(--border); margin: 20px 0; }
+    .code-fold { border: 1px solid var(--border); border-radius: 11px; background: light-dark(#111827, #0b0d11); color: #e7eaf0; overflow: hidden; }
+    .code-fold + .code-fold { margin-top: 12px; }
+    .code-fold summary { cursor: pointer; padding: 10px 13px; background: #181d27; color: #c8d2e4; font-size: 12px; font-weight: 650; }
+    .code-scroll { max-height: min(62vh, 680px); overflow: auto; padding: 10px 0; }
+    .code-line { display: grid; grid-template-columns: 48px minmax(max-content, 1fr); min-height: 20px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.55; }
+    .line-number { position: sticky; left: 0; padding: 0 10px; color: #667085; background: #111827; text-align: right; user-select: none; }
+    .code-line code { padding: 0 14px 0 2px; color: inherit; white-space: pre; overflow-wrap: normal; }
+    .version-stack { display: grid; gap: 14px; }
+    .version-card { position: relative; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); padding: 17px; }
+    .version-card[data-status="in_progress"] { border-color: var(--accent); box-shadow: inset 4px 0 0 var(--accent); }
+    .version-card[data-status="released"], .version-card[data-status="completed"] { box-shadow: inset 4px 0 0 var(--success); }
+    .version-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+    .version-title { margin: 0; font-size: 20px; }
+    .chip-row { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+    .version-chip { display: inline-flex; border-radius: 999px; background: var(--surface-2); padding: 5px 9px; color: var(--muted); font-size: 12px; }
+    .version-chip[data-ok="true"] { color: var(--success); }
+    .version-chip[data-ok="false"] { color: var(--danger); }
+    .version-requirements { display: grid; gap: 7px; margin-top: 14px; }
+    .version-requirement { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 8px; align-items: start; border-top: 1px solid var(--border); padding-top: 8px; }
+    .branch-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 12px; }
+    .branch-card { border: 1px solid var(--border); border-radius: 11px; background: var(--surface-2); padding: 12px; }
+    .branch-card[data-current="true"] { border-color: var(--accent); background: var(--accent-soft); }
+    .branch-name { font-weight: 650; overflow-wrap: anywhere; }
+    .lanes { display: grid; gap: 14px; }
+    .lane { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px; align-items: start; }
+    .lane-label { color: var(--muted); padding-top: 12px; font-size: 13px; }
+    .lane-tasks { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 9px; }
+    .task {
+      border: 1px solid var(--border); border-radius: 11px; background: var(--surface);
+      color: inherit; text-align: left; padding: 12px; cursor: pointer;
+    }
+    .task:hover { border-color: var(--accent); }
+    .task[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+    .task-title { display: block; font-weight: 600; margin-bottom: 7px; }
+    .status { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; }
+    .status::before { content: "○"; color: var(--muted); }
+    .status[data-status="in_progress"]::before, .status[data-status="active"]::before { content: "●"; color: var(--accent); }
+    .status[data-status="blocked"] { color: var(--danger); }
+    .status[data-status="blocked"]::before { content: "!"; font-weight: 800; color: var(--danger); }
+    .status[data-status="completed"] { color: var(--success); }
+    .status[data-status="completed"]::before { content: "✓"; color: var(--success); }
+    .status[data-status="verification_pending"] { color: var(--warning); }
+    .status[data-status="verification_pending"]::before { content: "◌"; color: var(--warning); }
+    .timeline { display: grid; gap: 0; }
+    .event-row { display: grid; grid-template-columns: 70px 135px minmax(0, 1fr); gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--border); }
+    .sequence, .event-time, .muted { color: var(--muted); font-size: 12px; }
+    .event-title { font-weight: 600; overflow-wrap: anywhere; }
+    .event-summary { color: var(--muted); margin-top: 3px; font-size: 13px; overflow-wrap: anywhere; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 10px 9px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; overflow-wrap: anywhere; }
+    .error { color: var(--danger); border-color: var(--danger); }
+    .warning-line { color: var(--warning); margin: 8px 0 0; font-size: 13px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+    @media (max-width: 900px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar { border-right: 0; border-bottom: 1px solid var(--border); }
+      .run-list { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+      .workspace { grid-template-columns: 1fr; }
+      .overview-grid { grid-template-columns: 1fr; }
+      .version-focus, .role-detail-grid { grid-template-columns: 1fr; }
+      .version-progress { text-align: left; }
+      .artifact-layout { grid-template-columns: 1fr; }
+      .markdown-shell { grid-template-columns: 1fr; }
+      .document-outline { position: static; max-height: 220px; }
+      .detail { position: static; }
+    }
+    @media (max-width: 560px) {
+      .metrics { grid-template-columns: repeat(2, 1fr); }
+      .lane { grid-template-columns: 1fr; gap: 5px; }
+      .lane-label { padding-top: 0; }
+      .event-row { grid-template-columns: 50px minmax(0, 1fr); }
+      .event-time { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" aria-label="运行列表">
+      <p class="brand">Harness 项目导航</p>
+      <p id="portfolio-summary" class="subtitle">正在整理项目…</p>
+      <p class="section-label">项目</p>
+      <div id="project-list" class="project-list"></div>
+      <p class="section-label">进展记录</p>
+      <div id="run-list" class="run-list"></div>
+    </aside>
+    <main class="main">
+      <div id="content" aria-live="polite">
+        <div class="empty">正在整理项目进展…</div>
+      </div>
+    </main>
+  </div>
+  <script>
+    (() => {
+      const state = { portfolio: null, project: null, index: null, run: null, snapshot: null, workspace: null, events: [], view: "overview", taskId: null, selectedRole: null, artifactPath: null, artifactDocument: null, artifactError: null, notice: null };
+      const projectList = document.getElementById("project-list");
+      const runList = document.getElementById("run-list");
+      const portfolioSummary = document.getElementById("portfolio-summary");
+      const content = document.getElementById("content");
+      const networkRetryDelaysMs = [0, 300, 900];
+
+      function el(tag, className, text) {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text !== undefined) node.textContent = String(text);
+        return node;
+      }
+
+      function wait(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+      }
+
+      async function fetchWithRetry(url) {
+        let lastError = null;
+        for (const delayMs of networkRetryDelaysMs) {
+          if (delayMs) await wait(delayMs);
+          try {
+            return await fetch(url, { cache: "no-store" });
+          } catch (error) {
+            lastError = error;
+          }
+        }
+        throw lastError;
+      }
+
+      async function fetchJson(url) {
+        const response = await fetchWithRetry(url);
+        if (!response.ok) throw new Error(`${url} returned ${response.status}`);
+        return response.json();
+      }
+
+      async function fetchEvents(projectId, runId) {
+        const response = await fetchWithRetry(`/api/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/events.jsonl`);
+        if (!response.ok) throw new Error(`events returned ${response.status}`);
+        const text = await response.text();
+        return text.split("\n").filter(Boolean).map(line => JSON.parse(line));
+      }
+
+      function readUrlState() {
+        const params = new URLSearchParams(location.search);
+        const rawView = params.get("view");
+        state.view = rawView === "graph" ? "overview" : ["overview", "artifacts", "versions", "timeline", "events"].includes(rawView) ? rawView : "overview";
+        state.taskId = params.get("task");
+        state.selectedRole = params.get("role");
+        state.artifactPath = params.get("artifact");
+        return { projectId: params.get("project"), runId: params.get("run") };
+      }
+
+      function writeUrlState() {
+        const params = new URLSearchParams();
+        if (state.project) params.set("project", state.project.project_id);
+        if (state.run) params.set("run", state.run.run_id);
+        params.set("view", state.view);
+        if (state.taskId) params.set("task", state.taskId);
+        if (state.selectedRole) params.set("role", state.selectedRole);
+        if (state.artifactPath) params.set("artifact", state.artifactPath);
+        history.replaceState(null, "", `?${params.toString()}`);
+      }
+
+      function statusLabel(value) {
+        const labels = {
+          observing: "观察中", active: "进行中", in_progress: "进行中", blocked: "已阻塞",
+          verification_pending: "待验证", completed: "已完成", skipped: "已跳过",
+          discovered: "待开始", ready: "可执行", abandoned: "已终止", unavailable: "不可用",
+          session_started: "会话活跃", turn_started: "处理中", turn_completed: "等待下一轮", session_ended: "会话结束",
+          started: "执行中"
+        };
+        return labels[value] || value || "未知";
+      }
+
+      function roleLabel(value) {
+        const labels = {
+          PM: "PM", Planner: "PM", Designer: "设计", Executor: "开发",
+          QA: "测试", Reviewer: "Review", Orchestrator: "协调", Unknown: "待分配"
+        };
+        return labels[value] || value || "待分配";
+      }
+
+      function summaryForEvent(event) {
+        const payload = event.payload || {};
+        return payload.summary || payload.reason || payload.title || payload.path || payload.check || `${event.subject.kind}: ${event.subject.id}`;
+      }
+
+      function renderProjectList() {
+        projectList.replaceChildren();
+        const projects = state.portfolio?.projects || [];
+        const validCount = projects.filter(item => item.validation === "valid").length;
+        portfolioSummary.textContent = `${validCount}/${projects.length} 个项目可用`;
+
+        const allButton = el("button", "project-button");
+        allButton.type = "button";
+        allButton.setAttribute("aria-current", String(!state.project));
+        allButton.append(el("span", "run-name", "所有项目"));
+        allButton.append(el("span", "run-meta", `${projects.length} 个登记目录`));
+        allButton.addEventListener("click", () => selectProject(null));
+        projectList.append(allButton);
+
+        projects.forEach(project => {
+          const button = el("button", "project-button");
+          button.type = "button";
+          button.dataset.validation = project.validation;
+          button.setAttribute("aria-current", String(state.project?.project_id === project.project_id));
+          button.append(el("span", "run-name", project.name));
+          const meta = el("span", "run-meta");
+          meta.append(el("span", "", project.validation === "valid" ? project.stage : "不可用"));
+          meta.append(el("span", "", project.validation === "valid" ? project.owner_role : project.validation));
+          button.append(meta);
+          button.addEventListener("click", () => selectProject(project.project_id));
+          projectList.append(button);
+        });
+      }
+
+      function renderRunList() {
+        runList.replaceChildren();
+        if (!state.project) {
+          runList.append(el("div", "muted", "先选择一个项目"));
+          return;
+        }
+        const runs = state.index?.runs || [];
+        if (!runs.length) {
+          runList.append(el("div", "empty", "还没有 run"));
+          return;
+        }
+        runs.forEach(run => {
+          const button = el("button", "run-button");
+          button.type = "button";
+          button.setAttribute("aria-current", String(state.run?.run_id === run.run_id));
+          button.append(el("span", "run-name", run.name || run.run_id));
+          const meta = el("span", "run-meta");
+          meta.append(el("span", `status`, statusLabel(run.status)));
+          meta.lastChild.dataset.status = run.status;
+          meta.append(el("span", "", `seq ${run.last_sequence || 0}`));
+          button.append(meta);
+          button.addEventListener("click", () => selectRun(run.run_id));
+          runList.append(button);
+        });
+      }
+
+      function metric(label, value) {
+        const box = el("div", "metric");
+        box.append(el("span", "metric-label", label), el("span", "metric-value", value));
+        return box;
+      }
+
+      function renderPortfolio() {
+        content.replaceChildren();
+        const projects = state.portfolio?.projects || [];
+        const summary = state.portfolio?.summary || {};
+        const top = el("div", "topline");
+        const titleWrap = el("div", "");
+        titleWrap.append(el("div", "eyebrow", "所有已注入 Harness 的项目"));
+        titleWrap.append(el("h1", "", "项目总览"));
+        top.append(titleWrap, el("div", "freshness", state.portfolio?.generated_at || "尚未同步"));
+        content.append(top);
+        if (state.notice) content.append(el("p", "warning-line", state.notice));
+        const metrics = el("div", "metrics");
+        metrics.append(
+          metric("有效项目", `${summary.project_valid ?? projects.filter(item => item.validation === "valid").length}/${summary.project_total ?? projects.length}`),
+          metric("需求进度", `${summary.task_completed || 0}/${summary.task_total || 0}`),
+          metric("阻塞", summary.active_blocks || 0),
+          metric("待验证", summary.verification_pending || 0)
+        );
+        content.append(metrics);
+        const grid = el("div", "project-grid");
+        projects.forEach(project => {
+          const card = el("button", "project-card");
+          card.type = "button";
+          card.dataset.validation = project.validation;
+          card.append(el("div", "run-name", project.name));
+          if (project.validation === "valid") {
+            card.append(el("div", "eyebrow", `${project.stage} · ${roleLabel(project.owner_role)}`));
+            const summaryLine = project.summary || {};
+            card.append(el("div", "event-summary", `需求 ${summaryLine.task_completed || 0}/${summaryLine.task_total || 0} · 阻塞 ${summaryLine.active_blocks || 0} · 待验证 ${summaryLine.verification_pending || 0}`));
+            if (project.recent_work) {
+              card.append(el("div", "event-summary", `最近：${roleLabel(project.recent_work.role)} · ${project.recent_work.summary || project.recent_work.objective}`));
+            } else {
+              card.append(el("div", "event-summary", "尚无角色活动"));
+            }
+          } else {
+            card.append(el("div", "event-summary error", project.reason || project.validation));
+          }
+          card.append(el("div", "project-path", project.path));
+          card.addEventListener("click", () => selectProject(project.project_id));
+          grid.append(card);
+        });
+        if (!projects.length) grid.append(el("div", "empty", "还没有注册项目。请先在项目目录运行 harness init。"));
+        content.append(grid);
+      }
+
+      function renderHeader(root) {
+        const snapshot = state.snapshot;
+        const top = el("div", "topline");
+        const titleWrap = el("div", "");
+        titleWrap.append(el("div", "eyebrow", `${state.project.stage} · ${roleLabel(state.project.owner_role)} · ${statusLabel(snapshot.run.status)}`));
+        titleWrap.append(el("h1", "", state.project.name));
+        titleWrap.append(el("div", "project-path", state.project.path));
+        top.append(titleWrap, el("div", "freshness", `seq ${snapshot.last_sequence || 0} · ${snapshot.updated_at || "尚未同步"}`));
+        root.append(top);
+      }
+
+      function renderTabs(root) {
+        const tabs = el("div", "tabs");
+        tabs.setAttribute("role", "tablist");
+        [["overview", "需求导航"], ["artifacts", "产物"], ["versions", "版本规划"], ["timeline", "技术记录"], ["events", "事件明细"]].forEach(([value, label]) => {
+          const button = el("button", "tab", label);
+          button.type = "button";
+          button.setAttribute("role", "tab");
+          button.setAttribute("aria-selected", String(state.view === value));
+          button.addEventListener("click", () => { state.view = value; writeUrlState(); render(); });
+          tabs.append(button);
+        });
+        root.append(tabs);
+      }
+
+      function visibleTasks() {
+        return Object.values(state.snapshot.tasks || {})
+          .filter(task => task.status !== "abandoned")
+          .sort((left, right) => {
+            const leftValue = Number(left.task_id.replace(/^task-/, ""));
+            const rightValue = Number(right.task_id.replace(/^task-/, ""));
+            if (Number.isFinite(leftValue) && Number.isFinite(rightValue)) return leftValue - rightValue;
+            return (left.derived_from_sequence || 0) - (right.derived_from_sequence || 0);
+          });
+      }
+
+      function activeBlocksFor(taskId = null) {
+        return Object.values(state.snapshot.blocks || {}).filter(block => {
+          if (!block.active) return false;
+          return taskId ? block.task_id === taskId : true;
+        });
+      }
+
+      function officeRoleId(value) {
+        return { PM: "PM", Planner: "PM", Orchestrator: "PM", Designer: "Designer", Executor: "Executor", QA: "QA", Reviewer: "Reviewer" }[value] || null;
+      }
+
+      function officeStatusLabel(value) {
+        return { active: "正在工作", waiting: "等待接手", completed: "已交付", idle: "尚未参与" }[value] || value || "尚未参与";
+      }
+
+      function roleAvatar(roleId) {
+        return { PM: "PM", Designer: "UX", Executor: "DEV", QA: "QA", Reviewer: "REV" }[roleId] || roleId;
+      }
+
+      function currentVersion() {
+        const versions = state.workspace?.versions?.items || [];
+        return versions.slice().reverse().find(item => item.status === "in_progress")
+          || versions.slice().reverse().find(item => item.status === "planned")
+          || versions[versions.length - 1]
+          || null;
+      }
+
+      function requirementTitle(requirementId, fallback = "") {
+        return state.snapshot.tasks?.[requirementId]?.title || fallback || requirementId || "未关联需求";
+      }
+
+      function decisionsForRole(role, requirementIds) {
+        return Object.values(state.snapshot.decisions || {})
+          .filter(item => officeRoleId(item.role) === role.role_id || requirementIds.has(item.requirement_id || item.task_id))
+          .sort((left, right) => (right.derived_from_sequence || 0) - (left.derived_from_sequence || 0));
+      }
+
+      function renderRoleDetail(container, role) {
+        const card = el("section", "section-card role-detail-card");
+        const title = el("div", "role-detail-title");
+        title.append(el("h2", "", `${role.label} · 执行详情`));
+        const status = el("span", "status", officeStatusLabel(role.status));
+        status.dataset.status = role.status;
+        title.append(status); card.append(title);
+
+        const rounds = (role.work_rounds || []).slice().sort((left, right) => (right.derived_from_sequence || 0) - (left.derived_from_sequence || 0));
+        const currentTransition = state.workspace?.organization?.current_transition;
+        if (role.status === "waiting" && currentTransition?.to_role === role.role_id) {
+          card.append(el("p", "section-help", `${roleLabel(currentTransition.from_role)} 已完成上一段工作，正在等待 ${role.label} 接手。`));
+        } else if (rounds.length) {
+          card.append(el("p", "section-help", rounds[0].summary || rounds[0].objective));
+        } else {
+          card.append(el("p", "section-help", "这个角色尚未参与当前项目的已回写工作。"));
+        }
+
+        const requirementMap = new Map();
+        rounds.forEach(item => {
+          const id = item.requirement_id || item.task_id;
+          if (id && !requirementMap.has(id)) requirementMap.set(id, item.objective || item.summary);
+        });
+        Object.values(state.snapshot.decisions || {}).forEach(item => {
+          const id = item.requirement_id || item.task_id;
+          if (id && officeRoleId(item.role) === role.role_id && !requirementMap.has(id)) requirementMap.set(id, item.title);
+        });
+        const requirementIds = new Set(requirementMap.keys());
+        const decisions = decisionsForRole(role, requirementIds);
+
+        const context = el("div", "detail-section");
+        context.append(el("h3", "", "需求上下文"));
+        requirementMap.forEach((fallback, requirementId) => {
+          const item = el("div", "requirement-context");
+          item.append(el("h3", "", requirementTitle(requirementId, fallback)), el("p", "", requirementId));
+          decisions.filter(decision => (decision.requirement_id || decision.task_id) === requirementId).forEach(decision => {
+            const note = el("div", "decision-note");
+            note.append(el("strong", "", `需求决策 · ${decision.title}`), document.createTextNode(` — ${decision.summary}`));
+            item.append(note);
+          });
+          context.append(item);
+        });
+        if (!requirementMap.size) context.append(el("p", "muted", "尚未关联已回写需求。"));
+        card.append(context);
+
+        const history = el("div", "detail-section");
+        history.append(el("h3", "", "执行记录"));
+        const historyList = el("div", "work-history");
+        rounds.slice(0, 5).forEach(item => {
+          const row = el("div", "work-entry");
+          row.dataset.status = item.status;
+          const head = el("div", "work-entry-title");
+          head.append(el("span", "", requirementTitle(item.requirement_id || item.task_id, item.objective)), el("span", "muted", statusLabel(item.status)));
+          row.append(head, el("p", "", item.summary || item.objective));
+          historyList.append(row);
+        });
+        if (!rounds.length) historyList.append(el("div", "muted", "尚未参与。"));
+        history.append(historyList); card.append(history);
+
+        const delivery = el("div", "detail-section");
+        delivery.append(el("h3", "", "交付物"));
+        const materials = el("div", "material-list");
+        const artifacts = (state.workspace?.artifacts || []).filter(item => {
+          return officeRoleId(item.role) === role.role_id || (item.requirement_id && requirementIds.has(item.requirement_id));
+        });
+        artifacts.forEach(item => {
+          const button = el("button", "material-chip material-button", item.title || item.path);
+          button.type = "button";
+          button.disabled = item.viewable === false;
+          button.addEventListener("click", () => openArtifact(item.path));
+          materials.append(button);
+        });
+        if (!materials.childElementCount) materials.append(el("span", "muted", "暂无已登记交付物"));
+        delivery.append(materials); card.append(delivery); container.append(card);
+      }
+
+      function renderOverview(root) {
+        const snapshot = state.snapshot;
+        const organization = state.workspace?.organization || { roles: [], transitions: [], current_transition: null, current_role: null };
+        const project = state.workspace?.project || {};
+        const version = currentVersion();
+        const versionRequirements = version?.requirements || [];
+        const completed = versionRequirements.filter(item => item.status === "completed").length;
+        const allDelivered = Boolean(versionRequirements.length) && completed === versionRequirements.length;
+
+        const goal = el("section", "goal-card");
+        goal.append(el("div", "goal-label", "项目目标"));
+        goal.append(el("p", "goal-text", project.goal || "PM 尚未建立稳定项目目标。"));
+        goal.append(el("div", "project-goal-source", project.source ? `长期目标来自 ${project.source}` : "请由 PM 在 docs/PROJECT.md 中建立长期目标。"));
+        const versionFocus = el("div", "version-focus");
+        const versionCopy = el("div", "");
+        versionCopy.append(el("div", "version-name", version ? `当前版本 · v${version.version}` : "当前版本 · 尚未规划"));
+        versionCopy.append(el("p", "version-goal", version?.goal || "PM 尚未为这个项目建立版本计划。"));
+        const versionProgress = el("div", "version-progress");
+        versionProgress.append(el("strong", "", version ? `${completed}/${versionRequirements.length}` : "—"));
+        versionProgress.append(el("span", "", allDelivered ? "本版本已交付，等待 PM 定义下一版本" : version ? "已确认进入本版本" : "等待 PM 规划"));
+        versionFocus.append(versionCopy, versionProgress); goal.append(versionFocus); root.append(goal);
+
+        const office = el("section", "section-card office-shell");
+        const officeHead = el("div", "office-head");
+        const officeCopy = el("div", "");
+        officeCopy.append(el("h2", "", "角色办公室"), el("p", "section-help", "点击角色查看他负责的需求、执行详情和交付物。"));
+        officeHead.append(officeCopy);
+        const transition = organization.current_transition;
+        if (transition) {
+          const current = el("div", "current-transition");
+          current.dataset.kind = transition.kind;
+          current.append(
+            el("span", "transition-kind", "当前流转"),
+            el("span", "transition-role", roleLabel(transition.from_role)),
+            el("span", "transition-arrow", "→"),
+            el("span", "transition-role", roleLabel(transition.to_role)),
+            el("span", "transition-kind", transition.kind === "handoff" ? "真实接手" : "建议接手")
+          );
+          officeHead.append(current);
+        } else {
+          officeHead.append(el("div", "muted", "当前没有角色流转。"));
+        }
+        office.append(officeHead);
+
+        const scroll = el("div", "office-scroll");
+        const roleGrid = el("div", "office-grid");
+        (organization.roles || []).forEach(role => {
+          const button = el("button", "office-role");
+          button.type = "button";
+          button.dataset.status = role.status;
+          if (transition?.from_role === role.role_id) button.dataset.flow = "source";
+          if (transition?.to_role === role.role_id) button.dataset.flow = "target";
+          button.setAttribute("aria-pressed", String(state.selectedRole === role.role_id));
+          button.setAttribute("aria-label", `${role.label}，${officeStatusLabel(role.status)}`);
+          const top = el("span", "role-top");
+          top.append(el("span", "role-avatar", roleAvatar(role.role_id)), el("span", "role-dot"));
+          button.append(top, el("span", "role-name", role.label), el("span", "role-state", officeStatusLabel(role.status)));
+          if (role.latest_summary) button.append(el("span", "role-summary", role.latest_summary));
+          button.addEventListener("click", () => { state.selectedRole = role.role_id; writeUrlState(); render(); });
+          roleGrid.append(button);
+        });
+        scroll.append(roleGrid); office.append(scroll);
+        const trail = el("div", "transition-trail");
+        (organization.transitions || []).slice(-5).forEach(item => {
+          const pill = el("span", "transition-pill", `${roleLabel(item.from_role)} → ${roleLabel(item.to_role)} · ${item.kind === "handoff" ? "已交接" : "建议"}`);
+          pill.dataset.current = String(item.transition_id === transition?.transition_id);
+          trail.append(pill);
+        });
+        if (!trail.childElementCount) trail.append(el("span", "muted", "角色开始工作后，流转会出现在这里。"));
+        office.append(trail); root.append(office);
+
+        const selectedRole = (organization.roles || []).find(item => item.role_id === state.selectedRole)
+          || (organization.roles || []).find(item => item.role_id === organization.current_role)
+          || organization.roles?.[0];
+        const detailGrid = el("div", "role-detail-grid");
+        if (selectedRole) renderRoleDetail(detailGrid, selectedRole);
+
+        const attention = el("section", "section-card");
+        attention.append(el("h2", "", "需要你处理"));
+        const attentionList = el("div", "attention-list");
+        activeBlocksFor().forEach(block => attentionList.append(el("div", "attention-item error", block.summary)));
+        Object.values(snapshot.approvals || {}).filter(item => item.status === "requested").forEach(item => {
+          attentionList.append(el("div", "attention-item", item.summary));
+        });
+        if (!attentionList.childElementCount) attentionList.append(el("div", "muted", "目前没有需要你处理的事项。"));
+        attention.append(attentionList); detailGrid.append(attention); root.append(detailGrid);
+      }
+
+      function resolveArtifactLink(documentPath, href) {
+        const clean = String(href).split("#", 1)[0].split("?", 1)[0];
+        if (!clean || clean.startsWith("/") || /^[a-z][a-z0-9+.-]*:/i.test(clean)) return null;
+        const parts = String(documentPath || "").split("/").slice(0, -1);
+        for (const segment of clean.split("/")) {
+          if (!segment || segment === ".") continue;
+          if (segment === "..") {
+            if (!parts.length) return null;
+            parts.pop();
+          } else {
+            parts.push(segment);
+          }
+        }
+        return parts.join("/");
+      }
+
+      function appendInlineMarkdown(parent, value, documentPath = "") {
+        const source = String(value);
+        const tokenPattern = /(`[^`\n]+`|\*\*[^*\n]+\*\*|__[^_\n]+__|\*[^*\n]+\*|_[^_\n]+_|\[[^\]\n]+\]\([^)\s]+(?:\s+"[^"\n]*")?\))/g;
+        let offset = 0;
+        for (const match of source.matchAll(tokenPattern)) {
+          if (match.index > offset) parent.append(document.createTextNode(source.slice(offset, match.index)));
+          const token = match[0];
+          if (token.startsWith("`") && token.endsWith("`")) {
+            parent.append(el("code", "", token.slice(1, -1)));
+          } else if ((token.startsWith("**") && token.endsWith("**")) || (token.startsWith("__") && token.endsWith("__"))) {
+            parent.append(el("strong", "", token.slice(2, -2)));
+          } else if ((token.startsWith("*") && token.endsWith("*")) || (token.startsWith("_") && token.endsWith("_"))) {
+            parent.append(el("em", "", token.slice(1, -1)));
+          } else {
+            const link = token.match(/^\[([^\]]+)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)$/);
+            const anchor = el("a", "", link[1]);
+            if (link[3]) anchor.title = link[3];
+            if (/^https?:\/\//i.test(link[2]) || /^mailto:/i.test(link[2])) {
+              anchor.href = link[2];
+              anchor.target = "_blank";
+              anchor.rel = "noopener noreferrer";
+            } else {
+              const artifactPath = resolveArtifactLink(documentPath, link[2]);
+              const readable = artifactPath && (state.workspace?.artifacts || []).some(item => item.path === artifactPath);
+              anchor.href = readable ? "#" : link[2].startsWith("#") ? link[2] : "#";
+              if (readable) {
+                anchor.addEventListener("click", event => { event.preventDefault(); openArtifact(artifactPath); });
+              } else if (!link[2].startsWith("#")) {
+                anchor.addEventListener("click", event => event.preventDefault());
+                anchor.title = anchor.title || "该链接未登记为可读产物";
+              }
+            }
+            parent.append(anchor);
+          }
+          offset = match.index + token.length;
+        }
+        if (offset < source.length) parent.append(document.createTextNode(source.slice(offset)));
+      }
+
+      function codeDetails(title, value, language = "text", open = true) {
+        const details = el("details", "code-fold");
+        details.open = open;
+        details.append(el("summary", "", `${title} · ${language || "text"} · ${String(value).split("\n").length} 行`));
+        const scroll = el("div", "code-scroll");
+        String(value).split("\n").forEach((line, index) => {
+          const row = el("div", "code-line");
+          row.append(el("span", "line-number", index + 1), el("code", "", line || " "));
+          scroll.append(row);
+        });
+        details.append(scroll);
+        return details;
+      }
+
+      function renderCodeDocument(container, documentValue) {
+        const reader = el("section", "document-reader");
+        reader.append(el("div", "eyebrow", "代码产物"));
+        reader.append(el("h2", "", documentValue.title || documentValue.name));
+        if (documentValue.summary) reader.append(el("p", "section-help", documentValue.summary));
+        reader.append(codeDetails(documentValue.path, documentValue.content, documentValue.language, true));
+        container.append(reader);
+      }
+
+      function markdownCells(value) {
+        return value.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map(item => item.trim());
+      }
+
+      function isMarkdownTableSeparator(value) {
+        return markdownCells(value).every(item => /^:?-{3,}:?$/.test(item));
+      }
+
+      function scrollToDocumentHeading(headingId) {
+        const target = document.getElementById(headingId);
+        if (!target) return;
+        document.querySelectorAll(".document-reader [data-stage-active]").forEach(node => delete node.dataset.stageActive);
+        target.dataset.stageActive = "true";
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+
+      function renderArtifactStageNavigation(container, headings, stages) {
+        container.append(el("div", "document-outline-title", "阶段导航"));
+        const stageList = el("div", "stage-list");
+        stages.forEach(stage => {
+          const heading = headings.find(item => item.line === stage.line);
+          if (!heading) return;
+          const button = el("button", "stage-link");
+          button.type = "button";
+          button.dataset.format = stage.format;
+          button.append(el("span", "stage-link-title", stage.title));
+          const meta = el("span", "stage-link-meta");
+          meta.append(el("span", "", stage.version ? `v${stage.version}` : "未标版本"));
+          meta.append(el("span", "", stage.date || "日期未知"));
+          if ((stage.dates || []).length > 1) meta.append(el("span", "", `${stage.dates.length} 次更新`));
+          meta.append(el("span", "stage-format", stage.traceable ? "规范标题" : "旧格式"));
+          button.append(meta);
+          button.addEventListener("click", () => scrollToDocumentHeading(heading.id));
+          stageList.append(button);
+        });
+        if (!stageList.childElementCount) {
+          stageList.append(el("p", "stage-empty", "还没有可追踪阶段。新阶段建议使用：vX.Y.Z · YYYY-MM-DD · 阶段标题"));
+        }
+        container.append(stageList);
+      }
+
+      function renderDocumentOutline(container, headings, stages) {
+        const outline = el("nav", "document-outline");
+        outline.setAttribute("aria-label", "文档目录");
+        renderArtifactStageNavigation(outline, headings, stages);
+        outline.append(el("div", "document-outline-title", "完整文档目录"));
+        headings.forEach(item => {
+          const button = el("button", "outline-link", item.text);
+          button.type = "button";
+          button.dataset.level = item.level;
+          button.addEventListener("click", () => scrollToDocumentHeading(item.id));
+          outline.append(button);
+        });
+        if (!headings.length) outline.append(el("div", "muted", "这个 Markdown 没有可导航标题。"));
+        container.append(outline);
+      }
+
+      function markdownHeadingId(value, index, usedIds) {
+        const base = String(value).toLowerCase().replace(/[`*_]/g, "").trim().replace(/\s+/g, "-").replace(/[^a-z0-9\u3400-\u9fff-]/g, "") || `section-${index + 1}`;
+        let candidate = base;
+        let suffix = 2;
+        while (usedIds.has(candidate)) { candidate = `${base}-${suffix}`; suffix += 1; }
+        usedIds.add(candidate);
+        return candidate;
+      }
+
+      function renderMarkdownDocument(container, documentValue) {
+        const shell = el("div", "markdown-shell");
+        const reader = el("article", "document-reader");
+        reader.append(el("div", "eyebrow", "Markdown 阅读"));
+        const lines = String(documentValue.content).replace(/\r\n?/g, "\n").split("\n");
+        const headings = [];
+        const usedIds = new Set();
+        let index = 0;
+        while (index < lines.length) {
+          const line = lines[index];
+          if (!line.trim()) { index += 1; continue; }
+          const fence = line.match(/^```\s*([^\s]*)/);
+          if (fence) {
+            const codeLines = [];
+            index += 1;
+            while (index < lines.length && !/^```/.test(lines[index])) {
+              codeLines.push(lines[index]); index += 1;
+            }
+            index += 1;
+            reader.append(codeDetails("代码块", codeLines.join("\n"), fence[1] || "text", false));
+            continue;
+          }
+          const heading = line.match(/^(#{1,4})\s+(.+)/);
+          if (heading) {
+            const node = el(`h${heading[1].length}`, "");
+            const headingId = markdownHeadingId(heading[2], headings.length, usedIds);
+            node.id = headingId;
+            headings.push({ id: headingId, line: index + 1, level: heading[1].length, text: heading[2].replace(/[`*_]/g, "") });
+            appendInlineMarkdown(node, heading[2], documentValue.path); reader.append(node); index += 1; continue;
+          }
+          if (/^(---+|\*\*\*+)\s*$/.test(line)) { reader.append(el("hr", "")); index += 1; continue; }
+          if (line.trim().startsWith("|") && index + 1 < lines.length && isMarkdownTableSeparator(lines[index + 1])) {
+            const wrap = el("div", "table-wrap");
+            const table = el("table", "");
+            const head = el("thead", "");
+            const headRow = el("tr", "");
+            markdownCells(line).forEach(cell => { const th = el("th", ""); appendInlineMarkdown(th, cell, documentValue.path); headRow.append(th); });
+            head.append(headRow); table.append(head); index += 2;
+            const body = el("tbody", "");
+            while (index < lines.length && lines[index].trim().startsWith("|")) {
+              const row = el("tr", "");
+              markdownCells(lines[index]).forEach(cell => { const td = el("td", ""); appendInlineMarkdown(td, cell, documentValue.path); row.append(td); });
+              body.append(row); index += 1;
+            }
+            table.append(body); wrap.append(table); reader.append(wrap); continue;
+          }
+          const listMatch = line.match(/^\s*([-*+] |\d+[.)] )(.+)/);
+          if (listMatch) {
+            const ordered = /^\d/.test(listMatch[1]);
+            const list = el(ordered ? "ol" : "ul", "");
+            while (index < lines.length) {
+              const current = lines[index].match(/^\s*([-*+] |\d+[.)] )(.+)/);
+              if (!current || /^\d/.test(current[1]) !== ordered) break;
+              const item = el("li", ""); appendInlineMarkdown(item, current[2], documentValue.path); list.append(item); index += 1;
+            }
+            reader.append(list); continue;
+          }
+          if (line.startsWith(">")) {
+            const quote = el("blockquote", "");
+            const quoteLines = [];
+            while (index < lines.length && lines[index].startsWith(">")) {
+              quoteLines.push(lines[index].replace(/^>\s?/, "")); index += 1;
+            }
+            appendInlineMarkdown(quote, quoteLines.join("\n"), documentValue.path); reader.append(quote); continue;
+          }
+          const paragraphLines = [line.trim()];
+          index += 1;
+          while (index < lines.length && lines[index].trim() && !/^(#{1,4})\s+|^```|^\s*([-*+] |\d+[.)] )|^>/.test(lines[index])) {
+            if (lines[index].trim().startsWith("|") && index + 1 < lines.length && isMarkdownTableSeparator(lines[index + 1])) break;
+            paragraphLines.push(lines[index].trim()); index += 1;
+          }
+          const paragraph = el("p", ""); appendInlineMarkdown(paragraph, paragraphLines.join(" "), documentValue.path); reader.append(paragraph);
+        }
+        renderDocumentOutline(shell, headings, documentValue.stages || []);
+        shell.append(reader);
+        container.append(shell);
+      }
+
+      async function loadArtifact(pathValue) {
+        state.artifactPath = pathValue;
+        state.artifactDocument = null;
+        state.artifactError = null;
+        writeUrlState();
+        render();
+        try {
+          const query = new URLSearchParams({ path: pathValue, run: state.run?.run_id || "" });
+          state.artifactDocument = await fetchJson(`/api/projects/${encodeURIComponent(state.project.project_id)}/artifact?${query.toString()}`);
+        } catch (error) {
+          state.artifactError = error.message;
+        }
+        render();
+      }
+
+      function openArtifact(pathValue) {
+        state.view = "artifacts";
+        return loadArtifact(pathValue);
+      }
+
+      function renderArtifacts(root) {
+        const layout = el("div", "artifact-layout");
+        const listCard = el("section", "section-card");
+        listCard.append(el("h2", "", "产物"), el("p", "section-help", "选择一份文件，再查看它内部的阶段记录。"));
+        const list = el("div", "artifact-list");
+        const artifacts = (state.workspace?.artifacts || []).slice()
+          .sort((left, right) => String(right.latest_recorded_at || right.modified_at || "").localeCompare(String(left.latest_recorded_at || left.modified_at || "")));
+        artifacts.forEach(item => {
+          const button = el("button", "artifact-item");
+          button.type = "button";
+          button.disabled = item.viewable === false;
+          button.setAttribute("aria-pressed", String(state.artifactPath === item.path));
+          button.append(el("span", "run-name", item.title || item.name || item.path));
+          button.append(el("span", "artifact-kind", item.viewable === false ? `无法阅读 · ${item.reason || "文件不可用"}` : `${item.kind === "markdown" ? "Markdown" : item.language || "文本"} · ${item.path}`));
+          button.addEventListener("click", () => loadArtifact(item.path));
+          list.append(button);
+        });
+        if (!list.childElementCount) list.append(el("div", "empty", "还没有已登记产物。"));
+        listCard.append(list); layout.append(listCard);
+        const viewer = el("section", "artifact-viewer");
+        if (state.artifactError) {
+          const errorCard = el("section", "document-reader");
+          errorCard.append(el("h2", "", "无法读取该产物"), el("p", "error", state.artifactError));
+          viewer.append(errorCard);
+        } else if (state.artifactPath && !state.artifactDocument) {
+          viewer.append(el("div", "empty", "正在读取产物…"));
+        } else if (!state.artifactDocument) {
+          viewer.append(el("div", "empty", "从左侧选择一个 Markdown 或代码产物。"));
+        } else if (state.artifactDocument.kind === "markdown") {
+          renderMarkdownDocument(viewer, state.artifactDocument);
+        } else {
+          renderCodeDocument(viewer, state.artifactDocument);
+        }
+        layout.append(viewer); root.append(layout);
+      }
+
+      function versionStatusLabel(value) {
+        return { released: "已发布", completed: "已交付", in_progress: "开发中", planned: "计划中", paused: "已暂停" }[value] || value || "未标记";
+      }
+
+      function renderVersions(root) {
+        const workspaceValue = state.workspace || {};
+        const versions = workspaceValue.versions || { items: [], unassigned_requirements: [] };
+        const git = workspaceValue.git || { available: false, branches: [], tags: [] };
+        const heading = el("section", "goal-card");
+        heading.append(el("div", "goal-label", "PM 版本工作台"));
+        heading.append(el("p", "goal-text", "先看每个版本要交付什么，再对照真实 Git 分支和标签。"));
+        root.append(heading);
+
+        const grid = el("div", "overview-grid");
+        const main = el("div", "version-stack");
+        const planCard = el("section", "section-card");
+        planCard.append(el("h2", "", "需求归属"), el("p", "section-help", versions.source ? `来自 ${versions.source}` : "尚未建立 docs/VERSIONS.md，PM 还没有把需求分配到版本。"));
+        const stack = el("div", "version-stack");
+        (versions.items || []).forEach(version => {
+          const card = el("article", "version-card");
+          card.dataset.status = version.status;
+          const head = el("div", "version-head");
+          head.append(el("h3", "version-title", `v${version.version}`), el("span", "status", versionStatusLabel(version.status)));
+          card.append(head);
+          if (version.goal) card.append(el("p", "", version.goal));
+          const chips = el("div", "chip-row");
+          if (version.branch) {
+            const branchChip = el("span", "version-chip", `分支 ${version.branch}${version.branch_exists ? "" : " · 未创建"}`);
+            branchChip.dataset.ok = String(version.branch_exists);
+            chips.append(branchChip);
+          }
+          if (version.tag) {
+            const tagChip = el("span", "version-chip", `标签 ${version.tag}${version.tag_exists ? "" : " · 尚未发布"}`);
+            tagChip.dataset.ok = String(version.tag_exists);
+            chips.append(tagChip);
+          }
+          if (version.is_current_branch) chips.append(el("span", "version-chip", "当前正在这条分支开发"));
+          card.append(chips);
+          if (version.branch_mismatch) card.append(el("p", "warning-line", `版本计划指向 ${version.branch}，但当前实际在 ${git.current_branch} 开发。`));
+          const requirements = el("div", "version-requirements");
+          (version.requirements || []).forEach(requirement => {
+            const row = el("div", "version-requirement");
+            row.append(el("span", "", requirement.status === "completed" ? "✓" : "○"));
+            row.append(el("span", "", requirement.title));
+            const planStatus = el("span", "muted", statusLabel(requirement.status));
+            if (requirement.observed_status && requirement.observed_status !== requirement.status) {
+              planStatus.title = `实时任务状态：${statusLabel(requirement.observed_status)}`;
+            }
+            row.append(planStatus);
+            requirements.append(row);
+          });
+          if (!requirements.childElementCount) requirements.append(el("div", "muted", "这个版本还没有分配需求。"));
+          card.append(requirements); stack.append(card);
+        });
+        if (!stack.childElementCount) stack.append(el("div", "empty", "PM 还没有建立版本路线。"));
+        planCard.append(stack); main.append(planCard);
+        if ((versions.unassigned_requirements || []).length) {
+          const unassigned = el("section", "section-card");
+          unassigned.append(el("h2", "", "尚未安排版本"), el("p", "section-help", "这些需求在 Plan 中存在，但还没有进入任何版本。"));
+          (versions.unassigned_requirements || []).forEach(item => unassigned.append(el("div", "attention-item", `${item.requirement_id} · ${item.title}`)));
+          main.append(unassigned);
+        }
+        grid.append(main);
+
+        const gitCard = el("aside", "section-card detail");
+        gitCard.append(el("h2", "", "真实 Git 状态"));
+        if (!git.available) {
+          gitCard.append(el("p", "section-help", "这个项目不是 Git 仓库，不展示伪造分支。"));
+        } else {
+          gitCard.append(el("p", "", `当前分支：${git.current_branch || "分离 HEAD"}`));
+          gitCard.append(el("p", git.clean ? "muted" : "warning-line", git.clean ? "工作区干净" : `${git.dirty_count} 处未提交改动`));
+          gitCard.append(el("p", "muted", `${git.head || ""} ${git.head_subject || ""}`.trim()));
+          const branches = el("div", "branch-grid");
+          (git.branches || []).forEach(branch => {
+            const card = el("div", "branch-card"); card.dataset.current = String(branch.current);
+            card.append(el("div", "branch-name", branch.name));
+            card.append(el("div", "muted", branch.current ? "当前开发" : branch.upstream ? `跟踪 ${branch.upstream}` : "本地分支"));
+            card.append(el("div", "event-summary", `${branch.sha || ""} ${branch.subject || ""}`.trim()));
+            branches.append(card);
+          });
+          gitCard.append(branches);
+          gitCard.append(el("h3", "", "已发布标签"));
+          gitCard.append(el("p", "muted", (git.tags || []).slice(0, 12).join(" · ") || "暂无 tag"));
+        }
+        grid.append(gitCard); root.append(grid);
+      }
+
+      function renderGraph(panel) {
+        const tasks = Object.values(state.snapshot.tasks || {}).filter(task => task.status !== "abandoned");
+        const sessions = Object.values(state.snapshot.agent_sessions || {});
+        const commands = Object.values(state.snapshot.harness_commands || {}).slice(-12);
+        if (!tasks.length && !sessions.length && !commands.length) {
+          panel.append(el("div", "empty", "当前来源中没有发现任务。"));
+          return;
+        }
+        const roles = new Map();
+        tasks.forEach(task => {
+          const role = task.role || "Unknown";
+          if (!roles.has(role)) roles.set(role, []);
+          roles.get(role).push(task);
+        });
+        const lanes = el("div", "lanes");
+        if (sessions.length) {
+          const lane = el("section", "lane");
+          lane.append(el("div", "lane-label", "Agent"));
+          const sessionGrid = el("div", "lane-tasks");
+          sessions.forEach(session => {
+            const card = el("div", "task");
+            card.append(el("span", "task-title", `${session.platform} · ${session.session_ref.slice(0, 18)}`));
+            const status = el("span", "status", statusLabel(session.state));
+            status.dataset.status = session.state === "turn_started" ? "in_progress" : session.state === "session_ended" ? "completed" : "active";
+            card.append(status);
+            sessionGrid.append(card);
+          });
+          lane.append(sessionGrid);
+          lanes.append(lane);
+        }
+        if (commands.length) {
+          const lane = el("section", "lane");
+          lane.append(el("div", "lane-label", "Harness"));
+          const commandGrid = el("div", "lane-tasks");
+          commands.slice().reverse().forEach(command => {
+            const card = el("div", "task");
+            card.append(el("span", "task-title", `harness ${command.command}`));
+            const status = el("span", "status", statusLabel(command.state));
+            status.dataset.status = command.state === "started" ? "in_progress" : command.exit_code === 0 ? "completed" : "blocked";
+            card.append(status);
+            commandGrid.append(card);
+          });
+          lane.append(commandGrid);
+          lanes.append(lane);
+        }
+        roles.forEach((roleTasks, role) => {
+          const lane = el("section", "lane");
+          lane.append(el("div", "lane-label", role));
+          const taskGrid = el("div", "lane-tasks");
+          roleTasks.forEach(task => {
+            const button = el("button", "task");
+            button.type = "button";
+            button.setAttribute("aria-pressed", String(state.taskId === task.task_id));
+            button.setAttribute("aria-label", `${task.title}, ${role}, ${statusLabel(task.status)}, ${task.depends_on?.length || 0} 个依赖`);
+            button.append(el("span", "task-title", task.title));
+            const status = el("span", "status", statusLabel(task.status));
+            status.dataset.status = task.status;
+            button.append(status);
+            button.addEventListener("click", () => { state.taskId = task.task_id; writeUrlState(); render(); });
+            taskGrid.append(button);
+          });
+          lane.append(taskGrid);
+          lanes.append(lane);
+        });
+        panel.append(lanes);
+      }
+
+      function renderTimeline(panel) {
+        if (!state.events.length) {
+          panel.append(el("div", "empty", "当前 run 没有事件。"));
+          return;
+        }
+        const timeline = el("div", "timeline");
+        state.events.slice().reverse().forEach(event => {
+          const row = el("article", "event-row");
+          row.append(el("div", "sequence", `#${event.sequence}`));
+          row.append(el("time", "event-time", new Date(event.occurred_at).toLocaleString()));
+          const body = el("div", "");
+          body.append(el("div", "event-title", `${event.source.role || event.source.producer} · ${event.type}`));
+          body.append(el("div", "event-summary", summaryForEvent(event)));
+          row.append(body);
+          timeline.append(row);
+        });
+        panel.append(timeline);
+      }
+
+      function renderEvents(panel) {
+        if (!state.events.length) {
+          panel.append(el("div", "empty", "当前 run 没有事件。"));
+          return;
+        }
+        const wrap = el("div", "table-wrap");
+        const table = el("table", "");
+        const caption = el("caption", "sr-only", "Append-only 运行事件");
+        table.append(caption);
+        const head = el("thead", "");
+        const headRow = el("tr", "");
+        ["Seq", "时间", "类型", "Producer", "Subject", "观察", "摘要"].forEach(label => headRow.append(el("th", "", label)));
+        head.append(headRow); table.append(head);
+        const body = el("tbody", "");
+        state.events.slice().reverse().forEach(event => {
+          const row = el("tr", "");
+          row.append(el("td", "", event.sequence));
+          row.append(el("td", "muted", new Date(event.occurred_at).toLocaleString()));
+          row.append(el("td", "", event.type));
+          row.append(el("td", "", event.source.role || event.source.producer));
+          row.append(el("td", "", `${event.subject.kind}:${event.subject.id}`));
+          row.append(el("td", "", event.observation_kind === "inferred" ? `推断 ${event.confidence ?? ""}` : "事实"));
+          row.append(el("td", "", summaryForEvent(event)));
+          body.append(row);
+        });
+        table.append(body); wrap.append(table); panel.append(wrap);
+      }
+
+      function matchingForTask(collection, taskId) {
+        return Object.values(collection || {}).filter(item => item.task_id === taskId);
+      }
+
+      function renderDetail(container) {
+        const detail = el("aside", "detail");
+        detail.setAttribute("aria-label", "任务详情");
+        const selectedTask = state.taskId ? state.snapshot.tasks?.[state.taskId] : null;
+        const task = selectedTask?.status === "abandoned" ? null : selectedTask;
+        if (!task) {
+          detail.append(el("h2", "", "任务详情"), el("p", "muted", "选择一个任务查看产物、验证、阻塞和来源。"));
+          container.append(detail);
+          return;
+        }
+        detail.append(el("h2", "", task.title));
+        const status = el("span", "status", `${task.role || "Unknown"} · ${statusLabel(task.status)}`);
+        status.dataset.status = task.status;
+        detail.append(status);
+        detail.append(el("h3", "", "依赖"));
+        detail.append(el("p", "", (task.depends_on || []).join(", ") || "无显式依赖"));
+        detail.append(el("h3", "", "验证"));
+        const verifications = (state.snapshot.verifications || []).filter(item => item.task_id === task.task_id);
+        if (verifications.length) verifications.forEach(item => detail.append(el("p", "", `${item.result}: ${item.summary || item.check}`)));
+        else detail.append(el("p", "muted", "没有验证证据"));
+        detail.append(el("h3", "", "阻塞"));
+        const blocks = matchingForTask(state.snapshot.blocks, task.task_id).filter(item => item.active);
+        if (blocks.length) blocks.forEach(item => detail.append(el("p", "error", item.summary)));
+        else detail.append(el("p", "muted", "没有 active block"));
+        detail.append(el("h3", "", "来源"));
+        detail.append(el("p", "", `sequence ${task.derived_from_sequence || "unknown"}`));
+        container.append(detail);
+      }
+
+      function render() {
+        renderProjectList();
+        renderRunList();
+        if (!state.project) {
+          renderPortfolio();
+          return;
+        }
+        content.replaceChildren();
+        if (state.project.validation !== "valid") {
+          const box = el("div", "empty error", `${state.project.name} 当前不可监控`);
+          box.append(el("div", "event-summary", state.project.reason || state.project.validation));
+          box.append(el("div", "project-path", state.project.path));
+          content.append(box);
+          return;
+        }
+        if (!state.snapshot) {
+          content.append(el("div", "empty", "请选择一个 run。"));
+          return;
+        }
+        renderHeader(content);
+        renderTabs(content);
+        if (state.view === "overview") {
+          renderOverview(content);
+          return;
+        }
+        if (state.view === "artifacts") {
+          renderArtifacts(content);
+          return;
+        }
+        if (state.view === "versions") {
+          renderVersions(content);
+          return;
+        }
+        const workspace = el("div", "workspace");
+        const panel = el("section", "panel");
+        panel.setAttribute("role", "tabpanel");
+        if (state.view === "timeline") renderTimeline(panel);
+        else if (state.view === "events") renderEvents(panel);
+        else renderGraph(panel);
+        workspace.append(panel);
+        renderDetail(workspace);
+        content.append(workspace);
+      }
+
+      async function selectRun(runId) {
+        state.run = state.index.runs.find(item => item.run_id === runId) || state.index.runs[0];
+        if (!state.run) return;
+        const [snapshot, events] = await Promise.all([
+          fetchJson(`/api/projects/${encodeURIComponent(state.project.project_id)}/runs/${encodeURIComponent(state.run.run_id)}/snapshot.json`),
+          fetchEvents(state.project.project_id, state.run.run_id)
+        ]);
+        state.snapshot = snapshot;
+        state.events = events;
+        if (state.taskId && (!snapshot.tasks?.[state.taskId] || snapshot.tasks[state.taskId].status === "abandoned")) {
+          state.taskId = null;
+        }
+        if (!state.taskId && snapshot.plan?.current_task_id && snapshot.tasks?.[snapshot.plan.current_task_id]) {
+          state.taskId = snapshot.plan.current_task_id;
+        }
+        const officeRoles = state.workspace?.organization?.roles || [];
+        if (!officeRoles.some(item => item.role_id === state.selectedRole)) {
+          state.selectedRole = state.workspace?.organization?.current_role || officeRoles[0]?.role_id || null;
+        }
+        writeUrlState();
+        render();
+      }
+
+      async function selectProject(projectId, requestedRunId = null, preserveTask = false) {
+        state.project = projectId ? state.portfolio.projects.find(item => item.project_id === projectId) || null : null;
+        state.index = null;
+        state.run = null;
+        state.snapshot = null;
+        state.workspace = null;
+        state.events = [];
+        state.artifactDocument = null;
+        state.artifactError = null;
+        if (!preserveTask) {
+          state.taskId = null;
+          state.selectedRole = null;
+          state.artifactPath = null;
+        }
+        if (!state.project) {
+          writeUrlState();
+          render();
+          return;
+        }
+        if (state.project.validation !== "valid") {
+          writeUrlState();
+          render();
+          return;
+        }
+        [state.index, state.workspace] = await Promise.all([
+          fetchJson(`/api/projects/${encodeURIComponent(state.project.project_id)}/index.json`),
+          fetchJson(`/api/projects/${encodeURIComponent(state.project.project_id)}/workspace.json`)
+        ]);
+        const selectedArtifact = (state.workspace.artifacts || []).find(item => item.path === state.artifactPath);
+        if (state.artifactPath && !selectedArtifact) state.artifactPath = null;
+        const runId = state.index.runs?.some(item => item.run_id === requestedRunId) ? requestedRunId : state.index.runs?.[0]?.run_id;
+        if (!runId) {
+          writeUrlState();
+          render();
+          return;
+        }
+        await selectRun(runId);
+        if (state.view === "artifacts" && state.artifactPath) await loadArtifact(state.artifactPath);
+      }
+
+      async function load() {
+        try {
+          state.portfolio = await fetchJson("/api/portfolio.json");
+          const requested = readUrlState();
+          let projectId = requested.projectId;
+          if (!projectId && requested.runId) {
+            projectId = state.portfolio.projects.find(project => project.runs?.some(run => run.run_id === requested.runId))?.project_id || null;
+          }
+          const requestedProject = projectId ? state.portfolio.projects.find(project => project.project_id === projectId) : null;
+          if (requestedProject && requestedProject.validation !== "valid") {
+            state.notice = `${requestedProject.name} 已失效，已回到全部项目。${requestedProject.reason ? ` ${requestedProject.reason}` : ""}`;
+            projectId = null;
+          } else if (projectId && !requestedProject) {
+            state.notice = "URL 中的项目未登记，已回到全部项目。";
+            projectId = null;
+          } else {
+            state.notice = null;
+          }
+          await selectProject(projectId, requested.runId, true);
+        } catch (error) {
+          const box = el("div", "empty error", "无法读取运行数据。");
+          box.append(el("div", "event-summary", error.message));
+          box.append(el("p", "muted", "请确认 Mick Harness Observer 正在 127.0.0.1:6425 运行。可执行 harness observe service status；临时模式可运行 harness observe watch --all。"));
+          const retry = el("button", "tab", "重新连接");
+          retry.type = "button";
+          retry.addEventListener("click", () => {
+            retry.disabled = true;
+            retry.textContent = "正在重连…";
+            load();
+          });
+          box.append(retry);
+          content.replaceChildren(box);
+        }
+      }
+
+      window.addEventListener("popstate", load);
+      load();
+    })();
+  </script>
+</body>
+</html>

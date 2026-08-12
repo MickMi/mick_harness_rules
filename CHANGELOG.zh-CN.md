@@ -6,6 +6,89 @@ Mick Agent Harness 的重要变更都会记录在本文件中。
 
 本项目遵循 Semantic Versioning 2.0。形如 `vX.Y.Z` 的 Git tag 是最终发布事实源。
 
+## [0.15.0] - 2026-08-12
+
+### 结构化产物阶段导航
+
+- **可追踪阶段标题**（`rules/core.md`）：持续演进的 Markdown 统一使用
+  `## vX.Y.Z · YYYY-MM-DD · 阶段标题`。版本只能来自 `docs/VERSIONS.md`，日期是
+  实际沟通/决策日期，两者都禁止编造。
+- **确定性解析器**（`scripts/harness-observe.py`）：新增 `parse_markdown_stages()`，
+  只读取 H2–H4 标题——正文和代码块里的日期不会生成阶段入口。旧格式标题（圆括号
+  或破折号日期）保留全部日期、可导航，但标记 `traceable=false` 并显示"未标版本"，
+  不做版本推断。
+- **工作台**：产物页用阶段导航替换旧的版本/日期事件筛选，点击阶段直接定位当前
+  文档对应标题；代码产物保留可折叠行号阅读器，不显示 Markdown 阶段。
+
+兼容性：产物 API 新增向后兼容的 `stages` 字段；旧 `artifact_mode` /
+`artifact_scope` URL 参数被忽略并在下次状态写回时移除。无新依赖，无新写接口。
+
+验证：43 个 unittest、Shell/Python/JSON/JavaScript 语法、`generate.sh --check`、
+`git diff --check`、Harness Audit 8 PASS / 0 FAIL，真实 RaliTennis 解析出 38 个
+阶段并保留多日期旧标题。
+
+## [0.14.0] - 2026-08-12
+
+### 产物版本与日期记录
+
+- 产物元数据聚合同一路径的**每一次工作回合引用**（`records`、`versions`、
+  `dates`），不再因路径去重丢失交付上下文。
+- 产物页展示每条记录的目标、结果、角色、日期以及关联需求的关键决策；Markdown
+  阅读器新增标题目录，可在文档内跳转。
+- **交付后修正**：版本/日期导航只作用于当前选中文件的阶段记录——左侧文件列表
+  不再被筛选，页面明确提示当前读取的是现有文件而非历史快照。
+
+验证：42 个 unittest、Harness Audit 8 PASS / 0 WARN / 0 FAIL、安装版与源码
+校验一致、Observer `/healthz` 正常。
+
+## [0.13.0] - 2026-08-12
+
+### 角色办公室与目标分层
+
+- **三层目标**：稳定项目目标写入 `docs/PROJECT.md`（新建，PM 维护），版本目标
+  仍在 `docs/VERSIONS.md`，plan 阶段目标不再被误标为总体目标。
+- **五角色办公室**：项目首页固定展示 PM / 设计 / 开发 / 测试 / Review，状态
+  （active / waiting / completed / idle）只来自真实 `work.round_*` 与
+  `handoff.created` 事件；Planner 与 Orchestrator 归入 PM 组。
+- **真实 vs 建议流转**：明确交接与 `next_role` 建议以不同样式展示；版本交付后
+  显示"本版本已交付，等待 PM 定义下一版本"，不再笼统显示"当前需求尚未确定"。
+- 角色详情页合并需求上下文、执行摘要、交付物、关联决策和历史工作；首页四个
+  重复模块已移除。
+
+验证：40 个 unittest、Harness Audit 8 PASS / 0 WARN / 0 FAIL，真实 workspace
+API 返回稳定项目目标、五角色和真实的 `Reviewer → PM` 建议流转。
+
+## [0.12.0] - 2026-08-12
+
+### 从规则注入工具到本地工作服务器 + 统一工作台
+
+- **Observer V0**：项目内 append-only 事件账本（`.harness-runtime/`）、
+  plan/STATE 采集器、确定性 snapshot 重放和 localhost 只读看板——只观察，
+  不做编排。
+- **跨项目总览**：`harness observe watch --all` 聚合全部已注册项目，明确
+  valid / invalid / missing 状态；project id 只通过 Harness registry 解析。
+- **常驻服务**：launchd 代理（`com.mick.harness.observer`）在 `127.0.0.1:6425`
+  保活定时扫描；`harness observe service install|start|stop|restart|status|logs|
+  uninstall` 管理生命周期。
+- **需求导航**：项目默认页展示总体目标、Plan 拆出的需求和 `定义 → 实现 → 验证 →
+  交付` 四个节点；原始事件退到"技术记录"。
+- **工作服务器接收**：唯一写接口 `POST /api/v1/events`（Bearer token、registry
+  范围、幂等）接收 `work.round_started / work.round_completed / decision.recorded /
+  handoff.created`；Agent 与 CLI 在服务不可达时回退项目本地账本，且不改变原命令
+  退出码。Prompt、聊天全文、命令参数和密钥永不落盘。
+- **产物阅读 + PM 版本工作台**：已授权 Markdown/代码产物在看板内阅读（安全 DOM、
+  512 KiB 文本上限、拒绝路径越界/越界 symlink/二进制）；`docs/VERSIONS.md` 成为
+  PM 维护的版本计划，与只读 Git 分支/标签/HEAD/dirty 事实对照展示。
+- **Codex Hook**（`scripts/harness-observe-hook.py`）：生命周期事件脱敏为
+  session/turn 状态、项目 id 和时间；Hook 配置只输出供审查，不自动安装。
+
+迁移说明：看板端口从 `4317` 迁移到 **`127.0.0.1:6425`**；执行一次
+`harness observe service install` 即可让 Observer 跨终端保活。事件账本、HTTP GET
+路由和 CLI 保持向后兼容。
+
+验证：冻结时 37 个 unittest、两个临时项目完成接收 → 聚合 → 刷新 → 重启恢复
+端到端检查、LaunchAgent 健康检查、安装版与源码校验一致。
+
 ## [0.11.0] - 2026-07-06
 
 ### Kernel 强化 (`rules/core.md`)

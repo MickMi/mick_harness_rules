@@ -58,7 +58,7 @@ done
 HARNESS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROJECT_DIR="$(cd "$HARNESS_ROOT/.." && pwd)"
 PLAN="$PROJECT_DIR/plan.md"
-STEP_ID_RE='[A-Za-z0-9][A-Za-z0-9._-]*[.)]?'
+STEP_ID_RE='[0-9]+([.][0-9]+)*[.)]?'
 
 # --- Pre-checks ---
 if [ ! -f "$PLAN" ]; then
@@ -149,7 +149,8 @@ else
             if [[ "$verify_lower" =~ (未验证|待验证|无法验证|未运行|没跑|未执行|未测试|not[[:space:]]+run|not[[:space:]]+tested|skipped|skip|n/a) ]]; then
                 ((UNVERIFIED_VERIFY++))
             fi
-            if [[ "$verify_lower" =~ (failed|failure|失败|未通过|not[[:space:]]+pass|exit[[:space:]]+code[[:space:]]+[1-9]) ]]; then
+            failure_probe=$(echo "$verify_lower" | sed -E 's/(^|[^0-9])0[[:space:]]+(failures?|failed)([^a-z]|$)/\1\3/g; s/no[[:space:]]+failures?//g')
+            if [[ "$failure_probe" =~ (failed|failure|失败|未通过|not[[:space:]]+pass|exit[[:space:]]+code[[:space:]]+[1-9]) ]]; then
                 ((FAILED_VERIFY++))
             fi
         fi

@@ -1,0 +1,436 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mickmi.dev/schemas/harness-runtime-event-v0.json",
+  "title": "Mick Agent Harness Runtime Event V0",
+  "description": "Append-only event contract for the Mick Harness local work server.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "event_id",
+    "run_id",
+    "sequence",
+    "occurred_at",
+    "type",
+    "observation_kind",
+    "source",
+    "subject",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "event_id": {"type": "string", "pattern": "^evt_[A-Za-z0-9][A-Za-z0-9._-]{7,}$"},
+    "run_id": {"type": "string", "pattern": "^run_[A-Za-z0-9][A-Za-z0-9._-]{7,}$"},
+    "sequence": {"type": "integer", "minimum": 1},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "ingested_at": {"type": "string", "format": "date-time"},
+    "type": {
+      "enum": [
+        "run.created",
+        "run.status_changed",
+        "source.snapshot_imported",
+        "plan.summary_observed",
+        "workflow.stage_changed",
+        "task.discovered",
+        "task.status_changed",
+        "artifact.observed",
+        "verification.observed",
+        "block.observed",
+        "approval.requested",
+        "approval.resolved",
+        "audit.finding_observed",
+        "agent.session_observed",
+        "agent.turn_observed",
+        "harness.command_observed",
+        "work.round_started",
+        "work.round_completed",
+        "decision.recorded",
+        "handoff.created",
+        "collector.warning"
+      ]
+    },
+    "observation_kind": {"enum": ["observed", "inferred"]},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "source": {"$ref": "#/$defs/source"},
+    "subject": {"$ref": "#/$defs/subject"},
+    "causation_id": {"type": "string", "pattern": "^evt_[A-Za-z0-9][A-Za-z0-9._-]{7,}$"},
+    "correlation_id": {"type": "string", "minLength": 3, "maxLength": 160},
+    "dedupe_key": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "evidence_refs": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/evidenceRef"},
+      "maxItems": 32
+    },
+    "payload": {"type": "object"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"observation_kind": {"const": "inferred"}}, "required": ["observation_kind"]},
+      "then": {"required": ["confidence"]}
+    },
+    {
+      "if": {"properties": {"type": {"const": "run.created"}}, "required": ["type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/runCreatedPayload"}}}
+    },
+    {
+      "if": {"properties": {"type": {"enum": ["run.status_changed", "task.status_changed"]}}, "required": ["type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/statusChangedPayload"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "source.snapshot_imported"}}, "required": ["type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/sourceSnapshotPayload"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "plan.summary_observed"}}, "required": ["type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/planSummaryPayload"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "workflow.stage_changed"}}, "required": ["type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/stageChangedPayload"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "task.discovered"}}, "required": ["type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/taskDiscoveredPayload"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "artifact.observed"}}, "required": ["type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/artifactPayload"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "verification.observed"}}, "required": ["type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/verificationPayload"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "block.observed"}}, "required": ["type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/blockPayload"}}}
+    },
+    {
+      "if": {"properties": {"type": {"enum": ["approval.requested", "approval.resolved"]}}, "required": ["type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/approvalPayload"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "audit.finding_observed"}}, "required": ["type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/auditPayload"}}}
+    },
+    {
+      "if": {"properties": {"type": {"enum": ["agent.session_observed", "agent.turn_observed"]}}, "required": ["type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/agentActivityPayload"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "harness.command_observed"}}, "required": ["type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/harnessCommandPayload"}}}
+    },
+    {
+      "if": {"properties": {"type": {"enum": ["work.round_started", "work.round_completed"]}}, "required": ["type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/workRoundPayload"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "decision.recorded"}}, "required": ["type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/decisionPayload"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "handoff.created"}}, "required": ["type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/handoffPayload"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "collector.warning"}}, "required": ["type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/warningPayload"}}}
+    }
+  ],
+  "$defs": {
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "not": {
+        "anyOf": [
+          {"pattern": "^/"},
+          {"pattern": "^[A-Za-z]:[\\\\/]"},
+          {"pattern": "(^|/)\\.\\.(/|$)"}
+        ]
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": ["kind", "producer"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {"enum": ["human", "agent", "harness", "importer"]},
+        "producer": {"type": "string", "minLength": 1, "maxLength": 120},
+        "role": {"enum": ["PM", "Planner", "Executor", "QA", "Reviewer", "Designer", "Orchestrator", "Unknown"]},
+        "agent_id": {"type": "string", "minLength": 1, "maxLength": 160},
+        "adapter": {"type": "string", "minLength": 1, "maxLength": 80},
+        "path": {"$ref": "#/$defs/relativePath"},
+        "revision": {"type": "string", "minLength": 1, "maxLength": 160}
+      }
+    },
+    "subject": {
+      "type": "object",
+      "required": ["kind", "id"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {"enum": ["run", "plan", "workflow", "task", "artifact", "verification", "block", "approval", "audit", "agent_session", "agent_turn", "harness_command", "work_round", "decision", "handoff", "collector"]},
+        "id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "parent_id": {"type": "string", "minLength": 1, "maxLength": 200}
+      }
+    },
+    "evidenceRef": {
+      "type": "object",
+      "required": ["kind", "ref"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {"enum": ["artifact", "command", "log", "source", "url"]},
+        "ref": {"type": "string", "minLength": 1, "maxLength": 2048},
+        "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "label": {"type": "string", "maxLength": 200}
+      }
+    },
+    "runCreatedPayload": {
+      "type": "object",
+      "required": ["name", "project_id"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 200},
+        "project_id": {"type": "string", "minLength": 1, "maxLength": 160},
+        "initial_status": {"enum": ["observing", "active"]}
+      }
+    },
+    "statusChangedPayload": {
+      "type": "object",
+      "required": ["from", "to"],
+      "additionalProperties": false,
+      "properties": {
+        "from": {"enum": ["unknown", "observing", "active", "discovered", "ready", "in_progress", "verification_pending", "blocked", "skipped", "completed", "abandoned"]},
+        "to": {"enum": ["observing", "active", "discovered", "ready", "in_progress", "verification_pending", "blocked", "skipped", "completed", "abandoned"]},
+        "reason": {"type": "string", "maxLength": 500}
+      }
+    },
+    "sourceSnapshotPayload": {
+      "type": "object",
+      "required": ["path", "digest", "collector"],
+      "additionalProperties": false,
+      "properties": {
+        "path": {"$ref": "#/$defs/relativePath"},
+        "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "collector": {"type": "string", "minLength": 1, "maxLength": 120},
+        "candidate_count": {"type": "integer", "minimum": 0},
+        "appended_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "planSummaryPayload": {
+      "type": "object",
+      "required": ["title", "objective", "source_path", "total_steps"],
+      "additionalProperties": false,
+      "properties": {
+        "title": {"type": "string", "minLength": 1, "maxLength": 200},
+        "objective": {"type": "string", "maxLength": 2000},
+        "source_path": {"$ref": "#/$defs/relativePath"},
+        "current_task_id": {"type": ["string", "null"], "maxLength": 200},
+        "current_title": {"type": ["string", "null"], "maxLength": 300},
+        "current_step": {"type": ["integer", "null"], "minimum": 1},
+        "total_steps": {"type": "integer", "minimum": 0}
+      }
+    },
+    "stageChangedPayload": {
+      "type": "object",
+      "required": ["from", "to"],
+      "additionalProperties": false,
+      "properties": {
+        "from": {"type": ["string", "null"], "maxLength": 100},
+        "to": {"type": "string", "minLength": 1, "maxLength": 100},
+        "feature": {"type": "string", "maxLength": 160},
+        "owner_role": {"type": "string", "maxLength": 80}
+      }
+    },
+    "taskDiscoveredPayload": {
+      "type": "object",
+      "required": ["title", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "title": {"type": "string", "minLength": 1, "maxLength": 300},
+        "status": {"enum": ["discovered", "in_progress", "blocked", "skipped", "completed"]},
+        "role": {"type": "string", "maxLength": 80},
+        "depends_on": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 200}, "uniqueItems": true, "maxItems": 64},
+        "source_anchor": {"type": "string", "maxLength": 200}
+      }
+    },
+    "artifactPayload": {
+      "type": "object",
+      "required": ["path", "artifact_type"],
+      "additionalProperties": false,
+      "properties": {
+        "path": {"$ref": "#/$defs/relativePath"},
+        "artifact_type": {"enum": ["plan", "state", "prd", "code", "test", "review", "design", "report", "other"]},
+        "exists": {"type": "boolean"},
+        "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "title": {"type": "string", "maxLength": 200},
+        "summary": {"type": "string", "maxLength": 1000},
+        "role": {"$ref": "#/$defs/role"},
+        "requirement_id": {"type": "string", "maxLength": 200}
+      }
+    },
+    "verificationPayload": {
+      "type": "object",
+      "required": ["result", "check"],
+      "additionalProperties": false,
+      "properties": {
+        "result": {"enum": ["passed", "failed", "unknown", "skipped"]},
+        "check": {"type": "string", "minLength": 1, "maxLength": 300},
+        "exit_code": {"type": "integer"},
+        "summary": {"type": "string", "maxLength": 1000},
+        "duration_ms": {"type": "integer", "minimum": 0}
+      }
+    },
+    "blockPayload": {
+      "type": "object",
+      "required": ["summary", "active"],
+      "additionalProperties": false,
+      "properties": {
+        "summary": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "active": {"type": "boolean"},
+        "owner_role": {"type": "string", "maxLength": 80},
+        "resolution_hint": {"type": "string", "maxLength": 1000}
+      }
+    },
+    "approvalPayload": {
+      "type": "object",
+      "required": ["status", "summary"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {"enum": ["requested", "approved", "rejected", "cancelled"]},
+        "summary": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "decision_by": {"type": "string", "maxLength": 160}
+      }
+    },
+    "auditPayload": {
+      "type": "object",
+      "required": ["level", "tag", "summary"],
+      "additionalProperties": false,
+      "properties": {
+        "level": {"enum": ["info", "warn", "fail"]},
+        "tag": {"type": "string", "minLength": 1, "maxLength": 100},
+        "summary": {"type": "string", "minLength": 1, "maxLength": 1000}
+      }
+    },
+    "agentActivityPayload": {
+      "type": "object",
+      "required": ["platform", "state", "session_ref"],
+      "additionalProperties": false,
+      "properties": {
+        "platform": {"enum": ["codex", "claude", "cursor", "other"]},
+        "state": {"enum": ["session_started", "turn_started", "turn_completed", "session_ended"]},
+        "session_ref": {"type": "string", "minLength": 1, "maxLength": 200},
+        "turn_ref": {"type": "string", "minLength": 1, "maxLength": 200},
+        "project_id": {"type": "string", "minLength": 1, "maxLength": 160}
+      }
+    },
+    "harnessCommandPayload": {
+      "type": "object",
+      "required": ["command", "state", "project_id"],
+      "additionalProperties": false,
+      "properties": {
+        "command": {"type": "string", "minLength": 1, "maxLength": 80},
+        "state": {"enum": ["started", "completed"]},
+        "project_id": {"type": "string", "minLength": 1, "maxLength": 160},
+        "exit_code": {"type": "integer"}
+      }
+    },
+    "role": {
+      "enum": ["PM", "Planner", "Executor", "QA", "Reviewer", "Designer", "Orchestrator", "Unknown"]
+    },
+    "workRoundPayload": {
+      "type": "object",
+      "required": ["role", "objective", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "role": {"$ref": "#/$defs/role"},
+        "objective": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "summary": {"type": "string", "maxLength": 4000},
+        "status": {"enum": ["active", "completed", "blocked", "verification_pending"]},
+        "requirement_id": {"type": "string", "maxLength": 200},
+        "next_role": {"$ref": "#/$defs/role"},
+        "blocker": {"type": "string", "maxLength": 2000},
+        "platform": {"enum": ["codex", "claude", "cursor", "other"]},
+        "session_ref": {"type": "string", "maxLength": 200},
+        "turn_ref": {"type": "string", "maxLength": 200},
+        "artifact_refs": {"type": "array", "items": {"type": "string", "maxLength": 200}, "maxItems": 32, "uniqueItems": true},
+        "verification_refs": {"type": "array", "items": {"type": "string", "maxLength": 200}, "maxItems": 32, "uniqueItems": true}
+      }
+    },
+    "decisionPayload": {
+      "type": "object",
+      "required": ["title", "summary", "role"],
+      "additionalProperties": false,
+      "properties": {
+        "title": {"type": "string", "minLength": 1, "maxLength": 200},
+        "summary": {"type": "string", "minLength": 1, "maxLength": 4000},
+        "rationale": {"type": "string", "maxLength": 4000},
+        "role": {"$ref": "#/$defs/role"},
+        "requirement_id": {"type": "string", "maxLength": 200},
+        "status": {"enum": ["accepted", "superseded"]}
+      }
+    },
+    "handoffPayload": {
+      "type": "object",
+      "required": ["from_role", "to_role", "summary", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "from_role": {"$ref": "#/$defs/role"},
+        "to_role": {"$ref": "#/$defs/role"},
+        "summary": {"type": "string", "minLength": 1, "maxLength": 4000},
+        "status": {"enum": ["pending", "accepted", "completed"]},
+        "requirement_id": {"type": "string", "maxLength": 200},
+        "round_id": {"type": "string", "maxLength": 200}
+      }
+    },
+    "warningPayload": {
+      "type": "object",
+      "required": ["code", "summary"],
+      "additionalProperties": false,
+      "properties": {
+        "code": {"type": "string", "minLength": 1, "maxLength": 100},
+        "summary": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "recoverable": {"type": "boolean"}
+      }
+    }
+  },
+  "examples": [
+    {
+      "schema_version": "0.1.0",
+      "event_id": "evt_01J5RUNCREATE",
+      "run_id": "run_01J5COMPANY0",
+      "sequence": 1,
+      "occurred_at": "2026-08-10T10:00:00+08:00",
+      "type": "run.created",
+      "observation_kind": "observed",
+      "source": {"kind": "harness", "producer": "observe-init"},
+      "subject": {"kind": "run", "id": "run_01J5COMPANY0"},
+      "payload": {"name": "Company Runtime V0", "project_id": "mick-harness-rules", "initial_status": "observing"}
+    },
+    {
+      "schema_version": "0.1.0",
+      "event_id": "evt_01J5TASK0001",
+      "run_id": "run_01J5COMPANY0",
+      "sequence": 2,
+      "occurred_at": "2026-08-10T10:00:01+08:00",
+      "type": "task.discovered",
+      "observation_kind": "observed",
+      "source": {"kind": "importer", "producer": "plan-collector", "path": "plan.md", "revision": "sha256:plan-example"},
+      "subject": {"kind": "task", "id": "task-1", "parent_id": "run_01J5COMPANY0"},
+      "payload": {"title": "定义事件 Schema", "status": "in_progress", "role": "Executor", "depends_on": [], "source_anchor": "Step 1"}
+    },
+    {
+      "schema_version": "0.1.0",
+      "event_id": "evt_01J5READY001",
+      "run_id": "run_01J5COMPANY0",
+      "sequence": 3,
+      "occurred_at": "2026-08-10T10:03:01+08:00",
+      "type": "task.status_changed",
+      "observation_kind": "inferred",
+      "confidence": 0.98,
+      "source": {"kind": "harness", "producer": "snapshot-projector"},
+      "subject": {"kind": "task", "id": "task-1", "parent_id": "run_01J5COMPANY0"},
+      "payload": {"from": "verification_pending", "to": "completed", "reason": "Observed completion marker and passing verification evidence"}
+    }
+  ]
+}
