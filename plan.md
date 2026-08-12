@@ -937,7 +937,7 @@ Planner 回复：采用建议方案；这修复的是本轮真实执行触发的
 - verify: 全量 unittest 42 tests / 0 failures；Shell/Python/JSON/HTML/JavaScript/generate/diff 检查通过；三个安装位置 SHA-256 逐项一致；Observer 重启后 `health.status=ok`、5 个登记项目/4 个有效项目；RaliTennis workspace 返回稳定的 3 份产物
 - notes: sandbox 首次全量测试有 4 项因禁止 localhost bind 报 PermissionError，授权本机回环后同一套 42 项全部通过；服务重启前健康检查失败，重启并端到端读取页面/API 后恢复。
 
-## v0.15.0 · 2026-08-12 · 结构化产物阶段导航
+## v0.16.0 · 2026-08-12 · 结构化产物阶段导航
 
 ### 新目标
 

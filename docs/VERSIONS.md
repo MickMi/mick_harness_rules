@@ -20,6 +20,19 @@
 - Status: released
 - Branch: main
 - Tag: v0.12.0
+- Goal: 用反驳表和验证 Gate 固化 Kernel 证据纪律，并通过 SessionStart Hook 保证规则注入。
+
+### Requirements
+
+- [x] Kernel 反驳表：撞墙合理化、完成话术、Claim/Requires 证据分层表
+- [x] 验证 Gate 五步与 UI 完成话术反驳表
+- [x] Claude Code SessionStart Hook 自动注入 Tripwire 与回合卡片契约
+
+## 0.13.0
+
+- Status: released
+- Branch: main
+- Tag: v0.13.0
 - Goal: 把 Harness 从规则注入工具升级为统一本地工作台，可以看进度、角色、产物和版本路线。
 
 ### Requirements
@@ -31,11 +44,11 @@
 - [x] `task-40` 让 PM 管理版本目标、需求归属和 Git 对照
 - [x] `task-47` 完成安装版、服务重启和真实浏览器验收
 
-## 0.13.0
+## 0.14.0
 
 - Status: released
 - Branch: main
-- Tag: v0.13.0
+- Tag: v0.14.0
 - Goal: 用项目目标、当前版本和五角色办公室，让用户看懂当前由谁负责、工作如何流转以及关键产物在哪里。
 
 ### Requirements
@@ -46,11 +59,11 @@
 - [x] `task-52` 让 PM 维护项目、版本和需求三层目标
 - [x] `task-58` 完成安装版、服务重启和本机工作台验收
 
-## 0.14.0
+## 0.15.0
 
 - Status: released
 - Branch: main
-- Tag: v0.14.0
+- Tag: v0.15.0
 - Goal: 让用户按版本或日期浏览项目产物，快速回到对应阶段的目标、讨论摘要、结果和文档章节。
 
 ### Requirements
@@ -61,11 +74,11 @@
 - [x] `task-62` 记录导航使用方式与历史正文边界
 - [x] `task-63` 完成安装版、服务重启和 localhost 验收
 
-## 0.15.0
+## 0.16.0
 
 - Status: released
 - Branch: main
-- Tag: v0.15.0
+- Tag: v0.16.0
 - Goal: 建立从 AI 产出可追踪标题、Observer 确定性解析到用户阶段阅读导航的完整链路。
 
 ### Requirements

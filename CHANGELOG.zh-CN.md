@@ -6,7 +6,7 @@ Mick Agent Harness 的重要变更都会记录在本文件中。
 
 本项目遵循 Semantic Versioning 2.0。形如 `vX.Y.Z` 的 Git tag 是最终发布事实源。
 
-## [0.15.0] - 2026-08-12
+## [0.16.0] - 2026-08-12
 
 ### 结构化产物阶段导航
 
@@ -27,7 +27,7 @@ Mick Agent Harness 的重要变更都会记录在本文件中。
 `git diff --check`、Harness Audit 8 PASS / 0 FAIL，真实 RaliTennis 解析出 38 个
 阶段并保留多日期旧标题。
 
-## [0.14.0] - 2026-08-12
+## [0.15.0] - 2026-08-12
 
 ### 产物版本与日期记录
 
@@ -41,7 +41,7 @@ Mick Agent Harness 的重要变更都会记录在本文件中。
 验证：42 个 unittest、Harness Audit 8 PASS / 0 WARN / 0 FAIL、安装版与源码
 校验一致、Observer `/healthz` 正常。
 
-## [0.13.0] - 2026-08-12
+## [0.14.0] - 2026-08-12
 
 ### 角色办公室与目标分层
 
@@ -58,7 +58,7 @@ Mick Agent Harness 的重要变更都会记录在本文件中。
 验证：40 个 unittest、Harness Audit 8 PASS / 0 WARN / 0 FAIL，真实 workspace
 API 返回稳定项目目标、五角色和真实的 `Reviewer → PM` 建议流转。
 
-## [0.12.0] - 2026-08-12
+## [0.13.0] - 2026-08-12
 
 ### 从规则注入工具到本地工作服务器 + 统一工作台
 
@@ -88,6 +88,69 @@ API 返回稳定项目目标、五角色和真实的 `Reviewer → PM` 建议流
 
 验证：冻结时 37 个 unittest、两个临时项目完成接收 → 聚合 → 刷新 → 重启恢复
 端到端检查、LaunchAgent 健康检查、安装版与源码校验一致。
+
+## [0.12.0] - 2026-07-16
+
+### Kernel 强化 (`rules/core.md`) —— 反驳表和验证 Gate
+
+- **铁律 5（撞墙熔断） —— 新增"撞墙合理化反驳表"**：6 行常见自我合理化话术
+  （"再试一次就好了" / "这次的原因不一样" / "改这里应该就行"）配上必须触发的
+  行为。想到左栏 = 已经在撞墙，直接进 Debug Card，不再靠感觉再试一次。灵感来自
+  superpowers 的 "Common Rationalizations" 模式，本地化到中文 Executor 会话中
+  真实出现的失败姿势。
+- **铁律 7（完成必须验证） —— 新增"验证 Gate"（5 步）**：`识别 → 执行 →
+  读取 → 核验 → 才能说"完成"`。跳过任一步 = 说谎，不是效率。明确点名"靠记忆
+  代替真实执行"这种最常见的假验证。
+- **铁律 7 —— 新增"完成话术反驳表"**：7 行禁止话术（"应该好了" / "配置好了" /
+  "只是警告不影响" / "Subagent 报告 success"）配上现实（独立验证、证据优先于
+  声明）。
+- **铁律 7 —— 新增"Claim / Requires / Not Sufficient 表"**：10 行映射声明类型
+  （测试通过 / 构建成功 / Bug 已修 / 配置生效 / UI 可用 / 部署上线 / 需求达成）
+  到它的真实证据和常见假证据。把"什么算证明"变成具体的判定标准，不再是空泛
+  提醒。
+
+### Playbook 增补 (`rules/extended.md`)
+
+- **§3.4 Interaction QA —— 新增"UI 完成话术反驳表"**：6 行针对 UI 特有的失败
+  姿势（"按钮已加上了" / "开关切换正常" / "本地测通了"），不能被通用验证话术
+  覆盖的场景。和现有的五要素 checklist 互补。
+
+### SessionStart Hook（`hooks/session-start.sh` + `scripts/hook-adapters.sh`）
+
+- **新增 Claude Code SessionStart hook**：在 `startup|clear|compact` 事件触发，
+  把 Tripwire + Self-Test 触发条件 + 回合卡片格式作为
+  `hookSpecificOutput.additionalContext` 注入。解决了"AGENTS.md 不一定被每个
+  工具打开时读到"这个之前只靠约定的痛点。
+- **非 Harness 项目静默 no-op**：向上 8 层父目录查找 `.harness/`、`AGENTS.md`、
+  `CLAUDE.md` 标记，找不到就 exit 0 不输出 JSON。不会污染无关项目的会话上下文。
+- **`hook-adapters.sh` 扩展**：新增 `install_claude_code_session_start_hook()`、
+  `claude_session_start_status()`、`iter_claude_session_start_commands()`。
+  `harness brain install` 现在同时挂载 SessionEnd（brain-sync）和 SessionStart
+  （Tripwire 注入）两个 hook。
+- **修复（SessionEnd 状态检测）**：`iter_claude_hook_commands()` 和新增的
+  SessionStart iterator 都从 `python3 <<PY "$file"` 改成 `python3 - "$file" <<PY`。
+  旧写法会让 python3 把路径当脚本文件打开（不是 argv[1]），静默吞掉解析，
+  导致 `harness brain status` 一直误报 SessionEnd 为 "missing"，即使 hook
+  实际已经装了。
+
+### 兼容性
+
+- 完全向后兼容。所有规则新增都是新增子句；表格只在触发条件出现时才会体现
+  （撞墙 / 完成话术 / UI QA）。
+- SessionStart hook 通过 `harness brain install` 选装（已由
+  `config/.brain-config.yaml` 里的 `hooks.claude_code.enabled` 控制）。
+- 修复的 SessionEnd 检测可能让 `harness brain status` 从"missing"变成
+  "installed"，仅针对之前装了 hook 但状态一直没被识别的用户 —— 这是修 bug，
+  不是行为变化。
+
+### 验证
+
+- `hooks/session-start.sh` 在三个 CWD 测过：harness 项目 → 合法 JSON、
+  home 目录（有 CLAUDE.md）→ 合法 JSON、`/tmp` → 静默 exit 0。
+- `harness brain status` 安装后正确显示
+  `Claude Code : enabled (SessionEnd: installed, SessionStart: installed)`。
+  两个 entry 在 `~/.claude/settings.json` 中确认。
+- `./generate.sh --check` 通过；`dist/AGENTS.md` 已重新生成，包含新表格。
 
 ## [0.11.0] - 2026-07-06
 
