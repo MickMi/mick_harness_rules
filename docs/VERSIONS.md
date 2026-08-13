@@ -104,8 +104,9 @@
 
 ## 0.17.0
 
-- Status: in_progress
+- Status: released
 - Branch: main
+- Tag: v0.17.0
 - Goal: 把规则注入、Agent 生效证明、结构化回写和 Brain 交互做成可诊断、可恢复、可迁移的本地工作系统，并用精简角色契约与行为评测证明各角色真实有效。
 
 ### Requirements
@@ -121,11 +122,11 @@
 - [x] `task-87` 用确定性契约测试和 Tier 1 Agent 行为样本验证角色有效性（Codex Reviewer 10/10；Claude 未评测）
 - [x] `task-88` 在工作台展示发现、注入、加载、遵守和回写五层真实状态
 - [x] `task-89` 完成兼容迁移、产品文档和支持矩阵
-- [ ] `task-90` 通过故障注入、重启恢复、隐私和端到端发布 Gate
+- [x] `task-90` 通过故障注入、重启恢复、隐私和端到端发布 Gate
 
 ## 0.18.0
 
-- Status: planned
+- Status: in_progress
 - Branch: main
 - Goal: 把本地工作台从只读观察页升级为安全、可恢复的 Harness 操作中心，并让 Brain 的连接、触发、候选、同步与故障状态对用户真实可见。
 

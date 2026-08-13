@@ -1,4 +1,4 @@
-> 🧭 状态：进行中 | 进度 89/90 | 当前归属：Codex Executor（v0.17.0 发布）| 最近卡点：无
+> 🧭 状态：进行中 | 进度 90/97 | 当前归属：PM / Planner（v0.18.0 已进入）| 最近卡点：无
 
 # Plan: Company Runtime V0 → Portfolio V0.2
 
@@ -1129,7 +1129,7 @@ Planner 回复：采用建议方案；这修复的是本轮真实执行触发的
 - [x] 87. [行为评测] 建立角色测试集与评分卡，分开“静态契约合格”与“真实 Agent 样本合格”，不用文档存在代替效果证据。
 - [x] 88. [工作台] 接入 Agent 五层状态、规则/角色版本、诊断证据和最小修复指引。
 - [x] 89. [迁移与文档] 完成旧全局 Loader、已注入项目、旧 Hook 和旧事件 schema 的向后兼容说明与迁移演练。
-- [ ] 90. [发布 Gate] 运行安装/重复同步/半写中断/服务离线/重启重放/隐私红线/真实 Tier 1 Agent 全链路验收，更新发布文档但不在未获授权时打 Tag。
+- [x] 90. [发布 Gate] 运行安装/重复同步/半写中断/服务离线/重启重放/隐私红线/真实 Tier 1 Agent 全链路验收，更新发布文档但不在未获授权时打 Tag。
 
 ### 完成判定
 
@@ -1243,3 +1243,8 @@ Planner 回复：采用建议方案；这修复的是本轮真实执行触发的
 - files: `docs/AGENT-SUPPORT.md`, `docs/ROLE-CONTRACTS.md`, `tests/test_role_contracts.py`, `plan.md`, `docs/VERSIONS.md`
 - verify: Codex CLI 四类 Hook 已由用户信任；同一真实 session 产生 SessionStart → TurnStart → TurnCompleted → SessionEnd，事件均携带 `rule_version=0.17.0` 与角色 digest；真实 Reviewer 样本五维均 2/2，总分 10/10；全量 71 tests / 0 failures
 - notes: Claude Code 已有真实 Loader 与 session start/end 证据，但用户于 2026-08-13 退出账号并决定继续发布，完整 turn 与行为样本明确列为发布例外并保持“未验证”；不以 Codex 样本代替 Claude 状态，也不再次发起 Claude 登录或模型调用。
+
+### Step 90 发布 Gate 完成 — 2026-08-13
+- files: `CHANGELOG.md`, `CHANGELOG.zh-CN.md`, `docs/VERSIONS.md`, `docs/AGENT-SUPPORT.md`, `docs/ROLE-CONTRACTS.md`, `plan.md`
+- verify: 全量 71 tests / 0 failures；Shell/Python/JSON、`./generate.sh --check`、`git diff --check` 均通过；Harness Check 18 PASS / 1 optional warning / 0 FAIL；6425 service status 为 healthy、outbox_remaining=0；发布提交 `8b8e94e` 已快进到远端 `main`
+- notes: v0.17.0 已发布并进入 Tag 收尾，v0.18.0 同步切为 in_progress；Claude 完整评测例外已写入结构化决策和支持文档，不影响 Codex 全链路证据，也不被表述为 Claude 已通过。
