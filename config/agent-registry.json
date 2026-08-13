@@ -1,0 +1,78 @@
+{
+  "schema_version": "1",
+  "agents": [
+    {
+      "id": "claude-code",
+      "name": "Claude Code",
+      "tier": 1,
+      "detection": {
+        "commands": ["claude"],
+        "config_dirs": [".claude"],
+        "apps": ["Claude.app"],
+        "extensions": ["anthropic.claude-code", "anthropic.claude"]
+      },
+      "loader": {"surface": "agent", "target": ".claude/CLAUDE.md", "managed": true},
+      "lifecycle": {"adapter": "claude-hooks", "events": ["SessionStart", "UserPromptSubmit", "Stop", "SessionEnd"]},
+      "limitations": []
+    },
+    {
+      "id": "codex",
+      "name": "Codex",
+      "tier": 1,
+      "detection": {
+        "commands": ["codex"],
+        "config_dirs": [".codex"],
+        "apps": ["Codex.app"],
+        "extensions": ["openai.chatgpt", "openai.codex"]
+      },
+      "loader": {"surface": "codex", "target": ".codex/AGENTS.md", "managed": true},
+      "lifecycle": {"adapter": "codex-hooks", "events": ["SessionStart", "UserPromptSubmit", "Stop", "SessionEnd"]},
+      "limitations": ["Lifecycle hook configuration depends on the installed Codex surface capability."]
+    },
+    {
+      "id": "cursor",
+      "name": "Cursor",
+      "tier": 2,
+      "detection": {"commands": ["cursor"], "config_dirs": [".cursor"], "apps": ["Cursor.app"], "extensions": []},
+      "loader": {"surface": "ide", "target": ".cursor/rules/mick-harness.mdc", "managed": false},
+      "lifecycle": {"adapter": null, "events": []},
+      "limitations": ["Discovery and capability guidance only; no verified lifecycle feedback in v0.17.0."]
+    },
+    {
+      "id": "windsurf",
+      "name": "Windsurf",
+      "tier": 2,
+      "detection": {"commands": ["windsurf"], "config_dirs": [".codeium/windsurf"], "apps": ["Windsurf.app"], "extensions": []},
+      "loader": {"surface": "ide", "target": ".windsurf/rules/mick-harness.md", "managed": false},
+      "lifecycle": {"adapter": null, "events": []},
+      "limitations": ["Discovery and capability guidance only; no verified lifecycle feedback in v0.17.0."]
+    },
+    {
+      "id": "cline",
+      "name": "Cline",
+      "tier": 2,
+      "detection": {"commands": [], "config_dirs": [], "apps": [], "extensions": ["saoudrizwan.claude-dev", "cline.cline"]},
+      "loader": {"surface": "ide", "target": null, "managed": false},
+      "lifecycle": {"adapter": null, "events": []},
+      "limitations": ["Editor extension discovery only; project rules differ by host editor."]
+    },
+    {
+      "id": "roo-code",
+      "name": "Roo Code",
+      "tier": 2,
+      "detection": {"commands": [], "config_dirs": [], "apps": [], "extensions": ["rooveterinaryinc.roo-cline", "roo-code.roo-code"]},
+      "loader": {"surface": "ide", "target": null, "managed": false},
+      "lifecycle": {"adapter": null, "events": []},
+      "limitations": ["Editor extension discovery only; no verified lifecycle feedback in v0.17.0."]
+    },
+    {
+      "id": "trae",
+      "name": "Trae",
+      "tier": 2,
+      "detection": {"commands": ["trae"], "config_dirs": [".trae"], "apps": ["Trae.app"], "extensions": []},
+      "loader": {"surface": "ide", "target": ".trae/rules/mick-harness.md", "managed": false},
+      "lifecycle": {"adapter": null, "events": []},
+      "limitations": ["Discovery and capability guidance only; no verified lifecycle feedback in v0.17.0."]
+    }
+  ]
+}

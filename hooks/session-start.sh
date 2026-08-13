@@ -70,6 +70,10 @@ Mick Agent Harness 已挂载。以下是最高优先级约束的摘要，完整�
 </HARNESS-LOADED>
 EOF
 
+HARNESS_VERSION="$(tr -d '[:space:]' < "$HARNESS_ROOT/VERSION" 2>/dev/null || true)"
+[ -n "$HARNESS_VERSION" ] || HARNESS_VERSION="unknown"
+PAYLOAD="Harness-Version: $HARNESS_VERSION"$'\n'"Rules: .harness/rules/core.md"$'\n'"$PAYLOAD"
+
 # Escape for JSON embedding (bash parameter substitution, fastest for hooks).
 escape_for_json() {
     local s="$1"

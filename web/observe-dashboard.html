@@ -28,15 +28,29 @@
     .sidebar { border-right: 1px solid var(--border); background: var(--surface); padding: 22px 16px; }
     .brand { margin: 0 0 4px; font-size: 18px; font-weight: 650; }
     .subtitle { margin: 0 0 20px; color: var(--muted); font-size: 13px; }
-    .section-label { margin: 20px 8px 8px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-    .project-list, .run-list { display: grid; gap: 8px; }
-    .project-button, .run-button {
-      width: 100%; text-align: left; border: 1px solid transparent; border-radius: 10px;
-      background: transparent; color: inherit; padding: 11px 12px; cursor: pointer;
+    .nav-tree { display: grid; gap: 2px; }
+    .nav-home, .nav-project, .nav-view {
+      width: 100%; text-align: left; border: 0; border-radius: 8px;
+      background: transparent; color: inherit; cursor: pointer; font: inherit;
     }
-    .project-button:hover, .run-button:hover { background: var(--surface-2); }
-    .project-button[aria-current="true"], .run-button[aria-current="true"] { border-color: var(--accent); background: var(--accent-soft); }
-    .project-button[data-validation]:not([data-validation="valid"]) { border-color: var(--danger); }
+    .nav-home { padding: 8px 10px; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+    .nav-home:hover { background: var(--surface-2); color: var(--text); }
+    .nav-home[aria-current="true"] { color: var(--text); font-weight: 650; background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+    .nav-home .nav-count { font-size: 12px; font-weight: 400; }
+    .nav-project { padding: 8px 10px; display: grid; gap: 3px; margin-top: 2px; }
+    .nav-project:hover { background: var(--surface-2); }
+    .nav-project[aria-current="true"] { background: var(--accent-soft); }
+    .nav-project-head { display: flex; gap: 6px; align-items: center; }
+    .nav-expander { width: 14px; color: var(--muted); font-size: 11px; flex: none; }
+    .nav-name { font-weight: 600; overflow-wrap: anywhere; }
+    .nav-project[data-validation]:not([data-validation="valid"]) .nav-name { color: var(--danger); }
+    .nav-meta { display: flex; gap: 8px; padding-left: 20px; color: var(--muted); font-size: 12px; }
+    .nav-views { display: grid; gap: 1px; margin: 2px 0 8px 22px; padding-left: 8px; border-left: 1px solid var(--border); }
+    .nav-view { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; padding: 6px 8px; color: var(--muted); }
+    .nav-view:hover { background: var(--surface-2); color: var(--text); }
+    .nav-view[aria-current="true"] { color: var(--text); font-weight: 650; background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+    .nav-badge { color: var(--danger); font-size: 11px; font-weight: 650; }
+    .retry-button { margin-top: 12px; border: 1px solid var(--accent); border-radius: 8px; background: transparent; color: var(--accent); padding: 8px 14px; cursor: pointer; }
     .run-name { display: block; font-weight: 600; overflow-wrap: anywhere; }
     .run-meta { display: flex; gap: 8px; margin-top: 5px; color: var(--muted); font-size: 12px; }
     .main { min-width: 0; padding: 24px clamp(16px, 3vw, 42px) 48px; }
@@ -48,9 +62,6 @@
     .metric { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 13px 15px; }
     .metric-label { color: var(--muted); font-size: 12px; }
     .metric-value { display: block; margin-top: 4px; font-size: 22px; font-weight: 650; }
-    .tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
-    .tab { border: 0; border-bottom: 3px solid transparent; background: transparent; color: var(--muted); padding: 10px 12px; cursor: pointer; }
-    .tab[aria-selected="true"] { border-bottom-color: var(--accent); color: var(--text); font-weight: 600; }
     .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
     .panel { min-width: 0; }
     .detail { position: sticky; top: 18px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); padding: 17px; }
@@ -63,6 +74,20 @@
     .project-card:hover { border-color: var(--accent); }
     .project-card[data-validation]:not([data-validation="valid"]) { border-color: var(--danger); }
     .project-path { margin-top: 7px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+    .agent-section { margin-top: 22px; }
+    .agent-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; margin-top: 12px; }
+    .agent-card { border: 1px solid var(--border); border-radius: 13px; background: var(--surface); padding: 14px; }
+    .agent-card-head { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+    .agent-card-title { font-weight: 680; }
+    .agent-tier { color: var(--muted); font-size: 11px; }
+    .agent-layers { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; margin-top: 11px; }
+    .agent-layer { min-width: 0; border-top: 3px solid var(--border); padding-top: 6px; color: var(--muted); font-size: 10px; }
+    .agent-layer[data-status="verified"] { border-color: var(--success); color: var(--text); }
+    .agent-layer[data-status="configured"] { border-color: var(--warning); color: var(--text); }
+    .agent-layer[data-status="blocked"] { border-color: var(--danger); color: var(--danger); }
+    .agent-layer-label, .agent-layer-state { display: block; overflow-wrap: anywhere; }
+    .agent-layer-state { margin-top: 3px; font-size: 9px; }
+    .agent-evidence { margin-top: 9px; color: var(--muted); font-size: 11px; line-height: 1.4; }
     .goal-card { border: 1px solid var(--border); border-radius: 16px; background: linear-gradient(135deg, var(--surface), var(--accent-soft)); padding: 20px; margin: 20px 0; }
     .goal-label { color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .05em; }
     .goal-text { margin: 7px 0 0; max-width: 900px; font-size: clamp(17px, 2.2vw, 23px); line-height: 1.45; font-weight: 620; }
@@ -92,11 +117,16 @@
     .version-progress span { color: var(--muted); font-size: 12px; }
     .office-shell { margin-top: 18px; }
     .office-head { display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
-    .current-transition { display: flex; align-items: center; gap: 10px; border: 1px solid var(--accent); border-radius: 12px; background: var(--accent-soft); padding: 10px 13px; }
-    .current-transition[data-kind="suggested"] { border-style: dashed; }
-    .transition-role { font-weight: 700; }
-    .transition-arrow { color: var(--accent); font-size: 18px; }
-    .transition-kind { color: var(--muted); font-size: 11px; }
+    .flow-line { display: flex; align-items: center; gap: 10px; border: 1px solid var(--accent); border-radius: 12px; background: var(--accent-soft); padding: 10px 13px; }
+    .flow-line[data-kind="suggested"] { border-style: dashed; }
+    .flow-line[data-kind="suggested"] .flow-arrow { background: repeating-linear-gradient(90deg, var(--accent) 0 6px, transparent 6px 11px); }
+    .flow-kind { color: var(--muted); font-size: 11px; letter-spacing: .04em; }
+    .flow-role { display: flex; align-items: center; gap: 6px; font-weight: 700; }
+    .flow-avatar { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 8px; background: var(--surface); font-size: 10px; font-weight: 760; }
+    .flow-arrow { position: relative; flex: none; width: 44px; height: 2px; background: var(--accent); overflow: visible; }
+    .flow-arrow::after { content: ""; position: absolute; right: -1px; top: -3.5px; border: 4.5px solid transparent; border-left-color: var(--accent); }
+    .flow-arrow::before { content: ""; position: absolute; left: 0; top: -2.5px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: flow-dot 1.4s linear infinite; }
+    @keyframes flow-dot { to { transform: translateX(37px); opacity: 0; } }
     .office-scroll { overflow-x: auto; padding: 4px 1px 8px; }
     .office-grid { min-width: 760px; display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr)); gap: 10px; margin-top: 17px; }
     .office-role { position: relative; min-height: 145px; border: 1px solid var(--border); border-radius: 15px; background: var(--surface); color: inherit; padding: 14px; text-align: left; cursor: pointer; transition: border-color .18s ease, transform .18s ease, background .18s ease; }
@@ -104,14 +134,16 @@
     .office-role[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
     .office-role[data-flow="source"] { box-shadow: inset 0 -3px 0 var(--warning); }
     .office-role[data-flow="target"] { box-shadow: inset 0 -3px 0 var(--accent); }
-    .office-role[data-status="active"] .role-dot { background: var(--accent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 18%, transparent); }
-    .office-role[data-status="waiting"] .role-dot { background: var(--warning); }
-    .office-role[data-status="completed"] .role-dot { background: var(--success); }
+    .office-role[data-flow="source"] .role-avatar, .office-role[data-flow="target"] .role-avatar { box-shadow: 0 0 0 2px var(--accent-soft), 0 0 0 4px var(--accent); }
+    .office-role[data-status="active"] .role-light { background: var(--success); animation: role-pulse 1.6s ease-in-out infinite; }
+    .office-role[data-status="waiting"] .role-light { background: var(--warning); }
+    .office-role[data-status="completed"] .role-light { background: var(--accent); }
     .office-role[data-status="idle"] { color: var(--muted); }
-    .office-role[data-status="idle"] .role-dot { background: var(--border); }
+    .office-role[data-status="idle"] .role-light { background: var(--border); }
+    @keyframes role-pulse { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--success) 22%, transparent); } }
     .role-top { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
     .role-avatar { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: var(--surface-2); font-size: 12px; font-weight: 760; letter-spacing: .02em; }
-    .role-dot { width: 9px; height: 9px; border-radius: 50%; }
+    .role-light { width: 9px; height: 9px; border-radius: 50%; }
     .role-name { display: block; margin-top: 14px; font-weight: 720; }
     .role-state { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
     .role-summary { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-top: 9px; color: var(--muted); font-size: 11px; line-height: 1.45; }
@@ -223,7 +255,7 @@
     @media (max-width: 900px) {
       .app { grid-template-columns: 1fr; }
       .sidebar { border-right: 0; border-bottom: 1px solid var(--border); }
-      .run-list { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+      .nav-views { margin-left: 14px; }
       .workspace { grid-template-columns: 1fr; }
       .overview-grid { grid-template-columns: 1fr; }
       .version-focus, .role-detail-grid { grid-template-columns: 1fr; }
@@ -244,13 +276,10 @@
 </head>
 <body>
   <div class="app">
-    <aside class="sidebar" aria-label="运行列表">
+    <aside class="sidebar" aria-label="项目导航">
       <p class="brand">Harness 项目导航</p>
       <p id="portfolio-summary" class="subtitle">正在整理项目…</p>
-      <p class="section-label">项目</p>
-      <div id="project-list" class="project-list"></div>
-      <p class="section-label">进展记录</p>
-      <div id="run-list" class="run-list"></div>
+      <nav id="nav-tree" class="nav-tree" aria-label="项目与视图"></nav>
     </aside>
     <main class="main">
       <div id="content" aria-live="polite">
@@ -260,9 +289,8 @@
   </div>
   <script>
     (() => {
-      const state = { portfolio: null, project: null, index: null, run: null, snapshot: null, workspace: null, events: [], view: "overview", taskId: null, selectedRole: null, artifactPath: null, artifactDocument: null, artifactError: null, notice: null };
-      const projectList = document.getElementById("project-list");
-      const runList = document.getElementById("run-list");
+      const state = { portfolio: null, agents: null, project: null, index: null, run: null, snapshot: null, workspace: null, events: [], view: "overview", taskId: null, selectedRole: null, artifactPath: null, artifactDocument: null, artifactError: null, notice: null };
+      const navTree = document.getElementById("nav-tree");
       const portfolioSummary = document.getElementById("portfolio-summary");
       const content = document.getElementById("content");
       const networkRetryDelaysMs = [0, 300, 900];
@@ -349,58 +377,51 @@
         return payload.summary || payload.reason || payload.title || payload.path || payload.check || `${event.subject.kind}: ${event.subject.id}`;
       }
 
-      function renderProjectList() {
-        projectList.replaceChildren();
+      const NAV_VIEWS = [["overview", "需求导航"], ["artifacts", "产物"], ["versions", "版本规划"], ["timeline", "技术记录"], ["events", "事件明细"]];
+
+      function renderNavTree() {
+        navTree.replaceChildren();
         const projects = state.portfolio?.projects || [];
         const validCount = projects.filter(item => item.validation === "valid").length;
         portfolioSummary.textContent = `${validCount}/${projects.length} 个项目可用`;
 
-        const allButton = el("button", "project-button");
-        allButton.type = "button";
-        allButton.setAttribute("aria-current", String(!state.project));
-        allButton.append(el("span", "run-name", "所有项目"));
-        allButton.append(el("span", "run-meta", `${projects.length} 个登记目录`));
-        allButton.addEventListener("click", () => selectProject(null));
-        projectList.append(allButton);
+        const home = el("button", "nav-home");
+        home.type = "button";
+        home.setAttribute("aria-current", String(!state.project));
+        home.append(el("span", "", "← 所有项目"), el("span", "nav-count", `${projects.length} 个登记`));
+        home.addEventListener("click", () => selectProject(null));
+        navTree.append(home);
 
         projects.forEach(project => {
-          const button = el("button", "project-button");
+          const expanded = state.project?.project_id === project.project_id;
+          const button = el("button", "nav-project");
           button.type = "button";
           button.dataset.validation = project.validation;
-          button.setAttribute("aria-current", String(state.project?.project_id === project.project_id));
-          button.append(el("span", "run-name", project.name));
-          const meta = el("span", "run-meta");
+          button.setAttribute("aria-current", String(expanded));
+          button.setAttribute("aria-expanded", String(expanded && project.validation === "valid"));
+          const head = el("span", "nav-project-head");
+          head.append(el("span", "nav-expander", expanded && project.validation === "valid" ? "▾" : "▸"), el("span", "nav-name", project.name));
+          button.append(head);
+          const meta = el("span", "nav-meta");
           meta.append(el("span", "", project.validation === "valid" ? project.stage : "不可用"));
-          meta.append(el("span", "", project.validation === "valid" ? project.owner_role : project.validation));
+          meta.append(el("span", "", project.validation === "valid" ? roleLabel(project.owner_role) : project.validation));
           button.append(meta);
           button.addEventListener("click", () => selectProject(project.project_id));
-          projectList.append(button);
-        });
-      }
+          navTree.append(button);
 
-      function renderRunList() {
-        runList.replaceChildren();
-        if (!state.project) {
-          runList.append(el("div", "muted", "先选择一个项目"));
-          return;
-        }
-        const runs = state.index?.runs || [];
-        if (!runs.length) {
-          runList.append(el("div", "empty", "还没有 run"));
-          return;
-        }
-        runs.forEach(run => {
-          const button = el("button", "run-button");
-          button.type = "button";
-          button.setAttribute("aria-current", String(state.run?.run_id === run.run_id));
-          button.append(el("span", "run-name", run.name || run.run_id));
-          const meta = el("span", "run-meta");
-          meta.append(el("span", `status`, statusLabel(run.status)));
-          meta.lastChild.dataset.status = run.status;
-          meta.append(el("span", "", `seq ${run.last_sequence || 0}`));
-          button.append(meta);
-          button.addEventListener("click", () => selectRun(run.run_id));
-          runList.append(button);
+          if (!expanded || project.validation !== "valid") return;
+          const views = el("div", "nav-views");
+          NAV_VIEWS.forEach(([value, label]) => {
+            const item = el("button", "nav-view");
+            item.type = "button";
+            item.setAttribute("aria-current", String(state.view === value));
+            item.append(el("span", "", label));
+            const blocks = state.snapshot?.summary?.active_blocks ?? project.summary?.active_blocks ?? 0;
+            if (value === "overview" && blocks > 0) item.append(el("span", "nav-badge", `●${blocks} 阻塞`));
+            item.addEventListener("click", () => { state.view = value; writeUrlState(); render(); });
+            views.append(item);
+          });
+          navTree.append(views);
         });
       }
 
@@ -429,6 +450,34 @@
           metric("待验证", summary.verification_pending || 0)
         );
         content.append(metrics);
+        const agentSection = el("section", "section-card agent-section");
+        agentSection.append(el("h2", "", "Code Agent 接入状态"));
+        agentSection.append(el("p", "section-help", "五层状态分开验证；装好规则或 Hook 不等于当前会话已经加载。"));
+        const agentGrid = el("div", "agent-grid");
+        const layerLabels = { discovered: "发现", injected: "注入", loaded: "加载", execution: "遵循", feedback: "回写" };
+        const layerStates = { verified: "已验证", configured: "待真实会话", unverified: "未验证", not_detected: "未发现", blocked: "有冲突" };
+        (state.agents?.agents || []).forEach(agent => {
+          const card = el("article", "agent-card");
+          const head = el("div", "agent-card-head");
+          head.append(el("span", "agent-card-title", agent.name), el("span", "agent-tier", `Tier ${agent.tier}`));
+          card.append(head);
+          const layers = el("div", "agent-layers");
+          Object.entries(layerLabels).forEach(([key, label]) => {
+            const layer = el("div", "agent-layer");
+            const status = agent.layers?.[key]?.status || "unverified";
+            layer.dataset.status = status;
+            layer.append(el("span", "agent-layer-label", label), el("span", "agent-layer-state", layerStates[status] || status));
+            layers.append(layer);
+          });
+          card.append(layers);
+          const evidence = agent.evidence || {};
+          const projects = (evidence.projects || []).join("、");
+          card.append(el("div", "agent-evidence", evidence.event_count ? `${evidence.event_count} 条回写证据${projects ? ` · ${projects}` : ""}` : "尚无真实会话证据"));
+          agentGrid.append(card);
+        });
+        if (!agentGrid.childElementCount) agentGrid.append(el("div", "empty", "尚未取得 Agent 检测结果。"));
+        agentSection.append(agentGrid);
+        content.append(agentSection);
         const grid = el("div", "project-grid");
         projects.forEach(project => {
           const card = el("button", "project-card");
@@ -464,20 +513,6 @@
         titleWrap.append(el("div", "project-path", state.project.path));
         top.append(titleWrap, el("div", "freshness", `seq ${snapshot.last_sequence || 0} · ${snapshot.updated_at || "尚未同步"}`));
         root.append(top);
-      }
-
-      function renderTabs(root) {
-        const tabs = el("div", "tabs");
-        tabs.setAttribute("role", "tablist");
-        [["overview", "需求导航"], ["artifacts", "产物"], ["versions", "版本规划"], ["timeline", "技术记录"], ["events", "事件明细"]].forEach(([value, label]) => {
-          const button = el("button", "tab", label);
-          button.type = "button";
-          button.setAttribute("role", "tab");
-          button.setAttribute("aria-selected", String(state.view === value));
-          button.addEventListener("click", () => { state.view = value; writeUrlState(); render(); });
-          tabs.append(button);
-        });
-        root.append(tabs);
       }
 
       function visibleTasks() {
@@ -633,14 +668,18 @@
         officeHead.append(officeCopy);
         const transition = organization.current_transition;
         if (transition) {
-          const current = el("div", "current-transition");
+          const current = el("div", "flow-line");
           current.dataset.kind = transition.kind;
+          const fromRole = el("span", "flow-role");
+          fromRole.append(el("span", "flow-avatar", roleAvatar(transition.from_role)), el("span", "", roleLabel(transition.from_role)));
+          const toRole = el("span", "flow-role");
+          toRole.append(el("span", "flow-avatar", roleAvatar(transition.to_role)), el("span", "", roleLabel(transition.to_role)));
           current.append(
-            el("span", "transition-kind", "当前流转"),
-            el("span", "transition-role", roleLabel(transition.from_role)),
-            el("span", "transition-arrow", "→"),
-            el("span", "transition-role", roleLabel(transition.to_role)),
-            el("span", "transition-kind", transition.kind === "handoff" ? "真实接手" : "建议接手")
+            el("span", "flow-kind", "当前流转"),
+            fromRole,
+            el("span", "flow-arrow"),
+            toRole,
+            el("span", "flow-kind", transition.kind === "handoff" ? "真实接手" : "建议接手")
           );
           officeHead.append(current);
         } else {
@@ -659,7 +698,7 @@
           button.setAttribute("aria-pressed", String(state.selectedRole === role.role_id));
           button.setAttribute("aria-label", `${role.label}，${officeStatusLabel(role.status)}`);
           const top = el("span", "role-top");
-          top.append(el("span", "role-avatar", roleAvatar(role.role_id)), el("span", "role-dot"));
+          top.append(el("span", "role-avatar", roleAvatar(role.role_id)), el("span", "role-light"));
           button.append(top, el("span", "role-name", role.label), el("span", "role-state", officeStatusLabel(role.status)));
           if (role.latest_summary) button.append(el("span", "role-summary", role.latest_summary));
           button.addEventListener("click", () => { state.selectedRole = role.role_id; writeUrlState(); render(); });
@@ -1205,8 +1244,7 @@
       }
 
       function render() {
-        renderProjectList();
-        renderRunList();
+        renderNavTree();
         if (!state.project) {
           renderPortfolio();
           return;
@@ -1220,11 +1258,10 @@
           return;
         }
         if (!state.snapshot) {
-          content.append(el("div", "empty", "请选择一个 run。"));
+          content.append(el("div", "empty", "正在读取项目快照…"));
           return;
         }
         renderHeader(content);
-        renderTabs(content);
         if (state.view === "overview") {
           renderOverview(content);
           return;
@@ -1313,7 +1350,10 @@
 
       async function load() {
         try {
-          state.portfolio = await fetchJson("/api/portfolio.json");
+          [state.portfolio, state.agents] = await Promise.all([
+            fetchJson("/api/portfolio.json"),
+            fetchJson("/api/agents.json")
+          ]);
           const requested = readUrlState();
           let projectId = requested.projectId;
           if (!projectId && requested.runId) {
@@ -1334,7 +1374,7 @@
           const box = el("div", "empty error", "无法读取运行数据。");
           box.append(el("div", "event-summary", error.message));
           box.append(el("p", "muted", "请确认 Mick Harness Observer 正在 127.0.0.1:6425 运行。可执行 harness observe service status；临时模式可运行 harness observe watch --all。"));
-          const retry = el("button", "tab", "重新连接");
+          const retry = el("button", "retry-button", "重新连接");
           retry.type = "button";
           retry.addEventListener("click", () => {
             retry.disabled = true;

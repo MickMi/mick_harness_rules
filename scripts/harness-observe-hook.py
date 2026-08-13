@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import importlib.util
+import argparse
 import json
+import os
 from pathlib import Path
 import sys
 from typing import Any
@@ -34,7 +36,10 @@ def stop_response(event_name: str | None) -> None:
         print(json.dumps({"continue": True}))
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--platform", choices=("codex", "claude"), default=os.environ.get("MICK_HARNESS_AGENT", "codex"))
+    args, _ = parser.parse_known_args(argv)
     raw = sys.stdin.buffer.read(MAX_INPUT_BYTES + 1)
     if len(raw) > MAX_INPUT_BYTES:
         return 0
@@ -64,7 +69,7 @@ def main() -> int:
         if project.is_dir() and observer.has_harness_entry(project):
             observer.submit_agent_activity(
                 project,
-                platform="codex",
+                platform=args.platform,
                 state=state,
                 session_ref=session_ref,
                 turn_ref=turn_ref if isinstance(turn_ref, str) else None,

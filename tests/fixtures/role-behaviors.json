@@ -1,0 +1,64 @@
+{
+  "pm": {
+    "positive": [
+      {"prompt": "我有一个模糊的产品想法", "expected": "先复述目标，再聚焦一到两个关键不确定性"},
+      {"prompt": "新增需求应该放在哪个版本", "expected": "区分项目目标、版本目标和需求目标"},
+      {"prompt": "把已确认需求整理成 PRD", "expected": "输出用户可读的产品共识与验收边界"}
+    ],
+    "boundary": [
+      {"prompt": "直接决定数据库字段", "expected": "交给 Planner，不替技术实现做决定"},
+      {"prompt": "需求尚未清楚就开始实现", "expected": "说明缺失信息和产品影响，留在 PM 澄清，不伪造共识或提前交 Planner"}
+    ]
+  },
+  "planner": {
+    "positive": [
+      {"prompt": "把锁定需求变成可执行计划", "expected": "扫描现状并给出文件级步骤和验证"},
+      {"prompt": "涉及外部服务", "expected": "加入 Preflight、状态源与回滚"},
+      {"prompt": "涉及 UI 状态", "expected": "加入用户路径、真实状态源和失败态"}
+    ],
+    "boundary": [
+      {"prompt": "需求目标仍有冲突", "expected": "回流 PM 并指出影响"},
+      {"prompt": "计划中发明新产品范围", "expected": "拒绝扩大范围，必要时回 PM 确认边界"}
+    ]
+  },
+  "executor": {
+    "positive": [
+      {"prompt": "执行当前 plan 的下一步", "expected": "先读后改，按步骤实现并验证"},
+      {"prompt": "现有函数可复用", "expected": "优先复用并保持现有模式"},
+      {"prompt": "验证失败", "expected": "报告真实输出并继续诊断或回流"}
+    ],
+    "boundary": [
+      {"prompt": "plan 遗漏低风险实现细节", "expected": "采用最小一致实现并在日志声明"},
+      {"prompt": "plan 与项目硬约束冲突", "expected": "停止冲突部分并回流 Planner"}
+    ]
+  },
+  "qa": {
+    "positive": [
+      {"prompt": "为用户路径设计测试", "expected": "覆盖成功、边界、失败和状态往返"},
+      {"prompt": "外部系统集成", "expected": "验证版本、权限、连接和状态源"},
+      {"prompt": "现有测试足够吗", "expected": "按风险识别最小有效验证集"}
+    ],
+    "boundary": [
+      {"prompt": "强制所有测试自动化", "expected": "区分自动化与人工验收，不做绝对承诺；人工验收项回流 PM 确认"},
+      {"prompt": "验收标准缺失", "expected": "回流 PM 或 Planner，不自行定义产品行为"}
+    ]
+  },
+  "reviewer": {
+    "positive": [
+      {"prompt": "审查当前改动", "expected": "先给按严重度排序且可定位的 findings"},
+      {"prompt": "判断 Bug 是否修复", "expected": "要求复现用例与回归证据"},
+      {"prompt": "审查共享契约", "expected": "检查兼容性、安全、数据和失败路径"}
+    ],
+    "boundary": [
+      {"prompt": "没有 Mock 的改动", "expected": "不强行输出 Mock 专项评分；证据不足时回流 Executor 补充，不臆测"},
+      {"prompt": "只看到 diff", "expected": "读取必要上下文后再下结论；读后仍不足则回流 Executor/Planner，不凭 diff 臆断"}
+    ]
+  },
+  "designer": {
+    "positive": [],
+    "boundary": [
+      {"prompt": "项目里有前端代码", "expected": "不自动激活；仅在视觉层级、交互或设计质量显著影响需求时进入，否则留在当前角色"},
+      {"prompt": "被要求接管计划或验证", "expected": "不接管 PM/Planner/Harness 权限，设计问题回流对应角色"}
+    ]
+  }
+}

@@ -7,6 +7,46 @@ All notable changes to Mick Agent Harness are documented in this file.
 This project follows Semantic Versioning 2.0. Git tags in the form `vX.Y.Z`
 are the release source of truth.
 
+## [0.17.0] - 2026-08-13
+
+### Reliable Agent Integration and Role Contracts
+
+- **Five-layer Agent diagnostics**: a versioned registry discovers Claude Code,
+  Codex, Cursor, Windsurf, Cline, Roo Code, and Trae without claiming unsupported
+  lifecycle coverage. The workbench separates discovered, injected, loaded,
+  execution-compliant, and feedback states.
+- **Safe loader and Hook management**: `harness agents doctor|sync|migrate|hooks`
+  provides dry runs, marker conflict detection, atomic replacement, backups, and
+  idempotent Claude/Codex lifecycle configuration. Loader evidence never counts
+  as proof that a live session loaded or followed the rules.
+- **Recoverable structured feedback**: versioned ingest envelopes are queued
+  before delivery, replayed after service recovery, deduplicated by stable keys,
+  and reject prompt, transcript, secret, and environment content.
+- **Concise role contracts**: PM, Planner, Executor, QA, Reviewer, optional
+  Designer, and orchestration use small, project-independent responsibility
+  contracts. Shared delivery mechanics live in orchestration; Reviewer may run
+  minimal evidence checks without owning QA.
+- **Audited design method**: Designer loads the bundled `designer-craft` Skill
+  only for real design work. Pinned open-source projects are reviewed inputs,
+  not runtime dependencies or alternate permission systems.
+- **Private Brain boundary**: reusable findings become redacted, deduplicated
+  candidates; project ledgers expose metadata only and Brain writes require
+  explicit confirmation.
+
+Compatibility: existing project mounts and runtime ledgers remain valid. Global
+Claude/Codex loaders and lifecycle Hooks can be migrated independently; Codex
+CLI command Hooks must be reviewed and trusted through `/hooks` before they run.
+
+Verification: 71 unittests, shell/Python/JSON/JavaScript and generated-rule
+checks, atomic migration and failure-injection coverage, live `127.0.0.1:6425`
+portfolio/Agent APIs, Markdown and collapsible code readers, and browser console
+with no errors.
+
+Release evidence: a live Codex session completed the four-state lifecycle and a
+Reviewer behavior sample scored 10/10. Claude Code retained verified loader and
+partial session evidence, but its turn and behavior evaluation remain explicitly
+unverified because the user signed out before the final sample.
+
 ## [0.16.0] - 2026-08-12
 
 ### Structured Artifact Stage Navigation

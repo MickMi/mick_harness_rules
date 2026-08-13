@@ -1,4 +1,4 @@
-> 🧭 状态：已完成 | 进度 75/75 | 当前归属：PM | 最近卡点：无
+> 🧭 状态：进行中 | 进度 89/90 | 当前归属：Codex Executor（v0.17.0 发布）| 最近卡点：无
 
 # Plan: Company Runtime V0 → Portfolio V0.2
 
@@ -1044,3 +1044,202 @@ Planner 回复：采用建议方案；这修复的是本轮真实执行触发的
 - files: installed `scripts/harness-observe.py`, `web/observe-dashboard.html`, `rules/core.md`, `dist/AGENTS.md`, `docs/OBSERVE.md`, `docs/FEATURES.md`, `docs/VERSIONS.md`; project `.harness/` 同步副本；`tests/test_harness_observe.py`; `plan.md`
 - verify: 全量 unittest 43 tests / 0 failures；Shell/Python/JSON/HTML/JavaScript/generate/diff 检查通过；Observer 重启后 `health.status=ok`；真实 RaliTennis artifact API 返回 38 个阶段并保留 Step 3ak 的两个日期；真实 Harness `plan.md` 返回 v0.15.0 规范阶段；页面源码无旧事件筛选器
 - notes: Sites 规范禁止未被用户明确要求的自动 DOM 点击与截图，因此交互采用 API、前端契约和脚本语法验收，并将真实页面打开给用户复核。
+
+## Phase 10：导航树重构与办公室视觉（v0.17.0 前瞻 · 纯前端）
+
+### 目标
+
+左侧导航改为「总览 → 项目（可折叠）→ 五个视图」的真实两级树，删除泄漏内部概念的“进展记录” run 列表；主区角色办公室增强状态灯、流转动线与工位卡质感。不改动 API、事件账本或功能行为。
+
+### 约束
+
+- run 仍自动选择最新，URL `run` 参数保留兼容；五个视图标签文案不变（需求导航/产物/版本规划/技术记录/事件明细）。
+- 导航项去卡片化：文本树 + 当前项左侧强调条；invalid 项目保留可见与原因。
+- 办公室增强只用既有 workspace/snapshot 字段，DOM 安全构建，无第三方依赖。
+- 既有 43 项测试不回归；新契约先红后绿。
+
+### 步骤
+
+- [x] 76. [修改] `tests/test_harness_observe.py` — 固定导航树与办公室视觉契约（无“进展记录”/run-list，有 nav-tree 与状态灯）。
+- [x] 77. [修改] `web/observe-dashboard.html` — 两级树导航、删除 run 列表与 tabs 迁移、办公室状态灯与流转动线。
+- [x] 78. [运行] 全量验证、同步 `~/.mick-harness` 与项目 `.harness/` 副本，打开真实页面给用户复核。
+
+### Step 76 — 2026-08-13
+- files: `tests/test_harness_observe.py`
+- verify: 新契约按预期红灯（`nav-tree` 缺失），实现后转绿
+
+### Step 77 — 2026-08-13
+- files: `web/observe-dashboard.html`
+- verify: HTML parse OK；抽取内联 JavaScript `node --check` exit 0；无 `run-list`/`renderTabs`/`role-dot` 等旧引用残留
+- notes: 左侧改为 总览 → 项目（▸/▾ 折叠）→ 五视图 两级树，当前项 inset 强调条；需求导航带真实阻塞徽章；tabs 从主区迁入树；办公室 role-dot 升级为呼吸状态灯 role-light，当前流转改为带流动点动画的 flow-line（建议接手为虚线）。
+
+### Step 78 — 2026-08-13
+- files: installed `web/observe-dashboard.html`（`~/.mick-harness` 与项目 `.harness/`）；`plan.md`
+- verify: 全量 unittest 44 tests / 0 failures；`git diff --check` 与 schema JSON 校验 exit 0；三处副本 SHA-256 一致；线上页面含 `nav-tree`、无“进展记录”；`/healthz` status=ok
+- notes: 静态页面按请求从安装目录读取，无需重启服务；真实视觉与交互由用户在已打开页面复核。
+
+## v0.17.0 · 2026-08-13 · 注入回写工业化与角色有效性
+
+### 目标
+
+把 Harness 从“能够注入规则并记录部分事件”升级为可诊断、可恢复、可迁移、可验证的本地 Agent 工作系统；同时将角色规则精简为稳定职责契约，用契约测试和真实 Agent 行为样本证明它们有效。
+
+“工业级”不表述为“绝对不出错”，而是：**不静默失败、不损坏原配置和事件数据、失败可定位、中断可恢复、升级可迁移、行为可验证**。
+
+### 用户可见结果
+
+- 用户能在一处看到每个 Code Agent 的五层真实状态：`已发现 → 已注入 → 已加载 → 执行合格 → 已回写`。
+- 诊断结果必须指明故障发生在 Agent 发现、规则文件、Hook、本地服务、项目注入还是事件投影。
+- 规则更新和旧项目迁移可重复执行；失败时保留最后一份有效配置，不留半写文件。
+- 服务离线或重启不丢失已接收事件；重复投递不制造重复记录。
+- Brain 的读取与写入有明确授权、来源、摘要和隐私边界，不把私人正文注入项目或事件账本。
+- 用户点开某个角色时，看到的职责、交付物、完成条件和流转边界与 Agent 实际执行一致。
+
+### 支持边界
+
+- Tier 1：Claude Code 与 Codex，完成自动发现、规则注入、加载证明、生命周期回写和诊断。
+- Tier 2：Cursor、Windsurf、Cline、Roo、Trae 等已知入口，提供尽力发现、可注入能力说明和明确的不支持项；本版不伪造完整生命周期支持。
+- “发现所有 Code Agent”不作为可验收承诺；可验收的是注册表中已知 Agent 在 PATH、macOS App、配置目录和编辑器扩展四类信号上的可重现检测。
+- 不存储 Prompt、回复全文、transcript、密钥、环境变量或 Brain 私人正文。
+- 不自动安装未知 Agent、IDE 扩展或第三方 Skill；不在无用户确认时改写 Agent 自有配置。
+
+### 文件级契约
+
+- `config/agent-registry.json`（新建）：已知 Agent 的标识、检测信号、注入目标、Hook 能力、支持等级和安全边界；注册表是能力事实源，不从界面文案推断。
+- `scripts/harness-agent-manager.py`（新建）：提供可测试的 scan / sync / doctor / migrate 内核；写入使用同目录临时文件、fsync 和原子替换，保留必要的可审查备份。
+- `bin/harness`（修改）：保留 `agents scan/sync`，新增 `agents doctor` 与 `agents migrate`，作为 Python 内核的稳定薄入口。
+- `scripts/harness-observe.py` 与 `scripts/harness-observe-hook.py`（修改）：增加带 schema/version/idempotency key 的可恢复事件提交、本地暂存、重放与脱敏校验。
+- `docs/runtime-event-v0.schema.json`（修改）：增加注入诊断、规则加载证明、Brain 交互元数据和回写恢复事件，不允许私密正文字段。
+- `rules/roles/*.md` 与 `rules/roles/orchestration.md`（修改）：统一为角色触发、必读输入、职责、非职责、交付物、验收、交接七段契约；长模板与行业示例下沉到按需资料。
+- `rules/skills/SOURCES.md`（新建）：记录外部 Skill 的仓库、许可证、固定 commit、引入理由、安全审查、适用角色和更新/移除方式；审查不通过时可以保持空清单。
+- `tests/test_harness_agents.py` 与 `tests/test_role_contracts.py`（新建）：覆盖注入、迁移、故障注入、隐私、契约结构和角色行为样本；不读写用户真实配置。
+- `web/observe-dashboard.html`（修改）：展示五层 Agent 状态、最后证据、失败原因和最小修复动作，不从文件存在推断已加载或执行合格。
+- `docs/AGENT-SUPPORT.md`、`docs/BRAIN-INTEGRATION.md`、`docs/ROLE-CONTRACTS.md`（新建）：分别记录兼容矩阵、Brain 数据流与角色有效性评测方法。
+
+### 实施步骤
+
+- [x] 79. [基线] 对现有 agents scan/sync、全局/项目 Loader、Hook、Observer、Brain 和角色规则建立端到端状态图、威胁模型与失效用例基线。
+- [x] 80. [测试先行] 固定 Agent 注册表、支持等级、多信号检测和 `agents doctor --json` 契约。
+- [x] 81. [注入] 实现原子同步、干跑、冲突识别、旧 marker 迁移、保守备份和中断回滚。
+- [x] 82. [加载证明] 为 Claude Code / Codex 完成可审查 Hook 安装、规则版本回报与 session/turn 生命周期闭环；第一步先把“已写未接入”的 `harness-observe-hook.py` 真正挂进真实 Agent 配置（Claude Code SessionStart/SessionEnd + Codex lifecycle），并让 `session-start.sh` 注入文本携带可核验的规则版本号，使“已加载”从静态文本提醒升级为可回写、可核验状态。
+- [x] 83. [可靠回写] 实现服务离线降级、持久化暂存、幂等重放、账本锁恢复和 schema 迁移，用故障注入验证；同时把 session/turn 生命周期从“仅 CLI 手动 emit”补齐为 hook 自动回写，并证明真实账本出现非 CLI 来源的 `agent.session_observed` / `agent.turn_observed` 事件。
+- [x] 84. [Brain] 实现分层读取、写入候选、确认策略、来源 digest、去重和脱敏事件，阻断私人正文进入项目/账本。
+- [x] 85. [角色契约] 清理冲突与过时调度，精简 PM / Planner / Executor / QA / Reviewer，Designer 保持可选，重新生成并校验分发文件；以实测缺陷为靶子（PM 412 行过长、Executor 僵硬、QA 重复绝对化、Reviewer 偏 Mock、orchestration 与 Kernel 过时冲突），统一为七段契约结构。
+- [x] 86. [Skill 治理] 调研外部开源 Skill，完成来源、许可证、安全、重复性与适用性评审；只引入能填补明确行为缺口的候选。
+- [x] 87. [行为评测] 建立角色测试集与评分卡，分开“静态契约合格”与“真实 Agent 样本合格”，不用文档存在代替效果证据。
+- [x] 88. [工作台] 接入 Agent 五层状态、规则/角色版本、诊断证据和最小修复指引。
+- [x] 89. [迁移与文档] 完成旧全局 Loader、已注入项目、旧 Hook 和旧事件 schema 的向后兼容说明与迁移演练。
+- [ ] 90. [发布 Gate] 运行安装/重复同步/半写中断/服务离线/重启重放/隐私红线/真实 Tier 1 Agent 全链路验收，更新发布文档但不在未获授权时打 Tag。
+
+### 完成判定
+
+- **接入验证（本阶段地基）**：回写 hook 以“真实 Agent 配置中的引用 + 真实 session 产生事件”为准，不以“脚本存在 / 单测通过”为准；`~/.claude/settings.json` 与 Codex lifecycle 中必须能定位到回写 hook，且真实账本出现非 CLI 来源的 `agent.session_observed` / `agent.turn_observed` 事件。
+- 同一 Agent 连续两次 sync 后目标文件字节一致；注入中断后旧文件仍可用，无半写 managed block。
+- 现有 Codex 重复 legacy block 可被 doctor 准确报告、migrate 一次清理，再次迁移为幂等 no-op。
+- Tier 1 Agent 能形成 session start → turn start/stop → session end 往返，并携带可核验的规则与角色版本；缺任一段不显示“已回写”。
+- 服务离线、进程被中断和重复投递用例中，最终 ledger 无丢失的已确认事件、无重复幂等键，replay digest 稳定。
+- 隐私测试向 Hook、回写和 Brain 边界注入 prompt / transcript / secret / env / 私人正文，持久化文件与 API 均不得出现原文。
+- 每个标准角色都通过七段契约结构检查；PM / Planner / Executor / QA / Reviewer 各至少有 3 个正向和 2 个越界/回流用例。
+- 真实 Claude Code 与 Codex 样本分别记录加载、职责、交付、验证、交接五项评分；未执行真实样本时只能标注“契约测试通过”。
+- 外部 Skill 没有完整来源记录或安全评审时不进入分发文件；无合适候选时“不引入”是合格结果。
+- 全量单元、故障注入、迁移、端到端、`./generate.sh --check`、Harness Audit 和本机工作台真实路径全部提供本次证据。
+
+### 立项时已确认的基线缺口
+
+- `harness agents scan/sync` 当前只对 Claude Code 和 Codex 建模，不是本机全 Agent 注册表；`config/agent-registry.json` 尚不存在，Tier 2 能力无事实源。
+- 项目注入通过现有 18 项核心检查，但 Codex 全局 Loader（`~/.codex/AGENTS.md`）存在 `MICK-HARNESS-GLOBAL` legacy managed block，正文停留在“Manifest: not found”，且全局 Loader 不会随 `rules/core.md` 源规则实时刷新。
+- **Hook 已写但未接入（2026-08-13 实测）**：`scripts/harness-observe-hook.py` 逻辑完整且单测通过，但 `~/.claude/settings.json`、`~/.claude/hooks/`、`~/.codex/config.toml` 三处均无任何引用；Claude Code SessionStart 的 `hooks/session-start.sh` 只注入静态 Tripwire 文本、无回写逻辑，SessionEnd 走 brain-sync/narc 而非 harness 回写。
+- **加载证明缺失**：注入的 Tripwire 文本不含规则版本号，系统无法核验“本轮加载的是哪一版规则”；现有账本中 `agent.session_observed` / `agent.turn_observed` 均为 0 条，“文件已注入”尚不能证明“本轮已加载并执行”。
+- **结构化回写半真**：账本现有 22 条 harness-agent 事件（work.round/decision/handoff）全部来自 `harness observe emit` CLI 手动回写，session/turn 生命周期自动回写为 0；Observer 服务健康但接收的是 CLI 提交而非 hook 自动提交。
+- 本次立项已被 `docs/VERSIONS.md` 真实解析为 12 项待办，但当前 Plan Collector 只读取首个 H2 `步骤` 区块，因此运行 snapshot 仍显示旧的 7/7；这是 task-79 必须固定、task-88 必须在工作台消除的真实断链。
+- 角色规则缺陷实测：`rules/roles/pm.md` 412 行（过长）、`executor.md` 81 行（僵硬）、`qa.md` 142 行（重复与绝对化）、`reviewer.md` 122 行（偏向 Mock）、`orchestration.md` 256 行（与当前 Kernel 过时冲突）；五份角色文件无统一七段契约，且“是否有效”只有文档存在、无行为评测证明。
+
+> 补充规划（2026-08-13 · Planner）：以上基线缺口已由实测交叉验证（注入链路 / 三个 Agent 配置 / 本地账本事件分布 / 角色文件规模 / 服务运行态），并据此把 task-82/83/85 与完成判定精确到“可核验的证据锚点”。本阶段的关键升级不是“再写一个脚本”，而是把“已写未接入”的 hook 真正挂进真实 Agent 配置，并把“脚本存在 / 单测通过”与“真实接入 / 真实产生事件”分成两个验收层。
+
+### Preflight 与停止条件
+
+- 开始实现前先复现并固定当前 Claude/Codex 注入、Hook、Observer 与 Brain 数据流；每个修复都保留改前/改后报告。
+- 所有 Agent 配置写入先在临时 HOME 与伪造应用目录测试；未通过迁移测试前不动用户真实配置。
+- 真实 Agent 行为评测若产生费用、需要登录、发起外部请求或修改全局配置，执行前单独获得用户授权。
+- 外部 Skill 候选只读调研；许可证不明、包含危险命令、需要私密数据或与现有契约冲突时立即停止引入。
+- 同一错误指纹重复两次进入 Debug Card；事件账本、Brain 私密内容或真实 Agent 配置存在损坏风险时停止本阶段。
+
+### Step 79 — 2026-08-13
+- files: `docs/AGENT-SUPPORT.md`, `plan.md`
+- verify: `harness agents scan` exit 0，Claude/Codex 均被发现；真实配置只读探针确认两者 Observer Hook 均未接入、Codex 同时存在 global/legacy 区块；Observer 基线在允许 localhost 的环境中 44 tests / 0 failures；Harness Check 18 PASS / 1 optional warning / 0 FAIL
+- notes: 五层状态被固定为相互独立的证据门；本轮未改写任何真实 Agent 配置，也未读取或持久化聊天正文。
+
+### Step 80 — 2026-08-13
+- files: `config/agent-registry.json`, `scripts/harness-agent-manager.py`, `bin/harness`, `tests/test_harness_agents.py`, `plan.md`
+- verify: 验证通过：新测试在 manager/registry 不存在时 4 errors；实现后 `python3 -B -m unittest tests/test_harness_agents.py` 4 tests / 0 failures；真实 `agents doctor --json` 解析成功并报告 7 个注册 Agent、4 个已发现入口
+- notes: Tier 1 仅 Claude Code/Codex；Cursor/Windsurf/Cline/Roo/Trae 只提供多信号发现和能力缺口，不承诺完整回写。
+
+### Step 81 — 2026-08-13
+- files: `scripts/harness-agent-manager.py`, `tests/test_harness_agents.py`, `plan.md`
+- verify: 验证通过：`python3 -B -m unittest tests/test_harness_agents.py` 8 tests / 0 failures；覆盖 dry-run 不写入、连续 sync 字节幂等、用户正文保留、备份、legacy marker 迁移幂等、未闭合 marker 拒写、替换故障保留旧文件并清理临时文件
+- notes: 所有写入在同目录完成 flush/fsync 后原子替换；迁移只识别 Harness 明确 marker。本轮仍未写真实 Agent 配置。
+
+### Step 82/83（实现完成，真实接入待授权）— 2026-08-13
+- files: `scripts/harness-agent-manager.py`, `scripts/harness-observe-hook.py`, `scripts/harness-observe.py`, `hooks/session-start.sh`, `docs/runtime-event-v0.schema.json`, `tests/test_harness_agents.py`, `tests/test_harness_observe.py`
+- verify: 隔离 HOME 中 Hook 合并保留原配置且连续执行幂等；Codex/Claude 四生命周期 round-trip 通过；服务离线 + 本地账本暂不可写时事件保留在 outbox，恢复后重放一次入账、再次重放为 no-op；全量 66 tests / 0 failures
+- notes: 真实 `~/.claude`、`~/.codex` 和 6425 安装部署被安全门要求用户对四个配置目标显式授权，因此 task-82/83 暂不勾选，也不把隔离测试表述为真实 Agent 已接入。
+
+### Step 84 — 2026-08-13
+- files: `scripts/harness-brain-boundary.py`, `docs/BRAIN-INTEGRATION.md`, `tests/test_harness_agents.py`
+- verify: 验证通过：候选记忆稳定去重，secret 与 HOME 路径脱敏，公开元数据不含正文；实际写入必须显式 `--yes`，dry-run 无写入；相关测试纳入全量 66 tests / 0 failures
+- notes: Brain 私人正文默认只在个人状态目录，项目/工作台只接触类型、层级、digest 与脱敏元数据。
+
+### Step 85 — 2026-08-13
+- files: `rules/roles/*.md`, `rules/roles/orchestration.md`, `tests/fixtures/role-behaviors.json`, `tests/test_role_contracts.py`
+- verify: 六个角色均使用七段契约且少于 100 行；五个标准角色各 3 个正向 + 2 个边界用例；旧绝对化、Mock 偏置和供应商绑定断言均通过
+- notes: 角色只在真实触发条件下进入；普通解释不再被 orchestration 强制切角色。
+
+### Step 86 — 2026-08-13
+- files: `rules/skills/designer-craft/SKILL.md`, `rules/skills/SOURCES.md`, `rules/roles/designer.md`, `tests/test_role_contracts.py`
+- verify: 验证通过：Skill Creator `quick_validate.py` → `Skill is valid!`；来源固定到 4 个 commit；测试确认适配 Skill 无 scripts 目录且包含禁止 Hook/全局配置/外部 API 的安全边界
+- notes: 以 Impeccable 为主要设计方法参考，UI UX Pro Max 仅作资料参考，Vercel guidelines 用于质量 Gate，Anthropic frontend-design 作行为基准；不复制或执行上游高权限能力。
+
+### Step 87（契约完成，真实样本待授权）— 2026-08-13
+- files: `docs/ROLE-CONTRACTS.md`, `tests/fixtures/role-behaviors.json`, `tests/test_role_contracts.py`
+- verify: 评分卡固定加载、职责、交付、验证、交接五维，契约测试通过；文档明确 Claude Code/Codex 真实样本均为待授权
+- notes: 工作台继续把“执行遵循”显示为未验证，不用静态文档或测试冒充真实模型行为。
+
+### Step 88 — 2026-08-13
+- files: `scripts/harness-observe.py`, `web/observe-dashboard.html`, `tests/test_harness_observe.py`
+- verify: `/api/agents.json` 端到端返回 7 个注册 Agent；带当前 `rule_version` 的 runtime 事件才点亮“加载”；页面脚本语法通过，API 与五层 UI 契约测试纳入全量 66 tests / 0 failures
+- notes: API 不暴露 session_ref、命令路径或配置正文；仅返回检测种类、分层状态、计数、项目名和修复提示。
+
+### Step 89 — 2026-08-13
+- files: `README.md`, `docs/AGENT-SUPPORT.md`, `docs/BRAIN-INTEGRATION.md`, `docs/ROLE-CONTRACTS.md`, `bin/harness`
+- verify: 真实 HOME 的 doctor 与 migrate/hooks dry-run 均 exit 0；准确报告 7 个注册、4 个已发现 Agent、Codex 1 个 legacy 区块、Claude/Codex 0/4 Observer Hook；Shell/JSON 语法与 `./generate.sh --check` 通过
+- notes: 文档固定 doctor → migrate dry-run → hooks dry-run → 应用 → 新会话验证路径；应用动作未获显式授权，没有改写真实配置。
+
+### Step 82/83/90 — 2026-08-13 · 真实部署阶段
+- files: `~/.mick-harness`, `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.claude/settings.json`, `~/.codex/hooks.json`, `scripts/harness-observe.py`, `bin/harness`, `tests/test_harness_agents.py`, `tests/test_harness_observe.py`
+- verify: 用户明确授权后完成全局安装备份、Loader 迁移、4/4 生命周期 Hook 合并和 6425 重启；二次 migrate/hooks dry-run 均 changed=false；服务 health=ok、5 个登记/4 个有效项目；全量 68 tests / 0 failures；真实浏览器显示 7 个 Agent 五层状态且 console 0 errors
+- notes: 安装备份位于 `~/.local/state/mick-harness/backups/v0.17-preinstall-20260813`；Claude/Codex 当前显示“加载待真实会话”是正确状态。当前任务启动早于 Hook 安装，必须由新会话产生规则版本事件后才能勾选 task-82/83；真实行为评分仍待单独授权。
+
+### Step 88 修正 — 2026-08-13
+- files: `scripts/harness-observe.py`, `tests/test_harness_observe.py`, `bin/harness`
+- verify: 验证通过：Collector 0.4.0 会按顶部进度范围选择当前版本的 79-90 步骤，并把解析器版本纳入计划事件幂等键；产品版本由 `VERSION` 显示为 0.17.0，旧 Git revision 仅作附加证据；全量 68 tests / 0 failures
+- notes: 修复前真实工作台仍显示旧首段 7/7；修复后同一 plan 会通过 append-only 新事件重新投影，不覆盖历史账本。
+
+### Step 87 审查 — 2026-08-13
+- files: `docs/VERSIONS.md`, `plan.md`
+- verify: 七份角色文件均为 48–50 行且无已知项目名或技术栈绑定；`python3 -B -m unittest tests/test_role_contracts.py` 为 6 tests / 0 failures；真实 `/api/agents.json` 显示 Claude Code 已有加载与回写证据、Codex 仍只有配置证据；`harness brain status` 显示 Brain 仓库和 Claude/Daily 接入可用，但 Codex/Generic 仍未接入
+- notes: v0.17 角色结构优化已完成，但真实 Agent 行为评测尚未完成，因此 task-87 保持未勾选；Reviewer 的验证边界、Designer 的通用审美边界及跨角色重复流程语句列为收尾项。Brain 当前属于“连接健康、触发覆盖与回写可靠性不足”，相关产品化改造已立项到 v0.18.0。
+
+### Step 87 角色收尾 — 2026-08-13
+- files: `rules/roles/*.md`, `rules/roles/orchestration.md`, `docs/ROLE-CONTRACTS.md`, `tests/test_role_contracts.py`, installed `~/.mick-harness/rules/roles/*.md`, installed `~/.mick-harness/docs/ROLE-CONTRACTS.md`
+- verify: 新增约束先得到 3 个预期失败；修正后角色测试 9 tests / 0 failures，全量 71 tests / 0 failures，`./generate.sh --check` 与 `git diff --check` 通过；源文件和安装副本逐文件一致
+- notes: Reviewer 可为 finding 执行最小验证但不接管 QA；Designer 角色只保留通用职责，具体审美方法由内置、按需加载的 `designer-craft` 提供，外部 Skill 仅作已审计上游参考；共享回合卡片和 handoff 机制只在 orchestration 定义一次。task-87 仍等待真实 Claude Code/Codex 行为样本，不因静态测试通过而勾选。
+
+### Step 90 发布审查 — 2026-08-13
+- files: `.gitignore`, `CHANGELOG.md`, `CHANGELOG.zh-CN.md`, `docs/AGENT-SUPPORT.md`, `plan.md`
+- verify: 全量 71 tests / 0 failures；Shell/Python/JSON、`./generate.sh --check`、`git diff --check` 通过；Harness Check 18 PASS / 1 optional warning / 0 FAIL；真实 6425 服务重启后 health=ok、outbox_remaining=0；浏览器验证总览、角色办公室、版本规划、Markdown/代码阅读，console 0 errors
+- notes: 发布审查未发现代码级 blocking finding；已补双语 v0.17 changelog、部署后支持状态与 Python cache 忽略。发布仍停止在两个外部 Gate：Codex 命令 Hook 必须由用户在 `/hooks` 信任后启动新会话形成真实事件；GitHub CLI 当前未登录（无效 `GITHUB_TOKEN`，移除变量后仍显示未登录）。未提交、未推送、未打 Tag，v0.17 保持 in_progress。
+
+### Step 82/83/87 验收补证 — 2026-08-13
+- files: `docs/AGENT-SUPPORT.md`, `docs/ROLE-CONTRACTS.md`, `tests/test_role_contracts.py`, `plan.md`, `docs/VERSIONS.md`
+- verify: Codex CLI 四类 Hook 已由用户信任；同一真实 session 产生 SessionStart → TurnStart → TurnCompleted → SessionEnd，事件均携带 `rule_version=0.17.0` 与角色 digest；真实 Reviewer 样本五维均 2/2，总分 10/10；全量 71 tests / 0 failures
+- notes: Claude Code 已有真实 Loader 与 session start/end 证据，但用户于 2026-08-13 退出账号并决定继续发布，完整 turn 与行为样本明确列为发布例外并保持“未验证”；不以 Codex 样本代替 Claude 状态，也不再次发起 Claude 登录或模型调用。

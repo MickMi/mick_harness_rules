@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://mickmi.dev/schemas/harness-runtime-event-v0.json",
   "title": "Mick Agent Harness Runtime Event V0",
-  "description": "Append-only event contract for the Mick Harness local work server.",
+  "description": "Append-only event contract for the Mick Harness local work server. v0.17 ingest envelopes use schema 0.2.0 while persisted events remain replay-compatible 0.1.0.",
   "type": "object",
   "required": [
     "schema_version",
@@ -321,7 +321,9 @@
         "state": {"enum": ["session_started", "turn_started", "turn_completed", "session_ended"]},
         "session_ref": {"type": "string", "minLength": 1, "maxLength": 200},
         "turn_ref": {"type": "string", "minLength": 1, "maxLength": 200},
-        "project_id": {"type": "string", "minLength": 1, "maxLength": 160}
+        "project_id": {"type": "string", "minLength": 1, "maxLength": 160},
+        "rule_version": {"type": "string", "minLength": 1, "maxLength": 40},
+        "role_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
       }
     },
     "harnessCommandPayload": {

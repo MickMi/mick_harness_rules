@@ -92,12 +92,14 @@ install_observer_service() {
 # harness version
 # ============================================================
 cmd_version() {
+    local declared=""
+    [ -f "$HARNESS_GLOBAL/VERSION" ] && declared=$(tr -d '[:space:]' < "$HARNESS_GLOBAL/VERSION")
     if [ -d "$HARNESS_GLOBAL/.git" ]; then
-        local ver
-        ver=$(git -C "$HARNESS_GLOBAL" describe --tags --always 2>/dev/null || echo "unknown")
-        echo "Mick Agent Harness $ver  ($HARNESS_GLOBAL)"
+        local revision
+        revision=$(git -C "$HARNESS_GLOBAL" describe --tags --always 2>/dev/null || echo "unknown")
+        echo "Mick Agent Harness ${declared:-unknown}  ($HARNESS_GLOBAL · git $revision)"
     elif harness_available; then
-        echo "Mick Agent Harness local checkout  ($HARNESS_GLOBAL)"
+        echo "Mick Agent Harness ${declared:-local checkout}  ($HARNESS_GLOBAL)"
     else
         echo "Mick Agent Harness (not installed. Run: harness install)"
     fi
@@ -533,135 +535,12 @@ EOF
 }
 
 # ============================================================
-# harness agents — scan/sync global code-agent loaders
+# harness agents — discover, diagnose and safely maintain Agent adapters
 # ============================================================
-GLOBAL_LOADER_BEGIN="<!-- MICK-HARNESS-GLOBAL:BEGIN — auto-managed by harness agents sync -->"
-GLOBAL_LOADER_END="<!-- MICK-HARNESS-GLOBAL:END -->"
-
-agent_detected() {
-    local command_name="$1"
-    local home_dir="$2"
-
-    command -v "$command_name" >/dev/null 2>&1 || [ -d "$home_dir" ]
-}
-
-inject_global_loader() {
-    local name="$1"
-    local surface="$2"
-    local target_file="$3"
-    local quiet="${4:-false}"
-
-    mkdir -p "$(dirname "$target_file")"
-    [ -f "$target_file" ] || touch "$target_file"
-
-    local block stripped
-    block="$(mktemp)"
-    {
-        echo "$GLOBAL_LOADER_BEGIN"
-        echo ""
-        cmd_export "$surface" "$HOME"
-        echo ""
-        echo "$GLOBAL_LOADER_END"
-    } > "$block"
-
-    if grep -qF "MICK-HARNESS-GLOBAL:BEGIN" "$target_file" 2>/dev/null; then
-        stripped="$(mktemp)"
-        awk -v begin="MICK-HARNESS-GLOBAL:BEGIN" -v end="MICK-HARNESS-GLOBAL:END" '
-            index($0, begin) { skip=1; next }
-            index($0, end)   { skip=0; next }
-            !skip { print }
-        ' "$target_file" | sed '/./,$!d' > "$stripped"
-        {
-            cat "$block"
-            echo ""
-            cat "$stripped"
-        } > "$target_file"
-        rm -f "$stripped"
-        [ "$quiet" = true ] || ok "$name loader refreshed: $target_file"
-    else
-        {
-            cat "$target_file"
-            [ -s "$target_file" ] && echo ""
-            cat "$block"
-        } > "$target_file.tmp.$$"
-        mv "$target_file.tmp.$$" "$target_file"
-        [ "$quiet" = true ] || ok "$name loader installed: $target_file"
-    fi
-    rm -f "$block"
-}
-
 cmd_agents() {
-    local sub="${1:-scan}"
-    [ $# -gt 0 ] && shift || true
-    local quiet=false
-
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --quiet)
-                quiet=true
-                shift
-                ;;
-            -h|--help|help)
-                sub="help"
-                shift
-                ;;
-            *)
-                fail "Unknown agents option: $1"
-                exit 1
-                ;;
-        esac
-    done
-
-    local claude=false codex=false
-    agent_detected "claude" "$HOME/.claude" && claude=true
-    agent_detected "codex" "$HOME/.codex" && codex=true
-
-    case "$sub" in
-        scan)
-            echo ""
-            echo -e "${BOLD}Agent Scan${NC}"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            if [ "$claude" = true ]; then
-                echo -e "  Claude / Claude Code : ${GREEN}detected${NC} → $HOME/.claude/CLAUDE.md"
-            else
-                echo -e "  Claude / Claude Code : ${YELLOW}not detected${NC}"
-            fi
-            if [ "$codex" = true ]; then
-                echo -e "  Codex / Codex CLI    : ${GREEN}detected${NC} → $HOME/.codex/AGENTS.md"
-            else
-                echo -e "  Codex / Codex CLI    : ${YELLOW}not detected${NC}"
-            fi
-            echo ""
-            ;;
-        sync)
-            [ "$quiet" = true ] || {
-                echo ""
-                echo -e "${BOLD}Agent Sync${NC}"
-                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            }
-            if [ "$claude" = true ]; then
-                inject_global_loader "Claude / Claude Code" "agent" "$HOME/.claude/CLAUDE.md" "$quiet"
-            fi
-            if [ "$codex" = true ]; then
-                inject_global_loader "Codex / Codex CLI" "codex" "$HOME/.codex/AGENTS.md" "$quiet"
-            fi
-            if [ "$claude" != true ] && [ "$codex" != true ]; then
-                [ "$quiet" = true ] || warn "No supported file-backed code agents detected."
-            fi
-            [ "$quiet" = true ] || echo ""
-            ;;
-        -h|--help|help)
-            echo "Usage: harness agents [scan|sync] [--quiet]"
-            echo ""
-            echo "scan  Detect supported local code-agent config targets."
-            echo "sync  Install or refresh managed Harness loader blocks."
-            ;;
-        *)
-            fail "Unknown agents command: $sub"
-            echo "Run 'harness agents --help' for usage."
-            exit 1
-            ;;
-    esac
+    local manager="$HARNESS_GLOBAL/scripts/harness-agent-manager.py"
+    [ -f "$manager" ] || fail "scripts/harness-agent-manager.py not found."
+    python3 "$manager" "$@"
 }
 
 # ============================================================
@@ -1084,7 +963,7 @@ case "${1:-}" in
         echo "  harness init --full      额外启用 config / Brain 检查"
         echo "  harness init --all-rules 额外挂旧工具入口"
         echo "  harness export [surface] 输出 Codex / Agent / API / IDE 加载器"
-        echo "  harness agents [scan|sync] 扫描并注入本机 code-agent 全局入口"
+        echo "  harness agents [scan|doctor|sync|migrate|hooks] 管理本机 Code Agent 接入"
         echo "  harness update           更新全局 Harness + 刷新所有注册项目"
         echo "  harness check [dir]      验证当前项目脚手架完整性"
         echo "  harness report [dir]     查看当前任务计划与执行状态"
@@ -1097,7 +976,10 @@ case "${1:-}" in
         echo "  harness init"
         echo ""
         echo "给不同 AI 入口注入 Harness："
-        echo "  harness agents sync      自动扫描 Claude/Codex 等文件型入口并注入"
+        echo "  harness agents doctor    查看发现、注入、Hook 与待验证状态"
+        echo "  harness agents sync      原子同步 Claude/Codex 全局 Loader"
+        echo "  harness agents migrate   迁移旧受管区块（先加 --dry-run）"
+        echo "  harness agents hooks     安装生命周期回写（先加 --dry-run）"
         echo "  harness export codex     手动导出 Codex loader"
         echo "  harness export agent     手动导出通用 Agent loader"
         echo "  harness export api       手动导出 API prompt"

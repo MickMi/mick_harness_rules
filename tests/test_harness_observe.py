@@ -11,6 +11,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
@@ -154,7 +155,7 @@ class ObserveRuntimeTests(unittest.TestCase):
         self.assertEqual(OBSERVE.SERVICE_NAME, "Mick Harness Observer")
         self.assertEqual(OBSERVE.SERVICE_LABEL, "com.mick.harness.observer")
         self.assertEqual(OBSERVE.DEFAULT_PORT, 6425)
-        self.assertEqual(OBSERVE.COLLECTOR_VERSION, "0.3.1")
+        self.assertEqual(OBSERVE.COLLECTOR_VERSION, "0.4.0")
 
     def test_launch_agent_plist_keeps_observer_alive(self) -> None:
         state_dir = self.project / "state"
@@ -293,6 +294,25 @@ class ObserveRuntimeTests(unittest.TestCase):
             ["completed", "completed", "in_progress", "discovered", "discovered"],
         )
         self.assertEqual(snapshot["summary"]["task_total"], 5)
+
+    def test_versioned_plan_uses_step_block_matching_header_progress(self) -> None:
+        plan = (
+            "> 🧭 状态：进行中 | 进度 10/12 | 当前归属：Executor\n\n"
+            "# Plan: Long-running project\n\n"
+            "## 步骤\n\n"
+            "- [x] 1. Old one\n"
+            "- [x] 2. Old two\n\n"
+            "## v0.17.0 · current version\n\n"
+            "### 实施步骤\n\n"
+            "- [x] 9. Current done\n"
+            "- [x] 10. Current done too\n"
+            "- [ ] 11. Current next\n"
+            "- [ ] 12. Release gate\n"
+        )
+        steps = OBSERVE.parse_plan_steps(plan)
+
+        self.assertEqual([step["step_id"] for step in steps], ["9", "10", "11", "12"])
+        self.assertEqual([step["status"] for step in steps], ["completed", "completed", "in_progress", "discovered"])
 
     def test_numbered_plan_explicitly_resolved_block_is_not_actionable(self) -> None:
         plan = numbered_plan_text() + (
@@ -495,6 +515,9 @@ class ObserveRuntimeTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         events = self.events_text()
         self.assertIn("agent.turn_observed", events)
+        event = next(json.loads(line) for line in events.splitlines() if "agent.turn_observed" in line)
+        self.assertEqual(event["payload"]["rule_version"], "0.17.0")
+        self.assertRegex(event["payload"]["role_digest"], r"^sha256:[a-f0-9]{64}$")
         for secret in (payload["prompt"], payload["last_assistant_message"], payload["transcript_path"], payload["model"]):
             self.assertNotIn(secret, events)
 
@@ -529,6 +552,75 @@ class ObserveRuntimeTests(unittest.TestCase):
         self.assertEqual(snapshot["summary"]["active_agent_sessions"], 0)
         self.assertEqual(snapshot["summary"]["active_agent_turns"], 0)
 
+    def test_agent_status_requires_runtime_version_evidence_for_loaded(self) -> None:
+        (self.project / "AGENTS.md").write_text("# Harness\n", encoding="utf-8")
+        OBSERVE.ingest_envelope(
+            self.project,
+            OBSERVE.build_agent_envelope(
+                self.project,
+                platform="codex",
+                state="session_started",
+                session_ref="thr_agent_status",
+            ),
+        )
+        state_dir = self.project / "state"
+        state_dir.mkdir()
+        registry = state_dir / "registered-projects"
+        registry.write_text(f"{self.project}\n", encoding="utf-8")
+        manager_report = {
+            "harness_version": "0.17.0",
+            "agents": [{
+                "id": "codex", "name": "Codex", "tier": 1, "detected": True,
+                "signals": [{"kind": "command", "found": True}],
+                "injection": {"status": "injected"},
+                "loading": {"status": "hook_configured"},
+                "execution": {"status": "unverified"},
+                "issues": [{
+                    "code": "load-proof-missing",
+                    "severity": "info",
+                    "message": "A loader file does not prove this Agent session loaded the rules.",
+                    "repair": "Start a fresh Agent session.",
+                }],
+                "limitations": [],
+            }],
+        }
+
+        result = OBSERVE.agent_status_snapshot(registry, manager_report=manager_report)
+        agent = result["agents"][0]
+
+        self.assertEqual(agent["layers"]["discovered"]["status"], "verified")
+        self.assertEqual(agent["layers"]["injected"]["status"], "verified")
+        self.assertEqual(agent["layers"]["loaded"]["status"], "verified")
+        self.assertEqual(agent["layers"]["execution"]["status"], "unverified")
+        self.assertEqual(agent["layers"]["feedback"]["status"], "verified")
+        self.assertEqual(agent["evidence"]["event_count"], 1)
+        self.assertFalse(any(issue["code"] == "load-proof-missing" for issue in agent["issues"]))
+        self.assertNotIn("thr_agent_status", json.dumps(result))
+
+    def test_offline_delivery_keeps_persistent_outbox_until_replay(self) -> None:
+        (self.project / "AGENTS.md").write_text("# Harness\n", encoding="utf-8")
+        envelope = OBSERVE.build_agent_envelope(
+            self.project,
+            platform="codex",
+            state="session_started",
+            session_ref="thr_outbox",
+        )
+        with mock.patch.object(OBSERVE, "urlopen", side_effect=URLError("offline")):
+            with mock.patch.object(OBSERVE, "ingest_envelope", side_effect=OSError("temporarily unwritable")):
+                with self.assertRaises(OSError):
+                    OBSERVE.submit_envelope(self.project, envelope, state_root=self.project / "state")
+
+        queued = list(OBSERVE.outbox_root(self.project).glob("*.json"))
+        self.assertEqual(len(queued), 1)
+        self.assertEqual(json.loads(queued[0].read_text(encoding="utf-8"))["schema_version"], "0.2.0")
+
+        first = OBSERVE.replay_outbox(self.project)
+        second = OBSERVE.replay_outbox(self.project)
+        self.assertEqual(first, {"queued": 1, "replayed": 1, "failed": 0, "remaining": 0})
+        self.assertEqual(second, {"queued": 0, "replayed": 0, "failed": 0, "remaining": 0})
+        events = [json.loads(line) for line in self.events_text().splitlines()]
+        self.assertEqual(sum(event["type"] == "agent.session_observed" for event in events), 1)
+
     def test_codex_hook_config_is_reviewable_json(self) -> None:
         environment = os.environ.copy()
         environment["MICK_HARNESS_ROOT"] = str(ROOT)
@@ -546,6 +638,40 @@ class ObserveRuntimeTests(unittest.TestCase):
         self.assertEqual(set(config["hooks"]), {"SessionStart", "UserPromptSubmit", "Stop", "SessionEnd"})
         commands = [group[0]["hooks"][0]["command"] for group in config["hooks"].values()]
         self.assertTrue(all("harness-observe-hook.py" in command for command in commands))
+        self.assertTrue(all("--platform codex" in command for command in commands))
+
+    def test_claude_hook_config_is_reviewable_and_platform_scoped(self) -> None:
+        environment = os.environ.copy()
+        environment["MICK_HARNESS_ROOT"] = str(ROOT)
+        environment["MICK_HARNESS_ACTIVITY"] = "0"
+        result = subprocess.run(
+            [str(ROOT / "bin" / "harness"), "observe", "hook-config", "claude"],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        commands = [group[0]["hooks"][0]["command"] for group in json.loads(result.stdout)["hooks"].values()]
+        self.assertTrue(all("--platform claude" in command for command in commands))
+
+    def test_session_start_context_carries_harness_version(self) -> None:
+        (self.project / ".harness").mkdir()
+        environment = os.environ.copy()
+        environment["PWD"] = str(self.project)
+        result = subprocess.run(
+            [str(ROOT / "hooks" / "session-start.sh")],
+            check=False,
+            capture_output=True,
+            text=True,
+            cwd=self.project,
+            env=environment,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        context = payload["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("Harness-Version: 0.17.0", context)
+        self.assertIn("Rules: .harness/rules/core.md", context)
 
     def test_agent_activity_supplies_stage_when_project_has_no_plan(self) -> None:
         (self.project / "AGENTS.md").write_text("# Harness\n", encoding="utf-8")
@@ -744,6 +870,29 @@ class ObserveRuntimeTests(unittest.TestCase):
             self.assertNotIn(removed, dashboard)
         self.assertNotIn('task.status === "completed") return "Review"', dashboard)
         self.assertNotIn('task.status === "verification_pending") return "测试"', dashboard)
+
+    def test_dashboard_tree_navigation_and_office_visual_contract(self) -> None:
+        dashboard = DASHBOARD.read_text(encoding="utf-8")
+
+        self.assertIn("nav-tree", dashboard)
+        self.assertIn("renderNavTree", dashboard)
+        self.assertIn("所有项目", dashboard)
+        for label in ("需求导航", "产物", "版本规划", "技术记录", "事件明细"):
+            self.assertIn(label, dashboard)
+        for removed in ("进展记录", "run-list", "renderRunList", "run-button", "project-button", "renderTabs"):
+            self.assertNotIn(removed, dashboard)
+        self.assertIn("role-light", dashboard)
+        self.assertIn("flow-line", dashboard)
+        self.assertIn("@keyframes", dashboard)
+
+    def test_dashboard_shows_agent_five_layer_evidence_without_false_loaded_claims(self) -> None:
+        dashboard = DASHBOARD.read_text(encoding="utf-8")
+        self.assertIn("/api/agents.json", dashboard)
+        self.assertIn("Code Agent 接入状态", dashboard)
+        for label in ("发现", "注入", "加载", "遵循", "回写"):
+            self.assertIn(f'{label}\"', dashboard)
+        self.assertIn("待真实会话", dashboard)
+        self.assertIn("尚无真实会话证据", dashboard)
 
     def test_phase7_project_goal_and_role_office_projection(self) -> None:
         profile = OBSERVE.parse_project_profile(project_profile_text())
@@ -1081,6 +1230,10 @@ class ObserveRuntimeTests(unittest.TestCase):
             with urlopen(f"{base}/api/portfolio.json", timeout=1) as response:
                 portfolio = json.loads(response.read())
             self.assertEqual([item["validation"] for item in portfolio["projects"]], ["valid", "missing"])
+            with urlopen(f"{base}/api/agents.json", timeout=2) as response:
+                agents = json.loads(response.read())
+            self.assertEqual(len(agents["agents"]), 7)
+            self.assertIn("layers", agents["agents"][0])
             valid_id = portfolio["projects"][0]["project_id"]
             with urlopen(f"{base}/api/projects/{valid_id}/index.json", timeout=1) as response:
                 self.assertEqual(response.status, 200)

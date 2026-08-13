@@ -6,6 +6,37 @@ Mick Agent Harness 的重要变更都会记录在本文件中。
 
 本项目遵循 Semantic Versioning 2.0。形如 `vX.Y.Z` 的 Git tag 是最终发布事实源。
 
+## [0.17.0] - 2026-08-13
+
+### 可靠 Agent 接入与精简角色契约
+
+- **五层 Agent 诊断**：版本化注册表发现 Claude Code、Codex、Cursor、Windsurf、
+  Cline、Roo Code 和 Trae，同时不夸大生命周期支持；工作台分开显示发现、注入、
+  加载、执行遵循和回写状态。
+- **安全 Loader 与 Hook 管理**：`harness agents doctor|sync|migrate|hooks` 提供
+  dry-run、marker 冲突检查、原子替换、备份和幂等 Claude/Codex 生命周期配置；
+  Loader 存在不再被当作真实会话已加载或已遵守的证据。
+- **可恢复结构化回写**：带版本的事件在提交前先进入持久化队列；服务恢复后幂等
+  重放，并拒绝 Prompt、transcript、密钥和环境变量正文。
+- **精简角色契约**：PM、Planner、Executor、QA、Reviewer、可选 Designer 和编排
+  协议使用小型、项目无关的职责合同；共享交付机制集中在编排层，Reviewer 可以做
+  最小证据验证但不接管 QA。
+- **经过审计的设计方法**：Designer 只在真实设计任务中按需加载内置
+  `designer-craft`；固定版本的开源项目只是审计输入，不是运行依赖或另一套权限系统。
+- **Private Brain 边界**：可复用经验先成为脱敏、去重候选；项目账本只暴露元数据，
+  实际写入 Brain 必须显式确认。
+
+兼容性：已有项目挂载与运行账本继续有效。Claude/Codex 全局 Loader 和生命周期
+Hook 可独立迁移；Codex CLI 命令 Hook 运行前必须在 `/hooks` 中完成审查与信任。
+
+验证：71 个 unittest、Shell/Python/JSON/JavaScript 和生成规则检查、原子迁移与故障
+注入、真实 `127.0.0.1:6425` 项目/Agent API、Markdown 与折叠代码阅读器，以及无错误
+的浏览器控制台。
+
+发布证据：真实 Codex 会话完成四状态生命周期闭环，Reviewer 行为样本得到 10/10。
+Claude Code 保留已验证的 Loader 与部分会话证据，但用户在最终样本前退出账号，因此
+turn 闭环与行为评测明确保持“未验证”。
+
 ## [0.16.0] - 2026-08-12
 
 ### 结构化产物阶段导航

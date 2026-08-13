@@ -1,0 +1,4 @@
+interface:
+  display_name: "Designer Craft"
+  short_description: "Design and critique distinctive, usable product interfaces"
+  default_prompt: "Use $designer-craft to shape or critique this interface while preserving product truth and accessibility."

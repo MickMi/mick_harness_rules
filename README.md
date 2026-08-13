@@ -2,9 +2,9 @@
 
 **中文** | [English](README.en.md)
 
-让你的 AI 编码规则、个人偏好和项目纪律，在不同设备、项目和 Code Agent 之间持续生效。
+一套可诊断、可恢复、可迁移的本地 Agent 协作工作系统：把「规则注入 → Agent 生效证明 → 结构化回写 → 角色契约 → 长期记忆」串成闭环，让你的 AI 编码规则、个人偏好和项目纪律，在不同设备、项目和 Code Agent 之间持续生效——并且你能看见它们到底有没有真的生效。
 
-Mick Agent Harness 是一套个人 Agent 协作层。它不是新的 Code Agent，也不是替代 Claude Code、Codex、Cursor 这类工具的编码能力。它的定位是：**补充 Agent 能力，而不是覆盖 Agent 能力**。AI Agent 的通用编码能力会持续进化，Harness 最有价值的部分是把你的工作方式、质量标准、验证习惯和长期记忆稳定地注入进去，让不同 Agent 都更像你。
+Mick Agent Harness 不是新的 Code Agent，也不替代 Claude Code、Codex、Cursor 这类工具的编码能力。它的定位是**补上 Agent 缺的那一层治理**：先验注入规则、后验验证回写、五层状态可诊断、角色边界可执行。AI 的通用编码能力会持续进化，Harness 最有价值的部分是把你的工作方式、质量标准、验证习惯和长期记忆稳定地注入进去，并证明它被加载、被执行、被回写，让不同 Agent 都更像你。
 
 当前实现仓库名是 `mick_harness_rules`；产品名是 **Mick Agent Harness**。
 
@@ -33,6 +33,22 @@ Mick Agent Harness 适合这些用户：
 - 希望 Harness 可复用、低侵入、可验证，而不是每轮手动提醒 Agent。
 
 如果你只是在一个一次性脚本里试用 AI，可能不需要它。它更适合重度 AI 编码用户和希望建立个人 Agent 工作流的人。
+
+## 它由什么组成
+
+Harness 围绕一条闭环工作，五层 Agent 状态每一层都可诊断：
+
+| 层 | 回答的问题 | 对应能力 |
+|---|---|---|
+| 发现 | 本机有哪些 Code Agent | `harness agents scan`、Agent 注册表 |
+| 注入 | 规则是否装进 Agent 入口 | `harness agents sync`、`harness export` |
+| 加载 | Agent 新会话是否真的读了规则 | SessionStart Hook 回报规则版本 + 角色 digest |
+| 遵守 | Agent 是否按角色边界执行 | 七段角色契约 + 行为评测 |
+| 回写 | 工作是否结构化回到工作台 | `harness observe emit` + 生命周期 Hook |
+
+角色契约只有七个段落——`触发 / 必读输入 / 职责 / 非职责 / 交付物 / 验收 / 交接`，覆盖 PM、Planner、Executor、QA、Reviewer 和可选 Designer。边界可执行、越界可回流，不把固定瀑布流程强加给小改动。
+
+本地工作台（`127.0.0.1:6425`）统一展示项目目标、版本路线、五角色办公室和产物；Private Brain 沉淀长期记忆并驱动规则进化。
 
 ## 5 分钟开始
 
@@ -68,12 +84,12 @@ harness init
 harness init --full
 ```
 
-### 3. 让 Agent 读取规则
-
-自动同步到本机支持的 Agent：
+### 3. 接入本机 Code Agent
 
 ```bash
-harness agents sync
+harness agents doctor     # 看发现、注入、Hook 与待验证状态
+harness agents sync       # 原子同步 Claude/Codex 全局 Loader（先加 --dry-run）
+harness agents hooks      # 接入 session/turn 生命周期回写（先加 --dry-run）
 ```
 
 不能自动管理的工具，用导出：
@@ -85,9 +101,9 @@ harness export ide
 harness export api
 ```
 
-### 4. 验证是否生效
+### 4. 新会话验证是否生效
 
-对 Agent 说：
+Codex 在 `/hooks` 信任 Hook，Claude 重开新会话，然后对 Agent 说：
 
 ```text
 请按 Harness Self-Test 用 5 句话证明你理解当前任务约束。
@@ -101,7 +117,16 @@ harness export api
 4. 重复失败时如何停止；
 5. 本轮不会做什么。
 
-Self-Test 只证明 Agent 读到了约束，不等于功能完成。真实交付仍然必须给出测试命令、dry-run、截图、日志，或明确标注“未验证”。
+新会话还会回报规则版本与角色 digest，作为「规则已加载」的证明。Self-Test 只证明 Agent 读到了约束，不等于功能完成。真实交付仍然必须给出测试命令、dry-run、截图、日志，或明确标注“未验证”。
+
+### 5. 在本地工作台看进展
+
+```bash
+harness observe service install   # 常驻服务，127.0.0.1:6425
+harness observe service status
+```
+
+打开 `http://127.0.0.1:6425/`，看项目目标、版本路线、五角色办公室和产物。
 
 ## 成功后应该看到什么
 
@@ -135,7 +160,8 @@ harness observe status
 | 操作 | 可能写入的位置 | 目的 | 回滚方式 |
 |---|---|---|---|
 | `harness install` | `~/.mick-harness`、`~/.local/bin/harness` | 安装全局 Harness 和 CLI | 删除目录和 symlink |
-| `harness agents sync` | `~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md` | 注入 managed loader | 删除 `MICK-HARNESS-GLOBAL` 标记块 |
+| `harness agents sync/migrate` | `~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md` | 原子注入或迁移 managed loader | 使用同目录 `.mick-harness.bak` 或删除 `MICK-HARNESS-GLOBAL` 标记块 |
+| `harness agents hooks` | `~/.claude/settings.json`、`~/.codex/hooks.json` | 接入 session/turn 生命周期回写 | 使用同目录 `.mick-harness.bak` 或删除命令含 `harness-observe-hook.py` 的 Harness Hook 项 |
 | `harness init` | 项目内 `AGENTS.md`、`.harness/`、`.gitignore` | 项目挂载 Harness | 删除 `.harness`；移除 `AGENTS.md` symlink 或 `HARNESS:BEGIN` 标记块 |
 | `harness init --full` | 项目内 `.harness-config.yaml` | 启用完整配置和检查 | 删除该配置文件 |
 | `harness observe init` | 项目内 `.harness-runtime/` | 保存 Agent 工作事件账本和可重建 snapshot | 停止 `watch` 后删除 `.harness-runtime/` |
@@ -157,7 +183,7 @@ Prompt 约束不能让任何模型 100% 服从。Mick Agent Harness 的保证边
 | 阻止所有错误代码合入 | 不承诺 | 需要结合测试、CI、review 或更硬的工程门禁。 |
 | 长期记忆沉淀 | 支持 | 通过 Private Brain 和可选 hook adapter。 |
 | 跨项目统一进度 | 支持 | 所有 `harness init` 项目进入 6425 本地工作台。 |
-| Agent 工作自动回写 | 支持 | lifecycle 自动回写；结构化角色工作由注入规则调用 `harness observe emit`，失败时本地降级。 |
+| Agent 工作自动回写 | 条件支持 | Claude/Codex 执行 `harness agents hooks` 并在新会话确认 Hook 后自动回写；结构化角色工作仍由注入规则调用 `harness observe emit`，服务离线时进入本地队列。 |
 | 自动改写 Harness 规则 | 不支持 | 只生成进化提案，由人 review 后合并。 |
 
 换句话说：Harness 不是魔法强制器，而是一套**先验注入 + 后验检查 + 长期记忆 + 人工门禁**的协作系统。
@@ -166,8 +192,8 @@ Prompt 约束不能让任何模型 100% 服从。Mick Agent Harness 的保证边
 
 | 场景 | 推荐方式 | 当前状态 |
 |---|---|---|
-| Claude / Claude Code | `harness agents sync` | 自动 managed loader；Brain hook 支持最完整。 |
-| Codex / Codex CLI | `harness agents sync` 或 `harness export codex` | 支持全局 loader；Brain 写入通过可选 adapter / ingest。 |
+| Claude / Claude Code | `harness agents sync` + `harness agents hooks` | Tier 1；支持 managed loader、生命周期回写和新会话加载证明。 |
+| Codex / Codex CLI | `harness agents sync` + `harness agents hooks` | Tier 1；需在 `/hooks` 信任 Hook，之后由新会话提供加载证明。 |
 | 支持 `AGENTS.md` 的工具 | `harness init` | 项目级入口稳定。 |
 | Cursor / IDE 插件 | `harness export ide` | 手动粘贴或由插件侧加载。 |
 | 任意 Code Agent | `harness export agent` | 通用 prompt 契约。 |
@@ -229,7 +255,10 @@ harness update
 | `harness observe [init\|sync\|status\|replay\|watch\|hook-config\|emit]` | 整理项目目标与需求、重放进展、启动临时工作台、配置 Agent Hook 或回写结构化角色工作。 |
 | `harness update` | 更新全局 Harness、重新生成规则、刷新注册项目、同步 Agent loader。 |
 | `harness agents scan` | 查看本机可自动管理的 Agent 入口。 |
-| `harness agents sync` | 把 managed loader 同步到支持的 Agent 入口。 |
+| `harness agents doctor [--json]` | 分层诊断发现、注入、Hook 配置和仍缺少的真实证据。 |
+| `harness agents sync` | 原子同步 managed loader；先用 `--dry-run` 预览。 |
+| `harness agents migrate` | 清理旧 Harness marker 并迁移到当前 Loader；先用 `--dry-run`。 |
+| `harness agents hooks` | 保留原配置并接入 Tier 1 生命周期回写；先用 `--dry-run`。 |
 
 ### 用角色办公室查看项目进展
 

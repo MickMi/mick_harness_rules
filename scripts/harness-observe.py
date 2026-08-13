@@ -32,7 +32,8 @@ import uuid
 
 
 SCHEMA_VERSION = "0.1.0"
-COLLECTOR_VERSION = "0.3.1"
+INGEST_SCHEMA_VERSION = "0.2.0"
+COLLECTOR_VERSION = "0.4.0"
 RUNTIME_DIRNAME = ".harness-runtime"
 SERVICE_NAME = "Mick Harness Observer"
 SERVICE_LABEL = "com.mick.harness.observer"
@@ -146,6 +147,11 @@ ARTIFACT_LANGUAGES = {
     ".bash": "shell", ".zsh": "shell", ".html": "html", ".css": "css",
     ".sql": "sql", ".swift": "swift", ".kt": "kotlin", ".java": "java",
     ".go": "go", ".rs": "rust", ".txt": "text",
+}
+AGENT_PLATFORM_IDS = {
+    "claude": "claude-code",
+    "claude-code": "claude-code",
+    "codex": "codex",
 }
 
 
@@ -473,10 +479,12 @@ def validate_ingest_envelope(envelope: dict[str, Any], expected_project_id: str 
         raise ObserveError("Ingest body must be a JSON object", 422)
     validate_keys(
         envelope,
-        allowed={"project_id", "idempotency_key", "type", "source", "subject_id", "parent_id", "payload"},
+        allowed={"schema_version", "project_id", "idempotency_key", "type", "source", "subject_id", "parent_id", "payload"},
         required={"project_id", "idempotency_key", "type", "source", "subject_id", "payload"},
         label="Ingest envelope",
     )
+    if envelope.get("schema_version") not in {None, "0.1.0", INGEST_SCHEMA_VERSION}:
+        raise ObserveError("Unsupported ingest schema_version", 422)
     incoming_project_id = require_text(envelope, "project_id", maximum=160)
     if expected_project_id is not None and incoming_project_id != expected_project_id:
         raise ObserveError("Ingest project id does not match the resolved project", 422)
@@ -570,7 +578,7 @@ def validate_ingest_envelope(envelope: dict[str, Any], expected_project_id: str 
     elif event_type in {"agent.session_observed", "agent.turn_observed"}:
         validate_keys(
             payload,
-            allowed={"platform", "state", "session_ref", "turn_ref", "project_id"},
+            allowed={"platform", "state", "session_ref", "turn_ref", "project_id", "rule_version", "role_digest"},
             required={"platform", "state", "session_ref", "project_id"},
             label="Agent activity payload",
         )
@@ -579,6 +587,12 @@ def validate_ingest_envelope(envelope: dict[str, Any], expected_project_id: str 
         if payload["state"] not in {"session_started", "turn_started", "turn_completed", "session_ended"}:
             raise ObserveError("Agent state is invalid", 422)
         require_text(payload, "session_ref", maximum=200)
+        if payload.get("rule_version") is not None:
+            require_text(payload, "rule_version", maximum=40)
+        if payload.get("role_digest") is not None:
+            digest = require_text(payload, "role_digest", maximum=80)
+            if not digest or not re.fullmatch(r"sha256:[a-f0-9]{64}", digest):
+                raise ObserveError("Agent role_digest is invalid", 422)
         if payload.get("turn_ref") is not None:
             require_text(payload, "turn_ref", maximum=200)
     elif event_type == "harness.command_observed":
@@ -691,6 +705,7 @@ def build_work_envelope(
         **({"artifact_refs": artifact_refs} if artifact_refs else {}),
     }
     envelope = {
+        "schema_version": INGEST_SCHEMA_VERSION,
         "project_id": project_id(project),
         "idempotency_key": idempotency_key,
         "type": event_type,
@@ -722,6 +737,7 @@ def build_decision_envelope(
     status: str = "accepted",
 ) -> dict[str, Any]:
     envelope = {
+        "schema_version": INGEST_SCHEMA_VERSION,
         "project_id": project_id(project),
         "idempotency_key": idempotency_key,
         "type": "decision.recorded",
@@ -754,6 +770,7 @@ def build_handoff_envelope(
     round_ref: str | None = None,
 ) -> dict[str, Any]:
     envelope = {
+        "schema_version": INGEST_SCHEMA_VERSION,
         "project_id": project_id(project),
         "idempotency_key": idempotency_key,
         "type": "handoff.created",
@@ -781,9 +798,18 @@ def build_agent_envelope(
     session_ref: str,
     turn_ref: str | None = None,
 ) -> dict[str, Any]:
+    root = Path(__file__).resolve().parents[1]
+    version_path = root / "VERSION"
+    rule_version = version_path.read_text(encoding="utf-8").strip() if version_path.exists() else "unknown"
+    role_hasher = hashlib.sha256()
+    for role_path in sorted((root / "rules" / "roles").glob("*.md")):
+        role_hasher.update(role_path.name.encode("utf-8"))
+        role_hasher.update(role_path.read_bytes())
+    role_digest = f"sha256:{role_hasher.hexdigest()}"
     is_turn = state.startswith("turn_")
     subject_ref = turn_ref if is_turn else session_ref
     envelope = {
+        "schema_version": INGEST_SCHEMA_VERSION,
         "project_id": project_id(project),
         "idempotency_key": f"agent:{platform}:{state}:{session_ref}:{turn_ref or ''}",
         "type": "agent.turn_observed" if is_turn else "agent.session_observed",
@@ -800,6 +826,8 @@ def build_agent_envelope(
             "state": state,
             "session_ref": session_ref[:200],
             "project_id": project_id(project),
+            "rule_version": rule_version[:40],
+            "role_digest": role_digest,
             **({"turn_ref": turn_ref[:200]} if turn_ref else {}),
         },
     }
@@ -818,6 +846,7 @@ def build_harness_command_envelope(
     safe_command = re.sub(r"[^A-Za-z0-9._-]", "-", command.strip())[:80]
     safe_invocation = re.sub(r"[^A-Za-z0-9._-]", "-", invocation_ref.strip())[:160]
     envelope = {
+        "schema_version": INGEST_SCHEMA_VERSION,
         "project_id": project_id(project),
         "idempotency_key": f"harness-command:{safe_invocation}:{state}:{exit_code if exit_code is not None else ''}",
         "type": "harness.command_observed",
@@ -871,6 +900,7 @@ def submit_envelope(
     timeout: float = 0.3,
 ) -> dict[str, Any]:
     validate_ingest_envelope(envelope, project_id(project))
+    queued_path = queue_envelope(project, envelope)
     selected_port = port or int(os.environ.get("MICK_HARNESS_OBSERVER_PORT", DEFAULT_PORT))
     token = ensure_ingest_token(state_root)
     request = Request(
@@ -882,14 +912,54 @@ def submit_envelope(
     try:
         with urlopen(request, timeout=timeout) as response:
             result = json.loads(response.read().decode("utf-8"))
+        acknowledge_envelope(queued_path)
         return {**result, "transport": "service"}
     except HTTPError as error:
         if error.code in {404, 405} and has_harness_entry(project):
-            return {**ingest_envelope(project, envelope), "transport": "local-fallback"}
+            result = ingest_envelope(project, envelope)
+            acknowledge_envelope(queued_path)
+            return {**result, "transport": "local-fallback"}
         detail = error.read().decode("utf-8", errors="replace")[:500]
         raise ObserveError(f"Observer rejected event ({error.code}): {detail}", 2) from error
     except (URLError, TimeoutError, OSError, json.JSONDecodeError):
-        return {**ingest_envelope(project, envelope), "transport": "local-fallback"}
+        result = ingest_envelope(project, envelope)
+        acknowledge_envelope(queued_path)
+        return {**result, "transport": "local-fallback"}
+
+
+def outbox_root(project: Path) -> Path:
+    return runtime_root(project) / "outbox"
+
+
+def queue_envelope(project: Path, envelope: dict[str, Any]) -> Path:
+    key = envelope["idempotency_key"]
+    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
+    path = outbox_root(project) / f"{digest}.json"
+    if not path.exists():
+        atomic_write(path, json_bytes(envelope))
+    return path
+
+
+def acknowledge_envelope(path: Path) -> None:
+    with contextlib.suppress(FileNotFoundError):
+        path.unlink()
+
+
+def replay_outbox(project: Path) -> dict[str, Any]:
+    root = outbox_root(project)
+    queued = sorted(root.glob("*.json")) if root.exists() else []
+    replayed = 0
+    failed = 0
+    for path in queued:
+        try:
+            envelope = load_json(path)
+            validate_ingest_envelope(envelope, project_id(project))
+            ingest_envelope(project, envelope)
+            acknowledge_envelope(path)
+            replayed += 1
+        except (ObserveError, OSError, TypeError, ValueError):
+            failed += 1
+    return {"queued": len(queued), "replayed": replayed, "failed": failed, "remaining": len(list(root.glob('*.json'))) if root.exists() else 0}
 
 
 def write_index(project: Path, snapshot: dict[str, Any], run_metadata: dict[str, Any] | None = None) -> None:
@@ -1143,6 +1213,22 @@ def plan_section(text: str, names: tuple[str, ...]) -> str:
     return match.group(1).strip() if match else ""
 
 
+def active_plan_steps_body(text: str) -> str:
+    """Select the step block containing the declared current progress range."""
+    current_match = re.search(r"^>.*?进度\s+([0-9]+)\s*/\s*([0-9]+)", text, re.MULTILINE)
+    progress_value = int(current_match.group(1)) if current_match else None
+    headings = list(re.finditer(r"^##\s+.+$", text, re.MULTILINE))
+    for index in range(len(headings) - 1, -1, -1):
+        start = headings[index].start()
+        end = headings[index + 1].start() if index + 1 < len(headings) else len(text)
+        section = text[start:end]
+        matches = list(STEP_RE.finditer(section))
+        step_numbers = [int(clean_step_id(match.group(2))) for match in matches if clean_step_id(match.group(2)).isdigit()]
+        if matches and progress_value is not None and step_numbers and min(step_numbers) <= progress_value <= max(step_numbers):
+            return section
+    return plan_section(text, ("Steps", "步骤"))
+
+
 def plan_objective(text: str) -> str:
     body = plan_section(text, ("Objective", "目标"))
     if not body:
@@ -1172,7 +1258,7 @@ def step_title(value: str) -> str:
 
 
 def parse_plan_steps(text: str) -> list[dict[str, Any]]:
-    body = plan_section(text, ("Steps", "步骤"))
+    body = active_plan_steps_body(text)
     if not body:
         return []
     checkbox_matches = list(STEP_RE.finditer(body))
@@ -1330,6 +1416,7 @@ def collect_plan(project: Path, snapshot: dict[str, Any]) -> tuple[list[dict[str
         return [], [], None
     text = path.read_text(encoding="utf-8")
     digest = sha256_text(text)
+    plan_revision = f"collector:{COLLECTOR_VERSION}:{digest}"
     source_path = relative_source(project, path)
     source = {"kind": "importer", "producer": "plan-collector", "path": source_path, "revision": digest}
     candidates: list[dict[str, Any]] = []
@@ -1350,7 +1437,7 @@ def collect_plan(project: Path, snapshot: dict[str, Any]) -> tuple[list[dict[str
                 "workflow-plan",
                 source,
                 {"from": previous_stage, "to": stage, "feature": feature, "owner_role": stage_owner},
-                f"{digest}:workflow.plan:{stage}:{stage_owner}",
+                f"{plan_revision}:workflow.plan:{stage}:{stage_owner}",
                 observation_kind="observed" if stage_observed else "inferred",
                 confidence=None if stage_observed else 0.8,
             )
@@ -1369,7 +1456,7 @@ def collect_plan(project: Path, snapshot: dict[str, Any]) -> tuple[list[dict[str
                 snapshot["run"]["run_id"],
                 source,
                 {"from": current_status, "to": run_status, "reason": "Observed plan status line"},
-                f"{digest}:run.status:{run_status}",
+                f"{plan_revision}:run.status:{run_status}",
                 observation_kind="observed" if run_status_observed else "inferred",
                 confidence=None if run_status_observed else 0.8,
             )
@@ -1402,7 +1489,7 @@ def collect_plan(project: Path, snapshot: dict[str, Any]) -> tuple[list[dict[str
                         "depends_on": ([f"task-{int(step_id) - 1}"] if step_id.isdigit() and int(step_id) > 1 else []),
                         "source_anchor": f"Step {step_id}",
                     },
-                    f"task.discovered:{task_id}:{sha256_text(title)}",
+                    f"{plan_revision}:task.discovered:{task_id}:{sha256_text(title)}",
                     parent_id=snapshot["run"]["run_id"],
                 )
             )
@@ -1417,7 +1504,7 @@ def collect_plan(project: Path, snapshot: dict[str, Any]) -> tuple[list[dict[str
                         stable_id("warning", f"title:{task_id}:{digest}"),
                         source,
                         {"code": "task-title-changed", "summary": f"Task {task_id} title changed; V0 keeps the original title", "recoverable": True},
-                        f"{digest}:warning:title:{task_id}",
+                        f"{plan_revision}:warning:title:{task_id}",
                     )
                 )
         if desired_status != previous_status:
@@ -1428,7 +1515,7 @@ def collect_plan(project: Path, snapshot: dict[str, Any]) -> tuple[list[dict[str
                     task_id,
                     source,
                     {"from": previous_status, "to": desired_status, "reason": "Observed plan step marker and verification evidence"},
-                    f"{digest}:task.status:{task_id}:{desired_status}",
+                    f"{plan_revision}:task.status:{task_id}:{desired_status}",
                     parent_id=snapshot["run"]["run_id"],
                 )
             )
@@ -1441,7 +1528,7 @@ def collect_plan(project: Path, snapshot: dict[str, Any]) -> tuple[list[dict[str
                     verification_id,
                     source,
                     verification,
-                    f"{digest}:verification:{task_id}:{verification['result']}",
+                    f"{plan_revision}:verification:{task_id}:{verification['result']}",
                     parent_id=task_id,
                     evidence_refs=[{"kind": "source", "ref": source_path, "label": f"Step {step_id} self-check"}],
                 )
@@ -1457,7 +1544,7 @@ def collect_plan(project: Path, snapshot: dict[str, Any]) -> tuple[list[dict[str
                     task_id,
                     source,
                     {"from": previous.get("status", "unknown"), "to": "abandoned", "reason": "Plan item is no longer a numbered step"},
-                    f"{digest}:task.status:{task_id}:abandoned",
+                    f"{plan_revision}:task.status:{task_id}:abandoned",
                     parent_id=snapshot["run"]["run_id"],
                 )
             )
@@ -1485,7 +1572,7 @@ def collect_plan(project: Path, snapshot: dict[str, Any]) -> tuple[list[dict[str
                 block_id,
                 source,
                 {"summary": (block_summary or f"Plan block #{block_number}")[:1000], "active": not resolved, "owner_role": "Planner"},
-                f"{digest}:block:{block_id}:{'resolved' if resolved else 'active'}",
+                f"{plan_revision}:block:{block_id}:{'resolved' if resolved else 'active'}",
                 parent_id=task_id,
             )
         )
@@ -1497,7 +1584,7 @@ def collect_plan(project: Path, snapshot: dict[str, Any]) -> tuple[list[dict[str
             "plan-current",
             source,
             plan_summary,
-            f"{digest}:plan.summary",
+            f"{plan_revision}:plan.summary",
             parent_id=snapshot["run"]["run_id"],
         )
     )
@@ -1509,7 +1596,7 @@ def collect_plan(project: Path, snapshot: dict[str, Any]) -> tuple[list[dict[str
             stable_id("artifact", source_path),
             source,
             {"path": source_path, "artifact_type": "plan", "exists": True, "digest": digest},
-            f"{digest}:artifact:{source_path}",
+            f"{plan_revision}:artifact:{source_path}",
         )
     )
     return candidates, warnings, digest
@@ -2383,6 +2470,102 @@ def portfolio_snapshot(registry_path: Path | None = None, *, sync: bool = True) 
     }
 
 
+def _agent_manager_report(home: Path | None = None) -> dict[str, Any]:
+    script = Path(__file__).resolve().with_name("harness-agent-manager.py")
+    command = [sys.executable, str(script), "doctor", "--json", "--quiet"]
+    if home is not None:
+        command.extend(["--home", str(home)])
+    environment = os.environ.copy()
+    environment["MICK_HARNESS_ACTIVITY"] = "0"
+    result = subprocess.run(command, check=False, capture_output=True, text=True, env=environment)
+    if result.returncode != 0:
+        raise ObserveError(result.stderr.strip() or "Cannot inspect local Code Agents")
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise ObserveError(f"Cannot decode Agent inspection: {error}") from error
+
+
+def agent_status_snapshot(
+    registry_path: Path | None = None,
+    *,
+    manager_report: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Return privacy-safe five-layer Agent status backed by runtime evidence."""
+    report = manager_report or _agent_manager_report()
+    evidence: dict[str, dict[str, Any]] = {}
+    for descriptor in load_registered_projects(registry_path):
+        if descriptor["validation"] != "valid":
+            continue
+        try:
+            snapshot = status_runtime(Path(descriptor["path"]))["snapshot"]
+        except ObserveError:
+            continue
+        activity = list(snapshot.get("agent_sessions", {}).values()) + list(snapshot.get("agent_turns", {}).values())
+        for item in activity:
+            agent_id = AGENT_PLATFORM_IDS.get(str(item.get("platform", "")).lower())
+            if not agent_id:
+                continue
+            bucket = evidence.setdefault(agent_id, {"events": 0, "loaded": 0, "projects": set(), "last_seen_at": None})
+            bucket["events"] += 1
+            bucket["projects"].add(descriptor["name"])
+            if item.get("rule_version") == report.get("harness_version"):
+                bucket["loaded"] += 1
+            updated_at = item.get("updated_at")
+            if updated_at and (bucket["last_seen_at"] is None or updated_at > bucket["last_seen_at"]):
+                bucket["last_seen_at"] = updated_at
+
+    agents: list[dict[str, Any]] = []
+    for source in report.get("agents", []):
+        runtime = evidence.get(source["id"], {"events": 0, "loaded": 0, "projects": set(), "last_seen_at": None})
+        injection_status = source.get("injection", {}).get("status", "unverified")
+        hook_status = source.get("loading", {}).get("status", "unverified")
+        loaded_status = "verified" if runtime["loaded"] else ("configured" if hook_status == "hook_configured" else "unverified")
+        layers = {
+            "discovered": {"status": "verified" if source.get("detected") else "not_detected"},
+            "injected": {
+                "status": "verified" if injection_status == "injected" else ("blocked" if injection_status == "conflict" else "unverified")
+            },
+            "loaded": {"status": loaded_status},
+            "execution": {"status": source.get("execution", {}).get("status", "unverified")},
+            "feedback": {"status": "verified" if runtime["events"] else "unverified"},
+        }
+        issues = [
+            issue for issue in source.get("issues", [])
+            if not (runtime["loaded"] and issue.get("code") == "load-proof-missing")
+        ]
+        agents.append({
+            "id": source["id"],
+            "name": source["name"],
+            "tier": source["tier"],
+            "detected_by": sorted({signal["kind"] for signal in source.get("signals", []) if signal.get("found")}),
+            "layers": layers,
+            "evidence": {
+                "event_count": runtime["events"],
+                "load_proof_count": runtime["loaded"],
+                "projects": sorted(runtime["projects"]),
+                "last_seen_at": runtime["last_seen_at"],
+            },
+            "issues": [
+                {key: issue.get(key) for key in ("code", "severity", "message", "repair")}
+                for issue in issues
+            ],
+            "limitations": source.get("limitations", []),
+        })
+    return {
+        "schema_version": "1",
+        "generated_at": now_iso(),
+        "harness_version": report.get("harness_version"),
+        "agents": agents,
+        "summary": {
+            "registered": len(agents),
+            "detected": sum(agent["layers"]["discovered"]["status"] == "verified" for agent in agents),
+            "loaded": sum(agent["layers"]["loaded"]["status"] == "verified" for agent in agents),
+            "feedback": sum(agent["layers"]["feedback"]["status"] == "verified" for agent in agents),
+        },
+    }
+
+
 def record_agent_activity(
     project: Path,
     *,
@@ -2472,12 +2655,12 @@ def submit_harness_command_activity(
     )
 
 
-def codex_hook_config() -> dict[str, Any]:
+def codex_hook_config(platform: str = "codex") -> dict[str, Any]:
     hook_script = Path(__file__).resolve().with_name("harness-observe-hook.py")
-    command = f'python3 "{hook_script}"'
+    command = f'python3 "{hook_script}" --platform {platform}'
     handler = {"type": "command", "command": command, "timeout": 3}
     return {
-        "description": "Record redacted Codex lifecycle activity in Harness projects.",
+        "description": f"Record redacted {platform} lifecycle activity in Harness projects.",
         "hooks": {
             event: [{"hooks": [dict(handler)]}]
             for event in ("SessionStart", "UserPromptSubmit", "Stop", "SessionEnd")
@@ -2752,13 +2935,23 @@ def serve_runtime(
         try:
             if registry_path is not None:
                 result = scan_registered_projects(registry_path)
+                replayed = [
+                    replay_outbox(Path(item["path"]))
+                    for item in load_registered_projects(registry_path)
+                    if item["validation"] == "valid"
+                ]
+                result["outbox_remaining"] = sum(item["remaining"] for item in replayed)
+                result["outbox_replayed"] = sum(item["replayed"] for item in replayed)
             elif project is not None:
                 sync_runtime(project)
+                replayed = replay_outbox(project)
                 result = {
                     "project_count": 1,
                     "valid_project_count": 1,
                     "synced_project_count": 1,
                     "last_scan_error": None,
+                    "outbox_remaining": replayed["remaining"],
+                    "outbox_replayed": replayed["replayed"],
                 }
             else:
                 result = {
@@ -2840,6 +3033,14 @@ def serve_runtime(
                         }
                     )
                     self._send_bytes(200, "application/json", json_bytes(value), head_only=head_only)
+                    return
+                if path == "/api/agents.json":
+                    self._send_bytes(
+                        200,
+                        "application/json",
+                        json_bytes(agent_status_snapshot(registry_path)),
+                        head_only=head_only,
+                    )
                     return
                 if path == "/api/index.json" and project is not None and registry_path is None:
                     sync_runtime(project)
@@ -3061,7 +3262,7 @@ def build_parser() -> argparse.ArgumentParser:
     emit.add_argument("--round", dest="round_ref")
     emit.add_argument("--artifact", dest="artifact_refs", action="append", default=[], help="Project-relative deliverable path (repeatable)")
     hook_config = subparsers.add_parser("hook-config")
-    hook_config.add_argument("platform", choices=("codex",), help="Agent platform to configure")
+    hook_config.add_argument("platform", choices=("codex", "claude"), help="Agent platform to configure")
     return parser
 
 
@@ -3086,7 +3287,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.command == "hook-config":
-            print(json.dumps(codex_hook_config(), ensure_ascii=False, indent=2))
+            print(json.dumps(codex_hook_config(args.platform), ensure_ascii=False, indent=2))
             return 0
         if args.command == "service":
             if args.action == "install":
