@@ -1,0 +1,4 @@
+interface:
+  display_name: "PRD for Humans"
+  short_description: "Write flexible PRDs for human product review"
+  default_prompt: "Use $prd-for-humans to turn this confirmed requirement into a human-readable PRD."

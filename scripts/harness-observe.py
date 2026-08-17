@@ -13,6 +13,7 @@ import datetime as dt
 import hashlib
 import hmac
 import http.server
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -40,6 +41,10 @@ SERVICE_LABEL = "com.mick.harness.observer"
 DEFAULT_PORT = 6425
 DEFAULT_SCAN_INTERVAL = 2.0
 INGEST_PATH = "/api/v1/events"
+BRAIN_STATUS_PATH = "/api/brain/status.json"
+BRAIN_CANDIDATES_PATH = "/api/brain/candidates.json"
+BRAIN_PROJECT_MEMORY_PATH = "/api/brain/project-memory.json"
+BRAIN_SYNC_PATH = "/api/brain/sync"
 MAX_INGEST_BODY = 64 * 1024
 MAX_ARTIFACT_BYTES = 512 * 1024
 ROLES = {"PM", "Planner", "Executor", "QA", "Reviewer", "Designer", "Orchestrator", "Unknown"}
@@ -55,6 +60,7 @@ OFFICE_ROLE_BY_SOURCE = {
     for item in OFFICE_ROLES
     for source_role in item["source_roles"]
 }
+_BRAIN_BOUNDARY: Any | None = None
 EVENT_TYPES = {
     "run.created",
     "run.status_changed",
@@ -78,6 +84,20 @@ EVENT_TYPES = {
     "handoff.created",
     "collector.warning",
 }
+
+
+def load_brain_boundary() -> Any:
+    global _BRAIN_BOUNDARY
+    if _BRAIN_BOUNDARY is not None:
+        return _BRAIN_BOUNDARY
+    path = Path(__file__).resolve().with_name("harness-brain-boundary.py")
+    spec = importlib.util.spec_from_file_location("harness_brain_boundary_runtime", path)
+    if spec is None or spec.loader is None:
+        raise ObserveError(f"Unable to load Brain boundary: {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    _BRAIN_BOUNDARY = module
+    return module
 INGEST_EVENT_TYPES = {
     "agent.session_observed",
     "agent.turn_observed",
@@ -882,13 +902,56 @@ def ingest_envelope(project: Path, envelope: dict[str, Any]) -> dict[str, Any]:
     )
     appended, appended_events = append_events(target_run_dir, run_record["run_id"], [candidate])
     snapshot = write_snapshot(project, target_run_dir, load_events(target_run_dir / "events.jsonl"))
+    brain_results = record_brain_events(
+        project,
+        [{**envelope, "event_id": appended_events[0]["event_id"]}] if appended_events else [],
+    )
     return {
         "project_id": project_id(project),
         "run_id": run_record["run_id"],
         "appended": appended,
         "event_id": appended_events[0]["event_id"] if appended_events else None,
         "last_sequence": snapshot.get("last_sequence", 0),
+        "brain": brain_results[0] if brain_results else None,
     }
+
+
+def record_brain_events(project: Path, events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
+    if not events:
+        return results
+    try:
+        brain = load_brain_boundary()
+    except Exception as error:
+        return [{"action": "error", "error": str(error)[:300]}]
+    identifier = project_id(project)
+    for event in events:
+        try:
+            result = brain.process_observer_event(identifier, event)
+            if result.get("action") != "ignored":
+                results.append(result)
+        except Exception as error:
+            results.append({"action": "error", "event_id": event.get("event_id"), "error": str(error)[:300]})
+    return results
+
+
+def record_runtime_brain_events(project: Path, target_run_dir: Path) -> list[dict[str, Any]]:
+    """Incrementally project the append-only ledger into local project memory."""
+    identifier = project_id(project)
+    cursor_path = default_state_root() / "brain-event-cursors" / f"{identifier}.json"
+    cursor = load_json(cursor_path, {}) or {}
+    run_id = target_run_dir.name
+    last_sequence = int(cursor.get("last_sequence", 0)) if cursor.get("run_id") == run_id else 0
+    events = [event for event in load_events(target_run_dir / "events.jsonl") if int(event.get("sequence", 0)) > last_sequence]
+    if not events:
+        return []
+    results = record_brain_events(project, events)
+    if not any(item.get("action") == "error" for item in results):
+        atomic_write(
+            cursor_path,
+            json_bytes({"run_id": run_id, "last_sequence": max(int(event["sequence"]) for event in events), "updated_at": now_iso()}),
+        )
+    return results
 
 
 def submit_envelope(
@@ -1774,7 +1837,16 @@ def sync_runtime(project: Path) -> dict[str, Any]:
         snapshot = project_events(load_events(target_run_dir / "events.jsonl"))
 
     snapshot = write_snapshot(project, target_run_dir, load_events(target_run_dir / "events.jsonl"))
-    return {"run_id": run_id, "sources": source_count, "appended": appended_total, "warning": None, "snapshot": snapshot}
+    brain_results = record_runtime_brain_events(project, target_run_dir)
+    return {
+        "run_id": run_id,
+        "sources": source_count,
+        "appended": appended_total,
+        "brain_recorded": sum(item.get("action") == "recorded_project_memory" for item in brain_results),
+        "brain_errors": [item for item in brain_results if item.get("action") == "error"],
+        "warning": None,
+        "snapshot": snapshot,
+    }
 
 
 def replay_runtime(project: Path) -> dict[str, Any]:
@@ -2347,6 +2419,15 @@ def parse_versions_markdown(value: str) -> list[dict[str, Any]]:
     return items
 
 
+def version_sort_key(value: Any) -> tuple[Any, ...]:
+    """Sort dotted versions newest-first without treating 0.10 as older than 0.9."""
+    raw = str(value or "").strip().lstrip("vV")
+    base, separator, prerelease = raw.partition("-")
+    numbers = tuple(int(part) for part in re.findall(r"\d+", base))[:6]
+    padded = numbers + (0,) * (6 - len(numbers))
+    return (*padded, 1 if not separator else 0, prerelease.lower())
+
+
 def version_plan_snapshot(project: Path, snapshot: dict[str, Any], git: dict[str, Any]) -> dict[str, Any]:
     source = project / "docs" / "VERSIONS.md"
     planned = parse_versions_markdown(source.read_text(encoding="utf-8")) if source.is_file() else []
@@ -2370,6 +2451,7 @@ def version_plan_snapshot(project: Path, snapshot: dict[str, Any], git: dict[str
                 task = snapshot.get("tasks", {}).get(requirement_id)
                 if task and task.get("status") != "abandoned":
                     requirement["observed_status"] = task.get("status")
+    planned.sort(key=lambda item: version_sort_key(item.get("version")), reverse=True)
     unassigned = [
         {"requirement_id": task_id, "title": task.get("title"), "status": task.get("status")}
         for task_id, task in snapshot.get("tasks", {}).items()
@@ -2916,6 +2998,7 @@ def serve_runtime(
     started_at = now_iso()
     started_monotonic = time.monotonic()
     ingest_token = ensure_ingest_token()
+    action_token = secrets.token_urlsafe(32)
     stop_event = threading.Event()
     service_state_lock = threading.Lock()
     service_state: dict[str, Any] = {
@@ -3042,6 +3125,21 @@ def serve_runtime(
                         head_only=head_only,
                     )
                     return
+                if path == BRAIN_STATUS_PATH:
+                    value = load_brain_boundary().health_snapshot()
+                    value["action_token"] = action_token
+                    self._send_bytes(200, "application/json", json_bytes(value), head_only=head_only)
+                    return
+                if path == BRAIN_CANDIDATES_PATH:
+                    value = {"items": load_brain_boundary().list_candidates()}
+                    self._send_bytes(200, "application/json", json_bytes(value), head_only=head_only)
+                    return
+                if path == BRAIN_PROJECT_MEMORY_PATH:
+                    query = parse_qs(parsed.query)
+                    selected = (query.get("project") or [None])[0]
+                    value = {"items": load_brain_boundary().list_project_memories(project=selected)}
+                    self._send_bytes(200, "application/json", json_bytes(value), head_only=head_only)
+                    return
                 if path == "/api/index.json" and project is not None and registry_path is None:
                     sync_runtime(project)
                     self._send_bytes(200, "application/json", (runtime_root(project) / "index.json").read_bytes(), head_only=head_only)
@@ -3147,6 +3245,59 @@ def serve_runtime(
 
         def do_POST(self) -> None:  # noqa: N802
             parsed = urlparse(self.path)
+            brain_candidate_action = re.fullmatch(
+                r"/api/brain/candidates/(memory_[a-f0-9]{20})/(approve|reject|retry)", parsed.path
+            )
+            project_memory_action = re.fullmatch(
+                r"/api/brain/project-memory/(project_memory_[a-f0-9]{20})/(correct|undo|promote)", parsed.path
+            )
+            brain_sync_action = parsed.path == BRAIN_SYNC_PATH
+            if brain_candidate_action or project_memory_action or brain_sync_action:
+                supplied_action_token = self.headers.get("X-Harness-Action-Token", "")
+                if not supplied_action_token or not hmac.compare_digest(supplied_action_token, action_token):
+                    self._send_bytes(401, "application/json", json_bytes({"error": "unauthorized-action"}))
+                    return
+                content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+                if content_type != "application/json":
+                    self._send_bytes(415, "application/json", json_bytes({"error": "content-type-must-be-application-json"}))
+                    return
+                try:
+                    content_length = int(self.headers.get("Content-Length", "0"))
+                    body = json.loads(self.rfile.read(content_length).decode("utf-8")) if content_length else {}
+                    if not isinstance(body, dict):
+                        raise ValueError("body-must-be-object")
+                    brain = load_brain_boundary()
+                    if brain_sync_action:
+                        result = brain.sync_pending(
+                            confirmed=body.get("confirmed") is True,
+                            dry_run=body.get("dry_run") is True,
+                        )
+                    elif brain_candidate_action:
+                        identifier, action = brain_candidate_action.groups()
+                        if body.get("summary") is not None or body.get("layer") is not None:
+                            brain.update_candidate(identifier, summary=body.get("summary"), layer=body.get("layer"))
+                        if action == "approve":
+                            result = brain.approve(identifier, yes=True, dry_run=False)
+                        elif action == "reject":
+                            result = brain.reject(identifier, reason=body.get("reason"))
+                        else:
+                            result = brain.retry(identifier)
+                    else:
+                        identifier, action = project_memory_action.groups()
+                        if action == "correct":
+                            result = brain.correct_project_memory(identifier, summary=str(body.get("summary") or ""))
+                        elif action == "undo":
+                            result = brain.undo_project_memory(identifier)
+                        else:
+                            result = brain.promote_project_memory(identifier)
+                except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as error:
+                    self._send_bytes(400, "application/json", json_bytes({"error": str(error)}))
+                    return
+                except Exception as error:
+                    self._send_bytes(422, "application/json", json_bytes({"error": str(error)[:500]}))
+                    return
+                self._send_bytes(200, "application/json", json_bytes(result))
+                return
             if parsed.path != INGEST_PATH:
                 self._method_not_allowed()
                 return

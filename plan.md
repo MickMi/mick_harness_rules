@@ -1,4 +1,4 @@
-> 🧭 状态：进行中 | 进度 90/97 | 当前归属：PM / Planner（v0.18.0 已进入）| 最近卡点：无
+> 🧭 状态：进行中 | 进度 99/104 | 当前归属：Reviewer（v0.18.0 自动化优先与 Brain 信息精简已交付）| 最近卡点：无
 
 # Plan: Company Runtime V0 → Portfolio V0.2
 
@@ -1248,3 +1248,79 @@ Planner 回复：采用建议方案；这修复的是本轮真实执行触发的
 - files: `CHANGELOG.md`, `CHANGELOG.zh-CN.md`, `docs/VERSIONS.md`, `docs/AGENT-SUPPORT.md`, `docs/ROLE-CONTRACTS.md`, `plan.md`
 - verify: 全量 71 tests / 0 failures；Shell/Python/JSON、`./generate.sh --check`、`git diff --check` 均通过；Harness Check 18 PASS / 1 optional warning / 0 FAIL；6425 service status 为 healthy、outbox_remaining=0；发布提交 `8b8e94e` 已快进到远端 `main`
 - notes: v0.17.0 已发布并进入 Tag 收尾，v0.18.0 同步切为 in_progress；Claude 完整评测例外已写入结构化决策和支持文档，不影响 Codex 全链路证据，也不被表述为 Claude 已通过。
+
+## v0.18.0 · 2026-08-17 · Brain 可靠写入与工作台闭环
+
+### 版本目标
+
+让 Brain 不再依赖用户结束会话或某一个 Agent 的转录文件。Claude、Codex 和通用 Harness 入口都以结构化事件作为可靠来源：项目内已经确认的需求、决策、验证、交付与交接自动沉淀到项目 Brain；跨项目偏好与版本化 Profile 先进入工作台审批箱。所有记录都先在本机保存，再异步同步远端，并分别展示“已识别、已写入本地、待同步、同步成功、同步失败”，避免用单一“已连接”掩盖故障。
+
+### 产品边界
+
+- 项目记忆默认免审批，因为项目细节数量大且人的注意力难以持续跟踪；工作台提供纠正、撤销、合并和提升为全局候选的入口。
+- 全局 Brain 与版本化 Profile 必须审批，支持编辑后批准、调整目标层级、合并、拒绝、忽略同类和失败重试。
+- SessionEnd 只做可选压缩与补漏；用户不关闭会话也不能造成项目记忆长期不写入。
+- 原始对话、模型私有思维、Prompt、完整工具日志、密钥和无法归属项目的内容不得进入 Brain。
+- 6425 只开放明确的 Brain 白名单动作，不向浏览器暴露任意命令或任意文件写入。
+
+### 实施步骤
+
+- [x] 94. [真实健康] 展示 Brain 仓库、本地写入、远端同步、Agent 事件覆盖、最近尝试/成功/错误、定时补漏与候选积压，状态必须来自真实文件、进程与 Git 结果。
+- [x] 95. [统一入口] 让 Claude、Codex 与通用 Harness 的结构化事件进入同一识别、脱敏、去重链；移除主链对 SessionEnd transcript 的依赖，并把旧转录提炼降级为默认关闭的补漏来源。
+- [x] 96. [项目自动记忆] 已确认的项目需求、版本阶段、决策、验证经验、完成结果、评审结论、交接和关键产物自动写入项目 Brain；推断、原始日志、重复进度与敏感信息必须被拒绝。
+- [ ] 97. [全局审批箱] 全局偏好和 Profile 变更进入 6425 审批箱，支持批准、编辑后批准、换层、合并、拒绝、忽略同类和重试；项目自动记忆另有可撤销活动流。
+- [ ] 98. [工程预算] 采用 `fast / subsystem / release` 三档验证，同一代码和环境下不重复发布 Gate；预算是 0.18 的工程约束，不扩展为独立产品功能。
+- [ ] 101. [首个 Profile 消费者] 保留已经实现的 `prd-for-humans` 与 PRD Profile，作为版本化 Profile 审批、元数据展示和差异预览的首个真实用例，不在本版本继续扩张 PRD 功能范围。
+- [x] 102. [工作台层级] 将 Brain 降为项目总览中的记忆服务入口；版本规划按语义版本从新到旧排列；Git 用“工作区—分支—版本—标签”关系图替代重复状态文字。
+- [x] 103. [Brain 可视化同步] 展示实际 Brain 本地仓库、配置/实际远端、当前分支和写入来源/目标；为待同步状态提供受控、可确认、可审计的同步动作与成功/失败反馈。
+- [x] 104. [自动化优先与信息精简] 将 Brain 工作台的待同步与全局/Profile 待审批明确分开，仓库只突出配置目标和生效状态；确立“服务端自动化主链、Hook 仅采集、Prompt 仅语义辅助”的实现边界。
+
+外部 Skill 兼容诊断、`mattpocock/skills` 的进一步角色适配，以及通用 Harness 更新/注入操作中心移入 v0.19 候选，不占用本版本 Brain 主线。
+
+### 成本与兼容验收
+
+- 不保存或展示模型 chain-of-thought；有平台 Token 计数时记录输入/输出总量，没有时只记录可见上下文字节、工具输出字节、测试数量和耗时作为代理指标。
+- 用五类代表任务建立 v0.17 基线，v0.18 的中位可见上下文与工具输出至少下降 30%，同时不得降低需求覆盖或验证通过率；完整发布 Gate 每个候选提交最多执行一次，除非代码、环境或 Gate 自身发生变化。
+- 外部 Skill 的安装预览必须明确显示“可共存 / 需适配 / 冲突阻止”；`mattpocock/skills` 整包在当前 Harness 下应判为“需适配”，不能直接判为安全共存。
+- 角色文件继续保持精简，只存职责、边界和 Skill 指针；任何外部方法不得覆盖用户授权、Harness Tripwire、`plan.md`、回合回写或完成验证。
+- PRD 风格资料目前判定为“内容保留、触发退化”：Brain 与 Git 历史仍有完整规则，但当前 PM 仅有弱提示；2026-08-14 用户已裁决冲突——PRD 只服务人类产品评审，不包含技术细节或任何 AI 交付内容，旧 Profile 中相反规则必须在迁移时废止而不是继续参与优先级竞争。
+
+### v0.18 补充需求审查 — 2026-08-13
+- files: `docs/VERSIONS.md`, `rules/skills/SOURCES.md`, `plan.md`
+- verify: 只读审查 `mattpocock/skills@8b78b531ab965735c5dc74f6f7a219e1e37326df` 的 MIT License、setup 与 15 个核心候选 Skill；检索当前 PM/Planner、Brain PRD Profile、历史 v0.16 PM 规则和 v0.18 版本范围；本轮仅修改规划文档，采用聚焦 Markdown/diff 检查，不运行无关全量端到端测试
+- notes: 上游强调小型可组合 Skill、领域语言与紧反馈环，方向与 Harness 相容；冲突集中在安装入口、文档所有权、Issue Tracker、自动提交/子 Agent、无上限访谈和完成定义，因此采用固定版本的选择性方法适配，而非整包加载。
+
+### v0.18.0 · 2026-08-14 · PRD 只面向人类产品评审
+
+- decision: PRD 的用途是让产品、业务、设计和研发等人类参与者评审“为什么做、为谁做、做什么、做到哪里、如何判断成立”；它不是开发指南，也不是给 Agent 的执行输入。
+- hard-fail: PRD 出现文件路径、函数/类/组件、接口/字段、数据库、框架版本、CSS/像素、System Prompt、Reasoning Pipeline、模型参数、Data Contract、机器输出格式或 Agent 操作步骤时，默认判定为技术污染；产品自身的业务阈值、规则公式和用户可见状态不属于技术污染。
+- artifact-boundary: AI 功能需要实现约束时，单独创建 `docs/AI-CONTRACT-<feature>.md`；只有用户明确要求 AI 交付契约时才生成，PRD 不附赠、不内嵌、不链接尚不存在的契约。
+- architecture: PM 角色只负责需求探索与产品判断；显式请求 PRD 时再加载按需 `prd-for-humans` Skill；个人风格存在 Private Brain 的版本化 Profile，公开 Harness 只保留通用人类评审结构和加载协议。
+- regression: 以至少 3 份用户认可的真实 PRD 建立黄金样例，并加入技术污染反例；先检查产品判断是否完整，再检查风格一致性，禁止用“章节齐全”代替质量。
+- feedback-loop: 用户对 PRD 的纠正先记录为候选差异，区分一次性内容修改与稳定写作偏好；只有用户确认是长期偏好后才升级 Profile 版本，避免每次反馈让模板漂移。
+- verify-plan: 对同一需求做“当前链路输出 / 新 Skill 输出”盲评，比较人类可读性、产品判断、范围清晰度、需求覆盖和风格一致性；任一技术污染项命中即不合格，不用总分抵消。
+
+### Step 101 实现进展 — 2026-08-14
+- files: `rules/skills/prd-for-humans/`, `rules/roles/pm.md`, `rules/skills/SOURCES.md`, `tests/test_prd_for_humans.py`, `tests/fixtures/prd-for-humans/technical-pollution.md`, Private Brain `global/profiles/prd/` 与 `global/preferences.md`
+- verify: 新增测试先以 3 failures / 4 errors 形成基线，并对无效 Profile 降级补充 1 个预期失败；实现后聚焦测试 17 tests / 0 failures，Skill Creator validator 返回 `Skill is valid!`，三份结构样例均通过技术污染检查，真实 Private Profile 解析为 `private_brain v1.0.0` 且无诊断错误
+- notes: PRD Profile 已从固定骨架改为“严格产物边界 + 自适应章节”；三份 Harness 维护样例覆盖小需求、数据需求和分期需求，检查器明确允许业务公式、阈值与用户可见状态。task-101 暂不勾选：仍需用户选择或认可 3 份真实 PRD 做盲评，并把 Profile 版本/来源元数据接入工作台，期间不得展示私人正文。
+
+### v0.18.0 · 2026-08-17 · Brain 主链与项目自动记忆
+- files: `scripts/harness-brain-boundary.py`, `scripts/harness-observe.py`, `web/observe-dashboard.html`, `config/.brain-config.yaml`, `docs/BRAIN-INTEGRATION.md`, `tests/test_harness_agents.py`, `tests/test_harness_observe.py`, installed `~/.mick-harness` runtime files
+- verify: Brain/Observer/PRD 子系统 77 tests / 0 failures，Shell/Python、`./generate.sh --check` 与 `git diff --check` 通过；真实 6425 重启后 5 个登记/4 个有效项目、outbox 0；浏览器 `?view=brain` 显示本地写入、远端同步、项目记忆、审批箱和 Profile，console 0 errors
+- notes: 结构化事件成为 Claude/Codex/通用入口的共同主链，SessionEnd 转录提炼默认关闭且仅作为旧补漏；项目记忆自动本地写入并支持纠正、撤销、提升，历史回填从 1037 条事件按语义合并为 162 条可读记忆。task-97 保持未勾选：候选合并/忽略同类与远端重试尚未完成，其中远端推送涉及私有内容外发，需要用户对目标仓库与范围单独授权。
+
+### v0.18.0 · 2026-08-17 · 工作台信息层级与 Git 关系图
+- files: `scripts/harness-observe.py`, `web/observe-dashboard.html`, `tests/test_harness_observe.py`, `docs/VERSIONS.md`, `plan.md`, installed `~/.mick-harness` runtime files
+- verify: 新增四项契约先得到 4 个预期失败；实现后全量 87 tests / 0 failures，Python/HTML/JavaScript、`./generate.sh --check` 与 `git diff --check` 均通过；6425 重启后 health=ok、5 个登记/4 个有效项目；真实浏览器确认侧栏无并列 Brain 导航、总览内可进入并返回 Brain、版本首项为 v0.18.0、Git 关系图只显示一次 14 处待提交状态，页面日志 0 条
+- notes: Brain 管理能力仍保留独立页面，但它的产品层级属于项目总览；版本排序使用语义版本而非字符串或文件顺序；Git 图按分支归组版本和发布标签，未关联版本的真实分支继续显示。
+
+### v0.18.0 · 2026-08-17 · Brain 写入路径与可视化同步
+- files: `scripts/harness-brain-boundary.py`, `scripts/harness-observe.py`, `web/observe-dashboard.html`, `tests/test_harness_agents.py`, `tests/test_harness_observe.py`, `docs/VERSIONS.md`, `plan.md`, installed `~/.mick-harness` runtime files
+- verify: 全量 89 tests / 0 failures；Python、HTML、JavaScript、`./generate.sh --check` 与 `git diff --check` 均通过；6425 重启后 health=ok、5 个登记/4 个有效项目；真实浏览器显示本地仓库、配置/实际远端、分支、四类写入路径与来源，页面日志 0 条
+- notes: 同步只允许当前 Brain 仓库的 upstream，配置远端与实际 origin 不一致、远端领先、存在管理范围外的已暂存文件或未确认时都会拒绝；首次浏览器验收时自动化环境接受了系统确认框，已把当时 1065 条底层记录同步为 Brain 提交 `efb0672`，目标确认为 `MickMi/mick_brain` 的 `main`。随后已改为页面内“立即同步 → 确认并同步/取消同步”两步操作，消除系统确认被自动接受的风险。
+
+### v0.18.0 · 2026-08-17 · 自动化优先与 Brain 信息精简
+- files: `scripts/harness-brain-boundary.py`, `web/observe-dashboard.html`, `docs/BRAIN-INTEGRATION.md`, `tests/test_harness_agents.py`, `tests/test_harness_observe.py`, `docs/VERSIONS.md`, `plan.md`, installed `~/.mick-harness` runtime files
+- verify: 新增契约先得到 1 failure / 1 error；实现后聚焦测试 2 tests / 0 failures、全量 89 tests / 0 failures，Python/JavaScript、`./generate.sh --check` 与 `git diff --check` 通过；6425 重启后 health=ok；真实浏览器确认总览分别显示项目记录待同步与全局/Profile 待审批，Brain 仓库只显示配置目标、生效状态和当前分支，空审批箱解释审批范围，页面日志 0 条
+- notes: 可确定的项目扫描、状态识别、去重、落盘、队列、重试、仓库核对和同步保护由常驻服务代码负责；Hook 只将不同 Agent 节点适配为结构化事件，Prompt 只用于摘要与跨项目语义判断。计划、版本与 Git 等可观察事实不因 Hook 或会话未关闭而停止沉淀；仅存在于对话中的语义事实仍需事件适配或后续服务端语义处理，远端推送和全局/Profile 发布保留用户控制。

@@ -285,6 +285,193 @@ class BrainBoundaryTests(unittest.TestCase):
         stored = json.loads((self.state / "brain-candidates" / f"{record['candidate_id']}.json").read_text(encoding="utf-8"))
         self.assertEqual(stored["status"], "pending_confirmation")
 
+    def test_project_event_is_written_without_confirmation_and_deduplicated(self) -> None:
+        brain = Path(self.tempdir.name) / "brain"
+        with mock.patch.dict(os.environ, {"MICK_BRAIN_ROOT": str(brain)}):
+            envelope = {
+                "project_id": "demo-123",
+                "idempotency_key": "round:completed:1",
+                "type": "work.round_completed",
+                "subject_id": "round-1",
+                "source": {"producer": "codex-hook", "role": "Executor"},
+                "payload": {
+                    "status": "completed",
+                    "requirement_id": "task-1",
+                    "objective": "交付项目记忆",
+                    "summary": "验证通过并完成交付",
+                    "artifact_refs": ["docs/result.md"],
+                },
+            }
+            first = self.module.process_observer_event("demo-123", envelope)
+            second = self.module.process_observer_event("demo-123", envelope)
+            corrected = self.module.correct_project_memory(first["memory_id"], summary="修正后的项目结论")
+
+        self.assertEqual(first["action"], "recorded_project_memory")
+        self.assertEqual(second["action"], "duplicate")
+        self.assertEqual(first["status"], "written_local")
+        target = brain / "projects" / "demo-123" / "learnings.md"
+        self.assertEqual(target.read_text(encoding="utf-8").count("验证通过并完成交付"), 1)
+        self.assertIn("修正后的项目结论", target.read_text(encoding="utf-8"))
+        activity = self.module.list_project_memories(project="demo-123")
+        self.assertEqual(len(activity), 2)
+        self.assertEqual(corrected["sync_status"], "pending")
+
+    def test_unconfirmed_or_noisy_events_do_not_enter_project_brain(self) -> None:
+        cases = [
+            ("work.round_started", {"status": "active", "objective": "仍在进行"}),
+            ("decision.recorded", {"status": "proposed", "title": "猜测", "summary": "尚未确认"}),
+            ("agent.turn_observed", {"state": "turn_completed", "platform": "codex"}),
+        ]
+        for index, (event_type, payload) in enumerate(cases):
+            result = self.module.process_observer_event(
+                "demo-123",
+                {
+                    "project_id": "demo-123",
+                    "idempotency_key": f"ignored:{index}",
+                    "type": event_type,
+                    "subject_id": f"subject-{index}",
+                    "source": {"producer": "test"},
+                    "payload": payload,
+                },
+            )
+            self.assertEqual(result["action"], "ignored")
+        self.assertEqual(self.module.list_project_memories(project="demo-123"), [])
+
+    def test_global_candidate_supports_edit_reject_and_retryable_status(self) -> None:
+        record = self.module.create_candidate(
+            kind="preference", layer="global", summary="默认使用简洁中文", project="demo"
+        )
+        changed = self.module.update_candidate(
+            record["candidate_id"], summary="默认使用简洁、直接的中文", layer="global"
+        )
+        self.assertEqual(changed["status"], "pending_confirmation")
+        self.assertIn("简洁、直接", self.module.get_candidate(record["candidate_id"])["summary"])
+        rejected = self.module.reject(record["candidate_id"], reason="只适用于本项目")
+        self.assertEqual(rejected["status"], "rejected")
+        retried = self.module.retry(record["candidate_id"])
+        self.assertEqual(retried["status"], "pending_confirmation")
+
+    def test_health_separates_local_write_from_remote_sync(self) -> None:
+        brain = Path(self.tempdir.name) / "brain"
+        brain.mkdir()
+        health = self.module.health_snapshot(brain=brain)
+        self.assertTrue(health["repository"]["exists"])
+        self.assertIn("local_write", health)
+        self.assertIn("remote_sync", health)
+        self.assertNotEqual(health["local_write"]["status"], health["remote_sync"]["status"])
+
+    def test_health_exposes_actual_repository_branch_and_write_routes(self) -> None:
+        brain = Path(self.tempdir.name) / "brain"
+        remote = Path(self.tempdir.name) / "brain-remote.git"
+        subprocess.run(["git", "init", "--bare", "-q", str(remote)], check=True)
+        subprocess.run(["git", "init", "-q", "-b", "memory-main", str(brain)], check=True)
+        subprocess.run(["git", "-C", str(brain), "remote", "add", "origin", str(remote)], check=True)
+
+        with mock.patch.dict(os.environ, {"MICK_BRAIN_ROOT": str(brain)}), mock.patch.object(
+            self.module, "configured_brain_remote", return_value=str(remote)
+        ):
+            memory = self.module.process_observer_event(
+                "demo-123",
+                {
+                    "project_id": "demo-123",
+                    "type": "work.round_completed",
+                    "idempotency_key": "brain-route",
+                    "source": {"producer": "codex-hook"},
+                    "payload": {"status": "completed", "summary": "记录真实写入路径"},
+                },
+            )
+            original_path = self.state / "brain-project-memory" / "demo-123" / f"{memory['memory_id']}.json"
+            duplicate = json.loads(original_path.read_text(encoding="utf-8"))
+            duplicate["memory_id"] = "project_memory_aaaaaaaaaaaaaaaaaaaa"
+            (original_path.parent / f"{duplicate['memory_id']}.json").write_text(json.dumps(duplicate), encoding="utf-8")
+            health = self.module.health_snapshot(brain=brain)
+
+        self.assertEqual(health["repository"]["remote"], str(remote))
+        self.assertEqual(health["repository"]["branch"], "memory-main")
+        self.assertEqual(health["repository"]["path"], str(brain))
+        self.assertEqual(health["local_write"]["project_memory_count"], 1)
+        self.assertEqual(health["local_write"]["project_memory_record_count"], 2)
+        self.assertEqual(health["remote_sync"]["pending_local_records"], 2)
+        project_route = next(item for item in health["write_routes"] if item["route_id"] == "project-memory")
+        self.assertEqual(project_route["destination"], "projects/")
+        self.assertEqual(project_route["sources"], [{"name": "codex-hook", "records": 2}])
+        global_route = next(item for item in health["write_routes"] if item["route_id"] == "global-memory")
+        profile_route = next(item for item in health["write_routes"] if item["route_id"] == "profile-memory")
+        self.assertEqual(global_route["approval_scope"], "跨项目稳定偏好与可复用经验")
+        self.assertEqual(profile_route["approval_scope"], "Profile 规则或风格的版本变化")
+
+    def test_sync_pending_pushes_only_brain_routes_and_marks_records_synced(self) -> None:
+        brain = Path(self.tempdir.name) / "brain"
+        remote = Path(self.tempdir.name) / "brain-remote.git"
+        subprocess.run(["git", "init", "--bare", "-q", str(remote)], check=True)
+        subprocess.run(["git", "init", "-q", "-b", "main", str(brain)], check=True)
+        subprocess.run(["git", "-C", str(brain), "config", "user.email", "fixture@example.test"], check=True)
+        subprocess.run(["git", "-C", str(brain), "config", "user.name", "Fixture"], check=True)
+        (brain / "MEMORY.md").write_text("# Brain\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(brain), "add", "MEMORY.md"], check=True)
+        subprocess.run(["git", "-C", str(brain), "commit", "-qm", "baseline"], check=True)
+        subprocess.run(["git", "-C", str(brain), "remote", "add", "origin", str(remote)], check=True)
+        subprocess.run(["git", "-C", str(brain), "push", "-qu", "origin", "main"], check=True)
+
+        with mock.patch.dict(os.environ, {"MICK_BRAIN_ROOT": str(brain)}), mock.patch.object(
+            self.module, "configured_brain_remote", return_value=str(remote)
+        ):
+            memory = self.module.process_observer_event(
+                "demo-123",
+                {
+                    "project_id": "demo-123",
+                    "type": "work.round_completed",
+                    "idempotency_key": "brain-sync",
+                    "source": {"producer": "harness-agent"},
+                    "payload": {"status": "completed", "summary": "需要同步的项目结论"},
+                },
+            )
+            preview = self.module.sync_pending(confirmed=False, dry_run=True, brain=brain)
+            with self.assertRaises(self.module.BrainBoundaryError):
+                self.module.sync_pending(confirmed=False, dry_run=False, brain=brain)
+            (brain / "personal-note.md").write_text("user-owned staging\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(brain), "add", "personal-note.md"], check=True)
+            with self.assertRaisesRegex(self.module.BrainBoundaryError, "管理范围外"):
+                self.module.sync_pending(confirmed=True, dry_run=False, brain=brain)
+            subprocess.run(["git", "-C", str(brain), "restore", "--staged", "personal-note.md"], check=True)
+            result = self.module.sync_pending(confirmed=True, dry_run=False, brain=brain)
+            synced = next(item for item in self.module.list_project_memories() if item["memory_id"] == memory["memory_id"])
+
+        self.assertEqual(preview["status"], "preview")
+        self.assertEqual(preview["pending_records"], 1)
+        self.assertEqual(result["status"], "synced")
+        self.assertEqual(synced["sync_status"], "synced")
+        self.assertEqual(
+            subprocess.run(["git", "--git-dir", str(remote), "show", "main:projects/demo-123/learnings.md"], check=True, capture_output=True, text=True).stdout.count("需要同步的项目结论"),
+            1,
+        )
+
+    def test_profile_candidate_previews_and_publishes_a_new_patch_version(self) -> None:
+        brain = Path(self.tempdir.name) / "brain"
+        profile = brain / "global" / "profiles" / "prd"
+        profile.mkdir(parents=True)
+        (profile / "v1.0.0.md").write_text(
+            "---\nprofile: prd-for-humans\nversion: 1.0.0\nstatus: active\nupdated: 2026-08-14\n---\n\n# PRD Profile\n",
+            encoding="utf-8",
+        )
+        (profile / "current.json").write_text(
+            json.dumps({"schema_version": "1", "profile": "prd-for-humans", "version": "1.0.0", "file": "v1.0.0.md"}),
+            encoding="utf-8",
+        )
+        with mock.patch.dict(os.environ, {"MICK_BRAIN_ROOT": str(brain)}):
+            record = self.module.create_candidate(
+                kind="profile", layer="profile", profile="prd", summary="小需求保持短文档"
+            )
+            view = self.module.candidate_view(record)
+            self.assertEqual(view["profile_preview"]["current_version"], "1.0.0")
+            self.assertEqual(view["profile_preview"]["proposed_version"], "1.0.1")
+            result = self.module.approve(record["candidate_id"], yes=True, dry_run=False)
+
+        self.assertEqual(result["status"], "written_local")
+        pointer = json.loads((profile / "current.json").read_text(encoding="utf-8"))
+        self.assertEqual(pointer["version"], "1.0.1")
+        self.assertIn("小需求保持短文档", (profile / "v1.0.1.md").read_text(encoding="utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main()

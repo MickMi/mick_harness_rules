@@ -74,6 +74,13 @@
     .project-card:hover { border-color: var(--accent); }
     .project-card[data-validation]:not([data-validation="valid"]) { border-color: var(--danger); }
     .project-path { margin-top: 7px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+    .portfolio-service { margin-top: 22px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: center; }
+    .service-status { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .service-pill { border-radius: 999px; background: var(--surface-2); padding: 6px 10px; color: var(--muted); font-size: 12px; }
+    .service-pill[data-status="synced"], .service-pill[data-status="written_local"] { color: var(--success); }
+    .service-pill[data-status="error"], .service-pill[data-status="sync_failed"] { color: var(--danger); }
+    .service-action { border: 1px solid var(--accent); border-radius: 9px; background: transparent; color: var(--accent); padding: 9px 13px; cursor: pointer; white-space: nowrap; }
+    .service-action:hover { background: var(--accent-soft); }
     .agent-section { margin-top: 22px; }
     .agent-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; margin-top: 12px; }
     .agent-card { border: 1px solid var(--border); border-radius: 13px; background: var(--surface); padding: 14px; }
@@ -215,10 +222,23 @@
     .version-chip[data-ok="false"] { color: var(--danger); }
     .version-requirements { display: grid; gap: 7px; margin-top: 14px; }
     .version-requirement { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 8px; align-items: start; border-top: 1px solid var(--border); padding-top: 8px; }
-    .branch-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 12px; }
-    .branch-card { border: 1px solid var(--border); border-radius: 11px; background: var(--surface-2); padding: 12px; }
-    .branch-card[data-current="true"] { border-color: var(--accent); background: var(--accent-soft); }
-    .branch-name { font-weight: 650; overflow-wrap: anywhere; }
+    .git-map { display: grid; gap: 0; margin-top: 14px; }
+    .git-workspace-node { border: 1px solid var(--accent); border-radius: 13px; background: var(--accent-soft); padding: 13px; }
+    .git-node-label { display: block; color: var(--muted); font-size: 11px; }
+    .git-node-title { display: block; margin-top: 3px; font-weight: 700; overflow-wrap: anywhere; }
+    .git-node-meta { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
+    .git-node-meta[data-dirty="true"] { color: var(--warning); }
+    .git-trunk { width: 2px; height: 20px; margin-left: 25px; background: var(--accent); }
+    .git-branches { display: grid; gap: 10px; }
+    .git-branch-row { position: relative; display: grid; grid-template-columns: minmax(120px, .7fr) minmax(0, 1.3fr); gap: 12px; align-items: stretch; padding-left: 24px; }
+    .git-branch-row::before { content: ""; position: absolute; left: 0; top: 22px; width: 24px; height: 2px; background: var(--border); }
+    .git-branch-node, .git-version-lane { border: 1px solid var(--border); border-radius: 11px; background: var(--surface-2); padding: 11px; }
+    .git-branch-node[data-current="true"] { border-color: var(--accent); background: var(--accent-soft); }
+    .git-version-lane { display: flex; flex-wrap: wrap; gap: 7px; align-content: center; }
+    .git-version-node { border-radius: 9px; background: var(--surface); padding: 6px 8px; font-size: 11px; }
+    .git-version-node[data-status="in_progress"] { box-shadow: inset 3px 0 0 var(--accent); }
+    .git-version-node[data-status="released"], .git-version-node[data-status="completed"] { box-shadow: inset 3px 0 0 var(--success); }
+    .git-version-tag { display: block; margin-top: 2px; color: var(--muted); font-size: 9px; }
     .lanes { display: grid; gap: 14px; }
     .lane { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px; align-items: start; }
     .lane-label { color: var(--muted); padding-top: 12px; font-size: 13px; }
@@ -251,6 +271,35 @@
     code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; overflow-wrap: anywhere; }
     .error { color: var(--danger); border-color: var(--danger); }
     .warning-line { color: var(--warning); margin: 8px 0 0; font-size: 13px; }
+    .brain-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 18px; }
+    .brain-card { border: 1px solid var(--border); border-radius: 14px; background: var(--surface); padding: 16px; }
+    .brain-card h2, .brain-card h3 { margin: 0 0 8px; }
+    .brain-repository { margin-top: 18px; }
+    .brain-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+    .brain-detail { border: 1px solid var(--border); border-radius: 11px; background: var(--surface-soft); padding: 11px; }
+    .brain-detail-label { display: block; color: var(--muted); font-size: 11px; }
+    .brain-detail-value { display: block; margin-top: 4px; font-size: 13px; font-weight: 620; overflow-wrap: anywhere; }
+    .brain-detail-value[data-match="true"] { color: var(--success); }
+    .brain-detail-value[data-match="false"] { color: var(--danger); }
+    .brain-route-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 9px; margin-top: 12px; }
+    .brain-route { border: 1px solid var(--border); border-radius: 11px; background: var(--surface-soft); padding: 11px; }
+    .brain-route-title { font-weight: 650; }
+    .brain-route-path { margin-top: 5px; color: var(--accent); font-size: 11px; overflow-wrap: anywhere; }
+    .brain-route-source { margin-top: 7px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+    .brain-sync-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+    .brain-sync-button { border: 1px solid var(--accent); border-radius: 9px; background: var(--accent); color: white; padding: 8px 12px; cursor: pointer; }
+    .brain-sync-button:disabled { opacity: .55; cursor: wait; }
+    .brain-sync-confirm { width: 100%; border: 1px solid var(--warning); border-radius: 11px; background: var(--surface-soft); padding: 11px; }
+    .brain-sync-confirm p { margin: 0 0 9px; font-size: 12px; line-height: 1.5; }
+    .brain-sync-confirm-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .brain-sync-cancel { border: 1px solid var(--border); border-radius: 9px; background: transparent; color: var(--text); padding: 8px 12px; cursor: pointer; }
+    .brain-list { display: grid; gap: 10px; margin-top: 12px; }
+    .brain-item { border: 1px solid var(--border); border-radius: 12px; padding: 12px; background: var(--surface-soft); }
+    .brain-meta { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+    .brain-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .brain-actions button { border: 1px solid var(--border); border-radius: 999px; background: var(--surface); padding: 6px 11px; cursor: pointer; }
+    .brain-actions button.primary { border-color: var(--accent); color: var(--accent); }
+    .brain-actions button.danger { border-color: var(--danger); color: var(--danger); }
     .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
     @media (max-width: 900px) {
       .app { grid-template-columns: 1fr; }
@@ -261,6 +310,10 @@
       .version-focus, .role-detail-grid { grid-template-columns: 1fr; }
       .version-progress { text-align: left; }
       .artifact-layout { grid-template-columns: 1fr; }
+      .brain-grid { grid-template-columns: 1fr; }
+      .brain-detail-grid { grid-template-columns: 1fr; }
+      .portfolio-service { grid-template-columns: 1fr; }
+      .git-branch-row { grid-template-columns: 1fr; }
       .markdown-shell { grid-template-columns: 1fr; }
       .document-outline { position: static; max-height: 220px; }
       .detail { position: static; }
@@ -289,7 +342,7 @@
   </div>
   <script>
     (() => {
-      const state = { portfolio: null, agents: null, project: null, index: null, run: null, snapshot: null, workspace: null, events: [], view: "overview", taskId: null, selectedRole: null, artifactPath: null, artifactDocument: null, artifactError: null, notice: null };
+      const state = { portfolio: null, agents: null, brainHealth: null, brainCandidates: [], projectMemories: [], brainSyncConfirm: false, project: null, index: null, run: null, snapshot: null, workspace: null, events: [], view: "overview", taskId: null, selectedRole: null, artifactPath: null, artifactDocument: null, artifactError: null, notice: null };
       const navTree = document.getElementById("nav-tree");
       const portfolioSummary = document.getElementById("portfolio-summary");
       const content = document.getElementById("content");
@@ -325,6 +378,21 @@
         return response.json();
       }
 
+      async function postBrain(url, body = {}) {
+        const response = await fetch(url, {
+          method: "POST",
+          cache: "no-store",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Harness-Action-Token": state.brainHealth?.action_token || ""
+          },
+          body: JSON.stringify(body)
+        });
+        const value = await response.json();
+        if (!response.ok) throw new Error(value.error || `${url} returned ${response.status}`);
+        return value;
+      }
+
       async function fetchEvents(projectId, runId) {
         const response = await fetchWithRetry(`/api/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/events.jsonl`);
         if (!response.ok) throw new Error(`events returned ${response.status}`);
@@ -335,7 +403,7 @@
       function readUrlState() {
         const params = new URLSearchParams(location.search);
         const rawView = params.get("view");
-        state.view = rawView === "graph" ? "overview" : ["overview", "artifacts", "versions", "timeline", "events"].includes(rawView) ? rawView : "overview";
+        state.view = rawView === "graph" ? "overview" : ["overview", "brain", "artifacts", "versions", "timeline", "events"].includes(rawView) ? rawView : "overview";
         state.taskId = params.get("task");
         state.selectedRole = params.get("role");
         state.artifactPath = params.get("artifact");
@@ -359,7 +427,8 @@
           verification_pending: "待验证", completed: "已完成", skipped: "已跳过",
           discovered: "待开始", ready: "可执行", abandoned: "已终止", unavailable: "不可用",
           session_started: "会话活跃", turn_started: "处理中", turn_completed: "等待下一轮", session_ended: "会话结束",
-          started: "执行中"
+          started: "执行中", ready: "可用", synced: "已同步", pending: "待同步",
+          error: "同步失败", not_configured: "未配置", unavailable: "不可用", written_local: "已写入本地"
         };
         return labels[value] || value || "未知";
       }
@@ -389,7 +458,7 @@
         home.type = "button";
         home.setAttribute("aria-current", String(!state.project));
         home.append(el("span", "", "← 所有项目"), el("span", "nav-count", `${projects.length} 个登记`));
-        home.addEventListener("click", () => selectProject(null));
+        home.addEventListener("click", () => { state.view = "overview"; selectProject(null); });
         navTree.append(home);
 
         projects.forEach(project => {
@@ -431,6 +500,214 @@
         return box;
       }
 
+      async function refreshBrain() {
+        const [health, candidates, memories] = await Promise.all([
+          fetchJson("/api/brain/status.json"),
+          fetchJson("/api/brain/candidates.json"),
+          fetchJson("/api/brain/project-memory.json")
+        ]);
+        state.brainHealth = health;
+        state.brainCandidates = candidates.items || [];
+        state.projectMemories = memories.items || [];
+        render();
+      }
+
+      function brainAction(label, action, className = "") {
+        const button = el("button", className, label);
+        button.type = "button";
+        button.addEventListener("click", async () => {
+          button.disabled = true;
+          try {
+            const result = await action();
+            state.notice = typeof result === "string" ? result : null;
+            await refreshBrain();
+          } catch (error) {
+            state.notice = `Brain 操作失败：${error.message}`;
+            render();
+          } finally {
+            button.disabled = false;
+          }
+        });
+        return button;
+      }
+
+      function renderBrain() {
+        content.replaceChildren();
+        const health = state.brainHealth || {};
+        const top = el("div", "topline");
+        const titleWrap = el("div", "");
+        titleWrap.append(el("div", "eyebrow", "本机记忆服务"), el("h1", "", "Brain 工作台"));
+        top.append(titleWrap, el("div", "freshness", health.generated_at || "尚未读取"));
+        content.append(top);
+        const back = el("button", "service-action", "← 返回项目总览");
+        back.type = "button";
+        back.addEventListener("click", () => { state.view = "overview"; writeUrlState(); render(); });
+        content.append(back);
+        content.append(el("p", "section-help", "本机服务自动记录可观察的项目事实；Hook 只负责采集事件，Prompt 只辅助识别含义，关闭会话不是写入前提。跨项目偏好和 Profile 版本变化才需要你确认。"));
+        if (state.notice) content.append(el("p", "warning-line", state.notice));
+
+        const metrics = el("div", "metrics");
+        metrics.append(
+          metric("本地服务", statusLabel(health.local_write?.status)),
+          metric("项目记忆", health.local_write?.project_memory_count || 0),
+          metric("项目记录待同步", health.remote_sync?.pending_local_records || 0),
+          metric("全局/Profile 待审批", health.approval_inbox?.pending || 0)
+        );
+        content.append(metrics);
+
+        const repository = health.repository || {};
+        const repositoryCard = el("section", "brain-card brain-repository");
+        repositoryCard.append(el("h2", "", "Brain 仓库"));
+        const repositoryGrid = el("div", "brain-detail-grid");
+        const repositoryDetail = (label, value, match = null) => {
+          const item = el("div", "brain-detail");
+          item.append(el("span", "brain-detail-label", label));
+          const content = el("span", "brain-detail-value", value || "未配置");
+          if (match !== null) content.dataset.match = String(match);
+          item.append(content); return item;
+        };
+        const repositoryEffective = Boolean(repository.git && repository.remote_matches_config && repository.branch && repository.upstream);
+        repositoryGrid.append(
+          repositoryDetail("配置仓库", repository.configured_remote),
+          repositoryDetail("生效状态", repositoryEffective ? "已生效" : "未生效", repositoryEffective),
+          repositoryDetail("当前分支", repository.branch ? `${repository.branch}${repository.upstream ? ` → ${repository.upstream}` : " · 无 upstream"}` : "未读取")
+        );
+        repositoryCard.append(repositoryGrid);
+        if (!repositoryEffective) {
+          const actualTarget = repository.remote ? `实际 origin：${repository.remote}` : "尚未读取到实际 origin";
+          repositoryCard.append(el("p", "error", `配置尚未生效；${actualTarget}。同步已停止。`));
+        }
+        content.append(repositoryCard);
+
+        const routesCard = el("section", "brain-card brain-repository");
+        routesCard.append(el("h2", "", "本地写入路径"));
+        routesCard.append(el("p", "section-help", "每条路径都说明谁在写、写到哪里，以及是否需要你审批。"));
+        const routeGrid = el("div", "brain-route-grid");
+        (health.write_routes || []).forEach(route => {
+          const card = el("article", "brain-route");
+          card.append(el("div", "brain-route-title", `${route.label} · ${route.approval}`));
+          card.append(el("div", "brain-route-path", route.absolute_destination || route.destination));
+          const sources = (route.sources || []).map(source => `${source.name}（${source.records || 0}）`).join("、") || "尚无真实写入源";
+          card.append(el("div", "brain-route-source", `当前写入源：${sources} · 已记录 ${route.records || 0}`));
+          if (route.approval_scope) card.append(el("div", "brain-route-source", `审批范围：${route.approval_scope}`));
+          routeGrid.append(card);
+        });
+        if (!routeGrid.childElementCount) routeGrid.append(el("div", "empty", "尚未取得本地写入路径。"));
+        routesCard.append(routeGrid); content.append(routesCard);
+
+        const grid = el("div", "brain-grid");
+        const activity = el("section", "brain-card");
+        activity.append(el("h2", "", "项目记忆活动"));
+        activity.append(el("p", "section-help", "由已完成、已接受或已验证的项目事件自动沉淀。原始对话和工具日志不会进入这里。"));
+        const activityList = el("div", "brain-list");
+        (state.projectMemories || []).slice(0, 30).forEach(memory => {
+          const item = el("article", "brain-item");
+          const repeated = (memory.occurrence_count || 1) > 1 ? ` · 合并 ${memory.occurrence_count} 次重复记录` : "";
+          item.append(el("div", "brain-meta", `${memory.project} · ${memory.kind} · ${memory.status} · 同步 ${memory.sync_status}${repeated}`));
+          item.append(el("div", "", memory.summary));
+          const actions = el("div", "brain-actions");
+          if (memory.status !== "reverted") {
+            actions.append(brainAction("纠正", async () => {
+              const summary = window.prompt("修正这条项目记忆：", memory.summary);
+              if (summary === null || !summary.trim() || summary.trim() === memory.summary) return;
+              await postBrain(`/api/brain/project-memory/${encodeURIComponent(memory.memory_id)}/correct`, { summary });
+            }));
+            actions.append(brainAction("提升为全局候选", () => postBrain(`/api/brain/project-memory/${encodeURIComponent(memory.memory_id)}/promote`), "primary"));
+            actions.append(brainAction("撤销记录", async () => {
+              if (!window.confirm("撤销这条项目记忆？历史会保留一条撤销标记。")) return;
+              await postBrain(`/api/brain/project-memory/${encodeURIComponent(memory.memory_id)}/undo`);
+            }, "danger"));
+          }
+          item.append(actions);
+          activityList.append(item);
+        });
+        if (!activityList.children.length) activityList.append(el("div", "empty", "还没有可展示的项目记忆。"));
+        activity.append(activityList);
+
+        const inbox = el("section", "brain-card");
+        inbox.append(el("h2", "", "全局与 Profile 审批箱"));
+        inbox.append(el("p", "section-help", "这里只处理跨项目稳定偏好与可复用经验，以及 Profile 规则或风格的版本变化；项目进度不会等待审批。"));
+        const inboxList = el("div", "brain-list");
+        (state.brainCandidates || []).filter(item => item.status !== "written_local").forEach(candidate => {
+          const item = el("article", "brain-item");
+          item.append(el("div", "brain-meta", `${candidate.layer} · ${candidate.kind} · ${candidate.status}`));
+          item.append(el("div", "", candidate.summary));
+          if (candidate.last_error) item.append(el("p", "error", candidate.last_error));
+          const actions = el("div", "brain-actions");
+          if (candidate.layer === "profile" && candidate.status === "pending_confirmation") {
+            const preview = candidate.profile_preview;
+            if (preview) {
+              item.append(el("div", "brain-meta", `${preview.current_version} → ${preview.proposed_version}`));
+              item.append(el("div", "", preview.change));
+              actions.append(brainAction("发布新 Profile 版本", async () => {
+                if (!window.confirm(`确认把这条变更发布为 ${preview.profile} ${preview.proposed_version}？`)) return;
+                await postBrain(`/api/brain/candidates/${encodeURIComponent(candidate.candidate_id)}/approve`);
+              }, "primary"));
+            } else {
+              actions.append(el("span", "error", "无法生成版本差异预览"));
+            }
+            actions.append(brainAction("拒绝", () => postBrain(`/api/brain/candidates/${encodeURIComponent(candidate.candidate_id)}/reject`), "danger"));
+          } else if (candidate.status === "pending_confirmation") {
+            actions.append(brainAction("编辑并批准", async () => {
+              const summary = window.prompt("确认或修改要写入全局 Brain 的内容：", candidate.summary);
+              if (summary === null || !summary.trim()) return;
+              await postBrain(`/api/brain/candidates/${encodeURIComponent(candidate.candidate_id)}/approve`, { summary, layer: "global" });
+            }, "primary"));
+            actions.append(brainAction("拒绝", async () => {
+              if (!window.confirm("拒绝这条候选？之后仍可重试。")) return;
+              await postBrain(`/api/brain/candidates/${encodeURIComponent(candidate.candidate_id)}/reject`);
+            }, "danger"));
+          } else if (["write_failed", "sync_failed", "rejected"].includes(candidate.status)) {
+            actions.append(brainAction("重试", () => postBrain(`/api/brain/candidates/${encodeURIComponent(candidate.candidate_id)}/retry`), "primary"));
+          }
+          item.append(actions);
+          inboxList.append(item);
+        });
+        if (!inboxList.children.length) inboxList.append(el("div", "empty", "当前无需审批。新的跨项目偏好或 Profile 版本变化出现后，会在这里显示内容、来源和操作。"));
+        inbox.append(inboxList);
+        grid.append(activity, inbox);
+
+        const sync = el("section", "brain-card");
+        const syncHead = el("div", "brain-sync-head");
+        syncHead.append(el("h2", "", "写入与同步状态"));
+        const pendingSync = Number(health.remote_sync?.pending_local_records || 0);
+        if (["pending", "error"].includes(health.remote_sync?.status) || pendingSync > 0) {
+          if (!state.brainSyncConfirm) {
+            const syncButton = el("button", "brain-sync-button", `立即同步${pendingSync ? ` ${pendingSync} 条` : ""}`);
+            syncButton.type = "button";
+            syncButton.addEventListener("click", () => { state.brainSyncConfirm = true; render(); });
+            syncHead.append(syncButton);
+          } else {
+            const confirmation = el("div", "brain-sync-confirm");
+            confirmation.append(el("p", "", `将同步到 ${repository.remote || "未配置仓库"} 的 ${repository.branch || "未识别分支"} 分支。系统只提交 Harness 管理的 Brain 路径，不自动 pull/rebase。`));
+            const actions = el("div", "brain-sync-confirm-actions");
+            const confirmButton = brainAction("确认并同步", async () => {
+              const result = await postBrain("/api/brain/sync", { confirmed: true });
+              state.brainSyncConfirm = false;
+              return `Brain 同步完成：${result.synced_records || 0} 条项目记忆，${result.synced_candidates || 0} 条已批准候选。`;
+            }, "brain-sync-button");
+            const cancelButton = el("button", "brain-sync-cancel", "取消同步");
+            cancelButton.type = "button";
+            cancelButton.addEventListener("click", () => { state.brainSyncConfirm = false; render(); });
+            actions.append(confirmButton, cancelButton); confirmation.append(actions); syncHead.append(confirmation);
+          }
+        }
+        sync.append(syncHead);
+        sync.append(el("p", "", `本地：${health.local_write?.status || "未知"}；远端：${health.remote_sync?.status || "未知"}；待同步底层记录：${health.remote_sync?.pending_local_records || 0}（阅读视图合并为 ${health.local_write?.project_memory_count || 0} 条）`));
+        sync.append(el("p", "muted", `分支差异：本地领先 ${health.remote_sync?.ahead ?? "未知"}，远端领先 ${health.remote_sync?.behind ?? "未知"}。`));
+        if (health.remote_sync?.last_success_at) sync.append(el("p", "muted", `最近同步成功：${health.remote_sync.last_success_at}`));
+        sync.append(el("p", "", `结构化事件：${health.structured_events?.status || "未知"}；已出现来源：${(health.structured_events?.source_agents || []).join("、") || "等待首条项目记忆"}`));
+        sync.append(el("p", "", `会话结束补漏：${health.legacy_backfill?.status || "disabled"}（可选，不是主链）`));
+        if (health.remote_sync?.last_error) sync.append(el("p", "error", health.remote_sync.last_error));
+        if (health.legacy_backfill?.status === "degraded" && health.legacy_backfill?.last_log) sync.append(el("p", "error", health.legacy_backfill.last_log));
+        const profiles = el("section", "brain-card");
+        profiles.append(el("h2", "", "版本化 Profile"));
+        (health.profiles || []).forEach(profile => profiles.append(el("p", "", `${profile.profile} · ${profile.version || "未标版本"} · ${profile.source || "private_brain"}`)));
+        if (!(health.profiles || []).length) profiles.append(el("p", "muted", "尚未发现版本化 Profile。"));
+        grid.append(sync, profiles);
+        content.append(grid);
+      }
+
       function renderPortfolio() {
         content.replaceChildren();
         const projects = state.portfolio?.projects || [];
@@ -450,6 +727,27 @@
           metric("待验证", summary.verification_pending || 0)
         );
         content.append(metrics);
+        const brainHealth = state.brainHealth || {};
+        const brainSection = el("section", "section-card portfolio-service");
+        const brainBody = el("div", "");
+        brainBody.append(el("h2", "", "Brain 接入状态"));
+        brainBody.append(el("p", "section-help", "Brain 是项目总览的记忆服务：本机服务自动记录可观察的项目事实；只有跨项目偏好与 Profile 版本变化等待你确认。"));
+        const serviceStatus = el("div", "service-status");
+        const localStatus = brainHealth.local_write?.status || "unavailable";
+        const remoteStatus = brainHealth.remote_sync?.status || "unavailable";
+        const localPill = el("span", "service-pill", `本地写入 · ${statusLabel(localStatus)}`);
+        localPill.dataset.status = localStatus;
+        const pendingSync = brainHealth.remote_sync?.pending_local_records || 0;
+        const remotePill = el("span", "service-pill", `${pendingSync} 条项目记录待同步 · ${statusLabel(remoteStatus)}`);
+        remotePill.dataset.status = remoteStatus;
+        const pendingApproval = brainHealth.approval_inbox?.pending || 0;
+        serviceStatus.append(localPill, remotePill, el("span", "service-pill", `${pendingApproval} 条全局/Profile 待审批`));
+        brainBody.append(serviceStatus);
+        const brainButton = el("button", "service-action", "查看记忆与审批");
+        brainButton.type = "button";
+        brainButton.addEventListener("click", () => { state.project = null; state.view = "brain"; writeUrlState(); render(); });
+        brainSection.append(brainBody, brainButton);
+        content.append(brainSection);
         const agentSection = el("section", "section-card agent-section");
         agentSection.append(el("h2", "", "Code Agent 接入状态"));
         agentSection.append(el("p", "section-help", "五层状态分开验证；装好规则或 Hook 不等于当前会话已经加载。"));
@@ -547,9 +845,9 @@
 
       function currentVersion() {
         const versions = state.workspace?.versions?.items || [];
-        return versions.slice().reverse().find(item => item.status === "in_progress")
-          || versions.slice().reverse().find(item => item.status === "planned")
-          || versions[versions.length - 1]
+        return versions.find(item => item.status === "in_progress")
+          || versions.find(item => item.status === "planned")
+          || versions[0]
           || null;
       }
 
@@ -1022,10 +1320,65 @@
         heading.append(el("p", "goal-text", "先看每个版本要交付什么，再对照真实 Git 分支和标签。"));
         root.append(heading);
 
-        const grid = el("div", "overview-grid");
+        const gitCard = el("section", "section-card");
+        gitCard.append(el("h2", "", "版本与 Git 关系"));
+        gitCard.append(el("p", "section-help", "工作区只显示一次真实状态；版本按分支归组，避免把同一分支误读成多个并行开发现场。"));
+        if (!git.available) {
+          gitCard.append(el("div", "empty", "这个项目不是 Git 仓库，无法建立版本与分支关系。"));
+        } else {
+          const map = el("div", "git-map");
+          const workspaceNode = el("div", "git-workspace-node");
+          workspaceNode.append(el("span", "git-node-label", "工作区"));
+          workspaceNode.append(el("span", "git-node-title", git.current_branch ? `当前分支 · ${git.current_branch}` : "分离 HEAD"));
+          const dirty = el("span", "git-node-meta", git.clean ? "没有待提交改动" : `${git.dirty_count} 处待提交改动`);
+          dirty.dataset.dirty = String(!git.clean);
+          workspaceNode.append(dirty);
+          if (git.head || git.head_subject) workspaceNode.append(el("span", "git-node-meta", `${git.head || ""} ${git.head_subject || ""}`.trim()));
+          map.append(workspaceNode, el("div", "git-trunk"));
+
+          const grouped = new Map();
+          (versions.items || []).forEach(version => {
+            const branchName = version.branch || "未分配分支";
+            if (!grouped.has(branchName)) grouped.set(branchName, []);
+            grouped.get(branchName).push(version);
+          });
+          (git.branches || []).forEach(branch => {
+            if (!grouped.has(branch.name)) grouped.set(branch.name, []);
+          });
+          const branches = el("div", "git-branches");
+          [...grouped.entries()].sort(([left], [right]) => {
+            if (left === git.current_branch) return -1;
+            if (right === git.current_branch) return 1;
+            if (left === "未分配分支") return 1;
+            if (right === "未分配分支") return -1;
+            return left.localeCompare(right);
+          }).forEach(([branchName, branchVersions]) => {
+            const branch = (git.branches || []).find(item => item.name === branchName);
+            const row = el("div", "git-branch-row");
+            const branchNode = el("div", "git-branch-node");
+            branchNode.dataset.current = String(branchName === git.current_branch);
+            branchNode.append(el("span", "git-node-label", branchName === git.current_branch ? "当前分支" : "分支"));
+            branchNode.append(el("span", "git-node-title", branchName));
+            branchNode.append(el("span", "git-node-meta", branch ? (branch.upstream ? `跟踪 ${branch.upstream}` : "本地分支") : branchName === "未分配分支" ? "版本计划尚未指定" : "计划中，尚未创建"));
+            const versionLane = el("div", "git-version-lane");
+            branchVersions.forEach(version => {
+              const node = el("div", "git-version-node");
+              node.dataset.status = version.status;
+              node.append(el("span", "", `v${version.version} · ${versionStatusLabel(version.status)}`));
+              node.append(el("span", "git-version-tag", version.tag ? `发布标签 · ${version.tag}${version.tag_exists ? "" : "（尚未发布）"}` : "发布标签 · 未设置"));
+              versionLane.append(node);
+            });
+            if (!branchVersions.length) versionLane.append(el("span", "muted", "尚未关联版本"));
+            row.append(branchNode, versionLane); branches.append(row);
+          });
+          if (!branches.childElementCount) branches.append(el("div", "empty", "还没有分支或版本记录。"));
+          map.append(branches); gitCard.append(map);
+        }
+        root.append(gitCard);
+
         const main = el("div", "version-stack");
         const planCard = el("section", "section-card");
-        planCard.append(el("h2", "", "需求归属"), el("p", "section-help", versions.source ? `来自 ${versions.source}` : "尚未建立 docs/VERSIONS.md，PM 还没有把需求分配到版本。"));
+        planCard.append(el("h2", "", "版本需求"), el("p", "section-help", versions.source ? `最新版本优先 · 来自 ${versions.source}` : "尚未建立 docs/VERSIONS.md，PM 还没有把需求分配到版本。"));
         const stack = el("div", "version-stack");
         (versions.items || []).forEach(version => {
           const card = el("article", "version-card");
@@ -1045,7 +1398,6 @@
             tagChip.dataset.ok = String(version.tag_exists);
             chips.append(tagChip);
           }
-          if (version.is_current_branch) chips.append(el("span", "version-chip", "当前正在这条分支开发"));
           card.append(chips);
           if (version.branch_mismatch) card.append(el("p", "warning-line", `版本计划指向 ${version.branch}，但当前实际在 ${git.current_branch} 开发。`));
           const requirements = el("div", "version-requirements");
@@ -1071,29 +1423,7 @@
           (versions.unassigned_requirements || []).forEach(item => unassigned.append(el("div", "attention-item", `${item.requirement_id} · ${item.title}`)));
           main.append(unassigned);
         }
-        grid.append(main);
-
-        const gitCard = el("aside", "section-card detail");
-        gitCard.append(el("h2", "", "真实 Git 状态"));
-        if (!git.available) {
-          gitCard.append(el("p", "section-help", "这个项目不是 Git 仓库，不展示伪造分支。"));
-        } else {
-          gitCard.append(el("p", "", `当前分支：${git.current_branch || "分离 HEAD"}`));
-          gitCard.append(el("p", git.clean ? "muted" : "warning-line", git.clean ? "工作区干净" : `${git.dirty_count} 处未提交改动`));
-          gitCard.append(el("p", "muted", `${git.head || ""} ${git.head_subject || ""}`.trim()));
-          const branches = el("div", "branch-grid");
-          (git.branches || []).forEach(branch => {
-            const card = el("div", "branch-card"); card.dataset.current = String(branch.current);
-            card.append(el("div", "branch-name", branch.name));
-            card.append(el("div", "muted", branch.current ? "当前开发" : branch.upstream ? `跟踪 ${branch.upstream}` : "本地分支"));
-            card.append(el("div", "event-summary", `${branch.sha || ""} ${branch.subject || ""}`.trim()));
-            branches.append(card);
-          });
-          gitCard.append(branches);
-          gitCard.append(el("h3", "", "已发布标签"));
-          gitCard.append(el("p", "muted", (git.tags || []).slice(0, 12).join(" · ") || "暂无 tag"));
-        }
-        grid.append(gitCard); root.append(grid);
+        root.append(main);
       }
 
       function renderGraph(panel) {
@@ -1246,7 +1576,8 @@
       function render() {
         renderNavTree();
         if (!state.project) {
-          renderPortfolio();
+          if (state.view === "brain") renderBrain();
+          else renderPortfolio();
           return;
         }
         content.replaceChildren();
@@ -1350,10 +1681,18 @@
 
       async function load() {
         try {
-          [state.portfolio, state.agents] = await Promise.all([
+          const [portfolio, agents, brainHealth, brainCandidates, projectMemories] = await Promise.all([
             fetchJson("/api/portfolio.json"),
-            fetchJson("/api/agents.json")
+            fetchJson("/api/agents.json"),
+            fetchJson("/api/brain/status.json"),
+            fetchJson("/api/brain/candidates.json"),
+            fetchJson("/api/brain/project-memory.json")
           ]);
+          state.portfolio = portfolio;
+          state.agents = agents;
+          state.brainHealth = brainHealth;
+          state.brainCandidates = brainCandidates.items || [];
+          state.projectMemories = projectMemories.items || [];
           const requested = readUrlState();
           let projectId = requested.projectId;
           if (!projectId && requested.runId) {

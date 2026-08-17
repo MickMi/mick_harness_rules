@@ -98,8 +98,18 @@ class ObserveRuntimeTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
         self.project = Path(self.tempdir.name)
+        self.env_patch = mock.patch.dict(
+            os.environ,
+            {
+                "MICK_HARNESS_STATE_ROOT": str(self.project / "private-state"),
+                "MICK_HARNESS_STATE_DIR": str(self.project / "private-state"),
+                "MICK_BRAIN_ROOT": str(self.project / "private-brain"),
+            },
+        )
+        self.env_patch.start()
 
     def tearDown(self) -> None:
+        self.env_patch.stop()
         self.tempdir.cleanup()
 
     def write_plan(self, value: str) -> Path:
@@ -502,6 +512,7 @@ class ObserveRuntimeTests(unittest.TestCase):
         }
         environment = os.environ.copy()
         environment["PYTHONDONTWRITEBYTECODE"] = "1"
+        environment["MICK_HARNESS_OBSERVER_PORT"] = "1"
 
         result = subprocess.run(
             [sys.executable, str(HOOK_SCRIPT)],
@@ -525,6 +536,7 @@ class ObserveRuntimeTests(unittest.TestCase):
         (self.project / "AGENTS.md").write_text("# Harness\n", encoding="utf-8")
         environment = os.environ.copy()
         environment["PYTHONDONTWRITEBYTECODE"] = "1"
+        environment["MICK_HARNESS_OBSERVER_PORT"] = "1"
         base = {"session_id": "thr_round_trip", "cwd": str(self.project)}
         inputs = [
             {**base, "hook_event_name": "SessionStart", "source": "startup"},
@@ -788,6 +800,19 @@ class ObserveRuntimeTests(unittest.TestCase):
             port = probe.getsockname()[1]
         environment = os.environ.copy()
         environment["MICK_HARNESS_STATE_DIR"] = str(state_dir)
+        environment["MICK_BRAIN_ROOT"] = str(state_dir / "brain")
+        candidate_process = subprocess.run(
+            [
+                sys.executable, str(ROOT / "scripts" / "harness-brain-boundary.py"),
+                "candidate", "--kind", "preference", "--layer", "global",
+                "--project", "fixture", "--summary", "跨项目候选",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+        candidate_id = json.loads(candidate_process.stdout)["candidate_id"]
         process = subprocess.Popen(
             [sys.executable, str(SCRIPT), "watch", "--all", "--port", str(port), "--scan-interval", "0.1"],
             stdout=subprocess.PIPE,
@@ -807,6 +832,41 @@ class ObserveRuntimeTests(unittest.TestCase):
             else:
                 stdout, stderr = process.communicate(timeout=1)
                 self.fail(f"server did not start\nstdout={stdout}\nstderr={stderr}")
+
+            with urlopen(f"{base}/api/brain/status.json", timeout=1) as response:
+                brain_health = json.loads(response.read())
+            self.assertIn("action_token", brain_health)
+            self.assertIn("local_write", brain_health)
+            with urlopen(f"{base}/api/brain/candidates.json", timeout=1) as response:
+                candidates = json.loads(response.read())
+            self.assertEqual(candidates["items"][0]["candidate_id"], candidate_id)
+            action_url = f"{base}/api/brain/candidates/{candidate_id}/reject"
+            with self.assertRaises(HTTPError) as unauthenticated_action:
+                urlopen(Request(action_url, data=b"{}", headers={"Content-Type": "application/json"}), timeout=1)
+            self.assertEqual(unauthenticated_action.exception.code, 401)
+            with self.assertRaises(HTTPError) as unauthenticated_sync:
+                urlopen(
+                    Request(
+                        f"{base}/api/brain/sync",
+                        data=json.dumps({"confirmed": True}).encode("utf-8"),
+                        headers={"Content-Type": "application/json"},
+                    ),
+                    timeout=1,
+                )
+            self.assertEqual(unauthenticated_sync.exception.code, 401)
+            with urlopen(
+                Request(
+                    action_url,
+                    data=b"{}",
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-Harness-Action-Token": brain_health["action_token"],
+                    },
+                ),
+                timeout=1,
+            ) as response:
+                rejected = json.loads(response.read())
+            self.assertEqual(rejected["status"], "rejected")
 
             body = json.dumps(envelope).encode("utf-8")
             with self.assertRaises(HTTPError) as unauthorized:
@@ -832,6 +892,34 @@ class ObserveRuntimeTests(unittest.TestCase):
                 second = json.loads(response.read())
             self.assertEqual(first["appended"], 1)
             self.assertEqual(second["appended"], 0)
+
+            completed = OBSERVE.build_work_envelope(
+                self.project,
+                event_type="work.round_completed",
+                role="Executor",
+                round_ref="round-http-completed",
+                requirement_id="task-1",
+                objective="完成 Brain 自动写入",
+                summary="项目事实已验证",
+                status="completed",
+                idempotency_key="phase5-http-completed",
+            )
+            with urlopen(
+                Request(
+                    f"{base}/api/v1/events",
+                    data=json.dumps(completed).encode("utf-8"),
+                    headers=headers,
+                ),
+                timeout=1,
+            ) as response:
+                completed_result = json.loads(response.read())
+            self.assertEqual(completed_result["brain"]["action"], "recorded_project_memory")
+            with urlopen(f"{base}/api/brain/project-memory.json", timeout=1) as response:
+                memories = json.loads(response.read())
+            self.assertIn(
+                "task-1: 完成 Brain 自动写入 — 项目事实已验证",
+                [item["summary"] for item in memories["items"]],
+            )
 
             with self.assertRaises(HTTPError) as invalid:
                 urlopen(
@@ -870,6 +958,50 @@ class ObserveRuntimeTests(unittest.TestCase):
             self.assertNotIn(removed, dashboard)
         self.assertNotIn('task.status === "completed") return "Review"', dashboard)
         self.assertNotIn('task.status === "verification_pending") return "测试"', dashboard)
+
+    def test_dashboard_has_brain_health_activity_and_approval_workbench(self) -> None:
+        dashboard = DASHBOARD.read_text(encoding="utf-8")
+
+        for endpoint in (
+            "/api/brain/status.json", "/api/brain/candidates.json", "/api/brain/project-memory.json"
+        ):
+            self.assertIn(endpoint, dashboard)
+        for label in ("Brain 工作台", "项目记忆活动", "全局与 Profile 审批箱", "写入与同步状态", "版本化 Profile"):
+            self.assertIn(label, dashboard)
+        self.assertIn("X-Harness-Action-Token", dashboard)
+        self.assertIn("关闭会话不是写入前提", dashboard)
+        self.assertIn("Brain 接入状态", dashboard)
+        self.assertIn("查看记忆与审批", dashboard)
+        for label in (
+            "Brain 仓库", "配置仓库", "已生效", "当前分支", "本地写入路径",
+            "项目记录待同步", "全局/Profile 待审批", "当前无需审批",
+            "跨项目稳定偏好与可复用经验", "Profile 规则或风格的版本变化",
+            "本机服务自动记录", "Hook 只负责采集事件", "立即同步", "确认并同步", "取消同步",
+        ):
+            self.assertIn(label, dashboard)
+        for removed in ("接入仓库", "实际仓库", "先核对本地 Brain、配置仓库和 Git 实际仓库"):
+            self.assertNotIn(removed, dashboard)
+        self.assertIn('/api/brain/sync', dashboard)
+        self.assertIn('confirmed: true', dashboard)
+        self.assertIn("brainSyncConfirm", dashboard)
+        self.assertNotIn('const brain = el("button", "nav-home")', dashboard)
+        self.assertNotIn("navTree.append(brain)", dashboard)
+
+    def test_plan_sync_auto_records_confirmed_requirements_stage_and_verification(self) -> None:
+        (self.project / "AGENTS.md").write_text("# Harness\n", encoding="utf-8")
+        self.write_plan(plan_text(marker="x", verify="passed: 3 tests"))
+
+        result = OBSERVE.sync_runtime(self.project)
+        memories = OBSERVE.load_brain_boundary().list_project_memories(project=OBSERVE.project_id(self.project))
+        kinds = {item["kind"] for item in memories}
+
+        self.assertGreaterEqual(result["brain_recorded"], 3)
+        self.assertIn("requirement", kinds)
+        self.assertIn("verification", kinds)
+        self.assertIn("stage", kinds)
+        self.assertTrue(all(item["status"] == "written_local" for item in memories))
+        second = OBSERVE.sync_runtime(self.project)
+        self.assertEqual(second["brain_recorded"], 0)
 
     def test_dashboard_tree_navigation_and_office_visual_contract(self) -> None:
         dashboard = DASHBOARD.read_text(encoding="utf-8")
@@ -990,10 +1122,10 @@ class ObserveRuntimeTests(unittest.TestCase):
 
         self.assertEqual(workspace["git"]["current_branch"], "main")
         self.assertIn("v0.1.0", workspace["git"]["tags"])
-        self.assertEqual([item["version"] for item in workspace["versions"]["items"]], ["0.1.0", "0.2.0"])
-        self.assertTrue(workspace["versions"]["items"][0]["tag_exists"])
-        self.assertFalse(workspace["versions"]["items"][1]["branch_exists"])
-        self.assertNotIn("observed_status", workspace["versions"]["items"][0]["requirements"][0])
+        self.assertEqual([item["version"] for item in workspace["versions"]["items"]], ["0.2.0", "0.1.0"])
+        self.assertFalse(workspace["versions"]["items"][0]["branch_exists"])
+        self.assertTrue(workspace["versions"]["items"][1]["tag_exists"])
+        self.assertNotIn("observed_status", workspace["versions"]["items"][1]["requirements"][0])
         self.assertIn("src/demo.py", [item["path"] for item in workspace["artifacts"]])
 
         content = OBSERVE.read_artifact_content(self.project, snapshot, "src/demo.py")
@@ -1005,6 +1137,24 @@ class ObserveRuntimeTests(unittest.TestCase):
         (self.project / "secret.txt").write_text("not authorized", encoding="utf-8")
         with self.assertRaises(OBSERVE.ObserveError):
             OBSERVE.read_artifact_content(self.project, snapshot, "secret.txt")
+
+    def test_version_plan_sorts_newest_first_by_semantic_version(self) -> None:
+        docs = self.project / "docs"
+        docs.mkdir()
+        (docs / "VERSIONS.md").write_text(
+            "# Versions\n\n## 0.2.0\n\n- Status: released\n\n"
+            "## 0.10.0-beta.1\n\n- Status: planned\n\n"
+            "## 0.10.0\n\n- Status: in_progress\n\n"
+            "## 0.9.0\n\n- Status: released\n",
+            encoding="utf-8",
+        )
+
+        result = OBSERVE.version_plan_snapshot(self.project, {"tasks": {}}, {"branches": [], "tags": []})
+
+        self.assertEqual(
+            [item["version"] for item in result["items"]],
+            ["0.10.0", "0.10.0-beta.1", "0.9.0", "0.2.0"],
+        )
 
     def test_phase8_artifacts_keep_version_and_date_records(self) -> None:
         docs = self.project / "docs"
@@ -1046,7 +1196,7 @@ class ObserveRuntimeTests(unittest.TestCase):
         workspace = OBSERVE.project_workspace_snapshot(self.project, snapshot)
         artifact = next(item for item in workspace["artifacts"] if item["path"] == "docs/RESULTS.md")
 
-        self.assertEqual(artifact["versions"], ["0.1.0", "0.2.0"])
+        self.assertEqual(artifact["versions"], ["0.2.0", "0.1.0"])
         self.assertEqual(artifact["dates"], ["2026-08-12", "2026-08-10"])
         self.assertEqual(artifact["latest_recorded_at"], "2026-08-12T09:45:00+00:00")
         self.assertEqual([item["round_id"] for item in artifact["records"]], ["round-two", "round-one"])
@@ -1101,8 +1251,11 @@ class ObserveRuntimeTests(unittest.TestCase):
     def test_phase6_dashboard_has_safe_artifact_reader_and_version_views(self) -> None:
         dashboard = DASHBOARD.read_text(encoding="utf-8")
 
-        for label in ("产物", "版本规划", "Markdown 阅读", "代码产物", "真实 Git 状态", "需求归属"):
+        for label in ("产物", "版本规划", "Markdown 阅读", "代码产物", "版本与 Git 关系", "版本需求"):
             self.assertIn(label, dashboard)
+        for label in ("工作区", "当前分支", "发布标签", "未分配分支"):
+            self.assertIn(label, dashboard)
+        self.assertNotIn("当前正在这条分支开发", dashboard)
         self.assertIn("renderMarkdownDocument", dashboard)
         self.assertIn("renderCodeDocument", dashboard)
         self.assertIn('el("strong"', dashboard)

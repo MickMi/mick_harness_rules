@@ -56,13 +56,14 @@ write_sources:
 # These adapters are installed through the existing command:
 #   harness brain install
 #
-# Defaults stay conservative:
-# - Claude Code keeps the current SessionEnd behavior.
-# - Codex / generic hooks are available but opt-in.
-# - Enabling an adapter must not break Harness install/init/update.
+# Structured Observer events are the primary Brain source for Claude, Codex and
+# generic Harness clients. Transcript distillation is legacy, optional backfill;
+# it is disabled by default because it depends on vendor files and may contain
+# more private context than a confirmed project event.
 hooks:
   claude_code:
-    enabled: true
+    enabled: false
+    mode: optional_backfill
     events:
       - SessionEnd
       - daily
