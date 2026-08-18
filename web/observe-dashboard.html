@@ -18,6 +18,29 @@
       --danger: light-dark(#b3261e, #ffaaa4);
       --warning: light-dark(#8a5800, #ffd089);
       --success: light-dark(#1c6b3c, #88d3a6);
+      --surface-soft: light-dark(#f5f7fa, #1e222a);
+      --danger-soft: light-dark(#fdecec, #3a2626);
+      --warning-soft: light-dark(#fdf3e0, #3a2f1a);
+      --success-soft: light-dark(#e9f6ee, #1f3327);
+      --code-bg: light-dark(#111827, #0b0d11);
+      --code-fg: #e7eaf0;
+      --code-header-bg: #181d27;
+      --code-header-fg: #c8d2e4;
+      --code-gutter-fg: #667085;
+      --code-gutter-bg: #111827;
+      --fs-page-title: 30px;
+      --fs-section-title: 19px;
+      --fs-body: 15px;
+      --fs-caption: 12.5px;
+      --fs-mono: 12px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-6: 24px;
+      --space-8: 32px;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-pill: 999px;
       font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     * { box-sizing: border-box; }
@@ -50,6 +73,11 @@
     .nav-view:hover { background: var(--surface-2); color: var(--text); }
     .nav-view[aria-current="true"] { color: var(--text); font-weight: 650; background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
     .nav-badge { color: var(--danger); font-size: 11px; font-weight: 650; }
+    .nav-more { margin: 2px 0 8px 22px; padding-left: 8px; border-left: 1px solid var(--border); }
+    .nav-more summary { cursor: pointer; color: var(--muted); font-size: 12px; padding: 6px 8px; list-style: none; }
+    .nav-more summary:hover { color: var(--text); }
+    .nav-more[open] summary { color: var(--text); }
+    .nav-more .nav-views { margin: 0; padding-left: 0; border-left: 0; }
     .retry-button { margin-top: 12px; border: 1px solid var(--accent); border-radius: 8px; background: transparent; color: var(--accent); padding: 8px 14px; cursor: pointer; }
     .run-name { display: block; font-weight: 600; overflow-wrap: anywhere; }
     .run-meta { display: flex; gap: 8px; margin-top: 5px; color: var(--muted); font-size: 12px; }
@@ -95,7 +123,7 @@
     .agent-layer-label, .agent-layer-state { display: block; overflow-wrap: anywhere; }
     .agent-layer-state { margin-top: 3px; font-size: 9px; }
     .agent-evidence { margin-top: 9px; color: var(--muted); font-size: 11px; line-height: 1.4; }
-    .goal-card { border: 1px solid var(--border); border-radius: 16px; background: linear-gradient(135deg, var(--surface), var(--accent-soft)); padding: 20px; margin: 20px 0; }
+    .goal-card { border: 1px solid var(--border); border-radius: 16px; background: var(--surface); padding: 20px; margin: 20px 0; }
     .goal-label { color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .05em; }
     .goal-text { margin: 7px 0 0; max-width: 900px; font-size: clamp(17px, 2.2vw, 23px); line-height: 1.45; font-weight: 620; }
     .progress-line { display: flex; justify-content: space-between; gap: 14px; margin-top: 18px; color: var(--muted); font-size: 13px; }
@@ -126,7 +154,7 @@
     .office-head { display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
     .flow-line { display: flex; align-items: center; gap: 10px; border: 1px solid var(--accent); border-radius: 12px; background: var(--accent-soft); padding: 10px 13px; }
     .flow-line[data-kind="suggested"] { border-style: dashed; }
-    .flow-line[data-kind="suggested"] .flow-arrow { background: repeating-linear-gradient(90deg, var(--accent) 0 6px, transparent 6px 11px); }
+    .flow-line[data-kind="suggested"] .flow-arrow { background: transparent; border-top: 2px dashed var(--accent); }
     .flow-kind { color: var(--muted); font-size: 11px; letter-spacing: .04em; }
     .flow-role { display: flex; align-items: center; gap: 6px; font-weight: 700; }
     .flow-avatar { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 8px; background: var(--surface); font-size: 10px; font-weight: 760; }
@@ -142,12 +170,12 @@
     .office-role[data-flow="source"] { box-shadow: inset 0 -3px 0 var(--warning); }
     .office-role[data-flow="target"] { box-shadow: inset 0 -3px 0 var(--accent); }
     .office-role[data-flow="source"] .role-avatar, .office-role[data-flow="target"] .role-avatar { box-shadow: 0 0 0 2px var(--accent-soft), 0 0 0 4px var(--accent); }
-    .office-role[data-status="active"] .role-light { background: var(--success); animation: role-pulse 1.6s ease-in-out infinite; }
+    .office-role[data-status="active"] .role-light { background: var(--accent); animation: role-pulse 1.6s ease-in-out infinite; }
     .office-role[data-status="waiting"] .role-light { background: var(--warning); }
-    .office-role[data-status="completed"] .role-light { background: var(--accent); }
+    .office-role[data-status="completed"] .role-light { background: var(--success); }
     .office-role[data-status="idle"] { color: var(--muted); }
     .office-role[data-status="idle"] .role-light { background: var(--border); }
-    @keyframes role-pulse { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--success) 22%, transparent); } }
+    @keyframes role-pulse { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 22%, transparent); } }
     .role-top { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
     .role-avatar { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: var(--surface-2); font-size: 12px; font-weight: 760; letter-spacing: .02em; }
     .role-light { width: 9px; height: 9px; border-radius: 50%; }
@@ -157,6 +185,55 @@
     .transition-trail { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
     .transition-pill { border-radius: 999px; background: var(--surface-2); padding: 5px 9px; color: var(--muted); font-size: 11px; }
     .transition-pill[data-current="true"] { background: var(--accent-soft); color: var(--text); }
+    .question-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); margin-top: 8px; }
+    .question-item { display: flex; flex-direction: column; gap: 4px; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-soft); }
+    .question-label { color: var(--muted); font-size: var(--fs-caption); }
+    .question-value { font-weight: 650; }
+    .office-roles { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+    .office-role-row { display: flex; align-items: center; gap: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: inherit; padding: 10px 12px; text-align: left; cursor: pointer; transition: border-color .15s ease, background .15s ease; }
+    .office-role-row:hover { border-color: var(--accent); }
+    .office-role-row[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+    .office-role-row[data-status="idle"] { color: var(--muted); }
+    .office-role-row[data-status="active"] .role-light { background: var(--accent); animation: role-pulse 1.6s ease-in-out infinite; }
+    .office-role-row[data-status="waiting"] .role-light { background: var(--warning); }
+    .office-role-row[data-status="completed"] .role-light { background: var(--success); }
+    .office-role-row[data-status="idle"] .role-light { background: var(--border); }
+    .role-drawer-backdrop { position: fixed; inset: 0; background: color-mix(in srgb, var(--code-bg) 40%, transparent); z-index: 90; }
+    .role-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 94vw); background: var(--surface); border-left: 1px solid var(--border); z-index: 91; overflow-y: auto; padding: var(--space-6); }
+    .role-drawer-close { float: right; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: var(--radius-sm); padding: 4px 12px; cursor: pointer; }
+    /* 工作台首屏与概览布局（Step 3/4 补充） */
+    .workbench-card { margin-top: 18px; }
+    .six-questions { margin-top: 22px; }
+    .office-shell + .section-card { margin-top: 18px; }
+    .inbox-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+    .inbox-items { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .inbox-item { border-radius: 999px; background: var(--surface-2); padding: 6px 11px; color: var(--muted); font-size: 12px; }
+    .inbox-item.error { color: var(--danger); background: var(--danger-soft); }
+    .project-table { margin-top: 6px; }
+    .project-table th { font-size: 12px; }
+    .project-table td.error { color: var(--danger); border-bottom-color: var(--border); }
+    .project-link { border: 0; background: transparent; color: inherit; padding: 0; cursor: pointer; font-weight: 600; text-align: left; }
+    .project-link:hover { color: var(--accent); }
+    .delivery-list { display: grid; margin-top: 12px; }
+    .delivery-item { display: flex; align-items: baseline; gap: 10px; border-top: 1px solid var(--border); padding: 9px 0; font-size: 13px; }
+    .delivery-item:first-child { border-top: 0; }
+    .delivery-role { flex: none; border-radius: 999px; background: var(--surface-2); padding: 3px 9px; color: var(--muted); font-size: 11px; }
+    .delivery-summary { flex: 1; min-width: 0; }
+    .system-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); }
+    .system-row:first-of-type { border-top: 0; padding-top: 6px; }
+    .system-label { flex: none; min-width: 108px; color: var(--muted); font-size: 12px; }
+    .system-row .muted { flex: 1; }
+    .runs-list { display: grid; gap: 8px; margin-top: 12px; }
+    .runs-row { width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: inherit; padding: 11px 12px; text-align: left; cursor: pointer; }
+    .runs-row:hover { border-color: var(--accent); }
+    .runs-row[data-current="true"] { border-color: var(--accent); background: var(--accent-soft); }
+    .runs-row-head { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+    .runs-row-meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 5px; color: var(--muted); font-size: 11px; }
+    .office-role-row .role-avatar { width: 32px; height: 32px; flex: none; }
+    .office-role-row .role-name { margin-top: 0; }
+    .office-role-row .role-state { margin-top: 0; }
+    .office-role-row .role-summary { display: block; -webkit-line-clamp: unset; margin-top: 0; margin-left: auto; color: var(--muted); font-size: var(--fs-caption); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 45%; flex: none; }
+    @media (max-width: 560px) { .question-grid { grid-template-columns: repeat(2, 1fr); } }
     .role-detail-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(280px, .9fr); gap: 18px; margin-top: 18px; align-items: start; }
     .role-detail-card { min-width: 0; }
     .role-detail-title { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
@@ -203,12 +280,12 @@
     .document-reader blockquote { margin: 14px 0; border-left: 4px solid var(--accent); padding: 4px 14px; color: var(--muted); }
     .document-reader table { margin: 14px 0; }
     .document-reader hr { border: 0; border-top: 1px solid var(--border); margin: 20px 0; }
-    .code-fold { border: 1px solid var(--border); border-radius: 11px; background: light-dark(#111827, #0b0d11); color: #e7eaf0; overflow: hidden; }
+    .code-fold { border: 1px solid var(--border); border-radius: 11px; background: var(--code-bg); color: var(--code-fg); overflow: hidden; }
     .code-fold + .code-fold { margin-top: 12px; }
-    .code-fold summary { cursor: pointer; padding: 10px 13px; background: #181d27; color: #c8d2e4; font-size: 12px; font-weight: 650; }
+    .code-fold summary { cursor: pointer; padding: 10px 13px; background: var(--code-header-bg); color: var(--code-header-fg); font-size: 12px; font-weight: 650; }
     .code-scroll { max-height: min(62vh, 680px); overflow: auto; padding: 10px 0; }
     .code-line { display: grid; grid-template-columns: 48px minmax(max-content, 1fr); min-height: 20px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.55; }
-    .line-number { position: sticky; left: 0; padding: 0 10px; color: #667085; background: #111827; text-align: right; user-select: none; }
+    .line-number { position: sticky; left: 0; padding: 0 10px; color: var(--code-gutter-fg); background: var(--code-gutter-bg); text-align: right; user-select: none; }
     .code-line code { padding: 0 14px 0 2px; color: inherit; white-space: pre; overflow-wrap: normal; }
     .version-stack { display: grid; gap: 14px; }
     .version-card { position: relative; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); padding: 17px; }
@@ -403,7 +480,7 @@
       function readUrlState() {
         const params = new URLSearchParams(location.search);
         const rawView = params.get("view");
-        state.view = rawView === "graph" ? "overview" : ["overview", "brain", "artifacts", "versions", "timeline", "events"].includes(rawView) ? rawView : "overview";
+        state.view = ALL_VIEWS.includes(rawView) ? rawView : "workbench";
         state.taskId = params.get("task");
         state.selectedRole = params.get("role");
         state.artifactPath = params.get("artifact");
@@ -446,7 +523,10 @@
         return payload.summary || payload.reason || payload.title || payload.path || payload.check || `${event.subject.kind}: ${event.subject.id}`;
       }
 
-      const NAV_VIEWS = [["overview", "需求导航"], ["artifacts", "产物"], ["versions", "版本规划"], ["timeline", "技术记录"], ["events", "事件明细"]];
+      const ALL_VIEWS = ["workbench", "projects", "inbox", "settings", "overview", "workflow", "versions", "artifacts", "agents", "timeline", "events", "runs"];
+      const GLOBAL_VIEWS = [["workbench", "工作台"], ["projects", "项目"], ["inbox", "待处理"], ["settings", "设置"]];
+      const PROJECT_VIEWS = [["overview", "概览"], ["workflow", "工作流"], ["versions", "版本"], ["artifacts", "产物"]];
+      const DIAG_VIEWS = [["agents", "Agent 接入"], ["timeline", "技术记录"], ["events", "事件日志"], ["runs", "原始运行"]];
 
       function renderNavTree() {
         navTree.replaceChildren();
@@ -454,11 +534,22 @@
         const validCount = projects.filter(item => item.validation === "valid").length;
         portfolioSummary.textContent = `${validCount}/${projects.length} 个项目可用`;
 
+        const global = el("div", "nav-views");
+        GLOBAL_VIEWS.forEach(([value, label]) => {
+          const item = el("button", "nav-view");
+          item.type = "button";
+          item.setAttribute("aria-current", String(!state.project && state.view === value));
+          item.append(el("span", "", label));
+          item.addEventListener("click", () => { state.view = value; selectProject(null); });
+          global.append(item);
+        });
+        navTree.append(global);
+
         const home = el("button", "nav-home");
         home.type = "button";
         home.setAttribute("aria-current", String(!state.project));
         home.append(el("span", "", "← 所有项目"), el("span", "nav-count", `${projects.length} 个登记`));
-        home.addEventListener("click", () => { state.view = "overview"; selectProject(null); });
+        home.addEventListener("click", () => { state.view = "workbench"; selectProject(null); });
         navTree.append(home);
 
         projects.forEach(project => {
@@ -480,7 +571,7 @@
 
           if (!expanded || project.validation !== "valid") return;
           const views = el("div", "nav-views");
-          NAV_VIEWS.forEach(([value, label]) => {
+          PROJECT_VIEWS.forEach(([value, label]) => {
             const item = el("button", "nav-view");
             item.type = "button";
             item.setAttribute("aria-current", String(state.view === value));
@@ -491,6 +582,20 @@
             views.append(item);
           });
           navTree.append(views);
+
+          const more = el("details", "nav-more");
+          more.append(el("summary", "", "更多 · 诊断"));
+          const diag = el("div", "nav-views");
+          DIAG_VIEWS.forEach(([value, label]) => {
+            const item = el("button", "nav-view");
+            item.type = "button";
+            item.setAttribute("aria-current", String(state.view === value));
+            item.append(el("span", "", label));
+            item.addEventListener("click", () => { state.view = value; writeUrlState(); render(); });
+            diag.append(item);
+          });
+          more.append(diag);
+          navTree.append(more);
         });
       }
 
@@ -539,9 +644,9 @@
         titleWrap.append(el("div", "eyebrow", "本机记忆服务"), el("h1", "", "Brain 工作台"));
         top.append(titleWrap, el("div", "freshness", health.generated_at || "尚未读取"));
         content.append(top);
-        const back = el("button", "service-action", "← 返回项目总览");
+        const back = el("button", "service-action", "← 返回工作台");
         back.type = "button";
-        back.addEventListener("click", () => { state.view = "overview"; writeUrlState(); render(); });
+        back.addEventListener("click", () => { state.view = "workbench"; selectProject(null); render(); });
         content.append(back);
         content.append(el("p", "section-help", "本机服务自动记录可观察的项目事实；Hook 只负责采集事件，Prompt 只辅助识别含义，关闭会话不是写入前提。跨项目偏好和 Profile 版本变化才需要你确认。"));
         if (state.notice) content.append(el("p", "warning-line", state.notice));
@@ -708,46 +813,7 @@
         content.append(grid);
       }
 
-      function renderPortfolio() {
-        content.replaceChildren();
-        const projects = state.portfolio?.projects || [];
-        const summary = state.portfolio?.summary || {};
-        const top = el("div", "topline");
-        const titleWrap = el("div", "");
-        titleWrap.append(el("div", "eyebrow", "所有已注入 Harness 的项目"));
-        titleWrap.append(el("h1", "", "项目总览"));
-        top.append(titleWrap, el("div", "freshness", state.portfolio?.generated_at || "尚未同步"));
-        content.append(top);
-        if (state.notice) content.append(el("p", "warning-line", state.notice));
-        const metrics = el("div", "metrics");
-        metrics.append(
-          metric("有效项目", `${summary.project_valid ?? projects.filter(item => item.validation === "valid").length}/${summary.project_total ?? projects.length}`),
-          metric("需求进度", `${summary.task_completed || 0}/${summary.task_total || 0}`),
-          metric("阻塞", summary.active_blocks || 0),
-          metric("待验证", summary.verification_pending || 0)
-        );
-        content.append(metrics);
-        const brainHealth = state.brainHealth || {};
-        const brainSection = el("section", "section-card portfolio-service");
-        const brainBody = el("div", "");
-        brainBody.append(el("h2", "", "Brain 接入状态"));
-        brainBody.append(el("p", "section-help", "Brain 是项目总览的记忆服务：本机服务自动记录可观察的项目事实；只有跨项目偏好与 Profile 版本变化等待你确认。"));
-        const serviceStatus = el("div", "service-status");
-        const localStatus = brainHealth.local_write?.status || "unavailable";
-        const remoteStatus = brainHealth.remote_sync?.status || "unavailable";
-        const localPill = el("span", "service-pill", `本地写入 · ${statusLabel(localStatus)}`);
-        localPill.dataset.status = localStatus;
-        const pendingSync = brainHealth.remote_sync?.pending_local_records || 0;
-        const remotePill = el("span", "service-pill", `${pendingSync} 条项目记录待同步 · ${statusLabel(remoteStatus)}`);
-        remotePill.dataset.status = remoteStatus;
-        const pendingApproval = brainHealth.approval_inbox?.pending || 0;
-        serviceStatus.append(localPill, remotePill, el("span", "service-pill", `${pendingApproval} 条全局/Profile 待审批`));
-        brainBody.append(serviceStatus);
-        const brainButton = el("button", "service-action", "查看记忆与审批");
-        brainButton.type = "button";
-        brainButton.addEventListener("click", () => { state.project = null; state.view = "brain"; writeUrlState(); render(); });
-        brainSection.append(brainBody, brainButton);
-        content.append(brainSection);
+      function renderAgents(container) {
         const agentSection = el("section", "section-card agent-section");
         agentSection.append(el("h2", "", "Code Agent 接入状态"));
         agentSection.append(el("p", "section-help", "五层状态分开验证；装好规则或 Hook 不等于当前会话已经加载。"));
@@ -769,37 +835,212 @@
           });
           card.append(layers);
           const evidence = agent.evidence || {};
-          const projects = (evidence.projects || []).join("、");
-          card.append(el("div", "agent-evidence", evidence.event_count ? `${evidence.event_count} 条回写证据${projects ? ` · ${projects}` : ""}` : "尚无真实会话证据"));
+          const evidenceProjects = (evidence.projects || []).join("、");
+          card.append(el("div", "agent-evidence", evidence.event_count ? `${evidence.event_count} 条回写证据${evidenceProjects ? ` · ${evidenceProjects}` : ""}` : "尚无真实会话证据"));
           agentGrid.append(card);
         });
         if (!agentGrid.childElementCount) agentGrid.append(el("div", "empty", "尚未取得 Agent 检测结果。"));
         agentSection.append(agentGrid);
-        content.append(agentSection);
-        const grid = el("div", "project-grid");
-        projects.forEach(project => {
-          const card = el("button", "project-card");
-          card.type = "button";
-          card.dataset.validation = project.validation;
-          card.append(el("div", "run-name", project.name));
-          if (project.validation === "valid") {
-            card.append(el("div", "eyebrow", `${project.stage} · ${roleLabel(project.owner_role)}`));
-            const summaryLine = project.summary || {};
-            card.append(el("div", "event-summary", `需求 ${summaryLine.task_completed || 0}/${summaryLine.task_total || 0} · 阻塞 ${summaryLine.active_blocks || 0} · 待验证 ${summaryLine.verification_pending || 0}`));
-            if (project.recent_work) {
-              card.append(el("div", "event-summary", `最近：${roleLabel(project.recent_work.role)} · ${project.recent_work.summary || project.recent_work.objective}`));
-            } else {
-              card.append(el("div", "event-summary", "尚无角色活动"));
-            }
-          } else {
-            card.append(el("div", "event-summary error", project.reason || project.validation));
-          }
-          card.append(el("div", "project-path", project.path));
-          card.addEventListener("click", () => selectProject(project.project_id));
-          grid.append(card);
+        container.append(agentSection);
+      }
+
+      function renderRuns(container) {
+        const runs = state.index?.runs || [];
+        const section = el("section", "section-card");
+        section.append(el("h2", "", "原始运行"));
+        section.append(el("p", "section-help", "每次观察运行对应一组快照与事件；选择运行回到该时间点。"));
+        if (!runs.length) {
+          section.append(el("div", "empty", "这个项目还没有原始运行记录。"));
+          container.append(section);
+          return;
+        }
+        const list = el("div", "runs-list");
+        runs.forEach(run => {
+          const button = el("button", "runs-row");
+          button.type = "button";
+          button.dataset.current = String(state.run?.run_id === run.run_id);
+          const head = el("div", "runs-row-head");
+          head.append(el("span", "", run.name || run.run_id), el("span", "muted", run.status || "observing"));
+          button.append(head);
+          const meta = el("div", "runs-row-meta");
+          meta.append(el("span", "muted", run.run_id));
+          if (run.updated_at) meta.append(el("span", "muted", new Date(run.updated_at).toLocaleString()));
+          if (run.last_sequence != null) meta.append(el("span", "muted", `seq ${run.last_sequence}`));
+          button.append(meta);
+          button.addEventListener("click", () => selectRun(run.run_id));
+          list.append(button);
         });
-        if (!projects.length) grid.append(el("div", "empty", "还没有注册项目。请先在项目目录运行 harness init。"));
-        content.append(grid);
+        section.append(list);
+        container.append(section);
+      }
+
+      function renderInbox() {
+        content.replaceChildren();
+        const projects = state.portfolio?.projects || [];
+        const brainHealth = state.brainHealth || {};
+        const pendingApproval = brainHealth.approval_inbox?.pending || 0;
+        const pendingSync = brainHealth.remote_sync?.pending_local_records || 0;
+        const top = el("div", "topline");
+        const titleWrap = el("div", "");
+        titleWrap.append(el("div", "eyebrow", "跨项目待处理事项"));
+        titleWrap.append(el("h1", "", "待处理"));
+        top.append(titleWrap, el("div", "freshness", state.portfolio?.generated_at || "尚未同步"));
+        content.append(top);
+        if (state.notice) content.append(el("p", "warning-line", state.notice));
+
+        const blocksSection = el("section", "section-card");
+        blocksSection.append(el("h2", "", "阻塞"));
+        const blocksList = el("div", "attention-list");
+        projects.forEach(project => {
+          if (project.summary?.active_blocks > 0) blocksList.append(el("div", "attention-item error", `${project.name} · ${project.summary.active_blocks} 项阻塞`));
+        });
+        if (!blocksList.childElementCount) blocksList.append(el("div", "muted", "没有阻塞。"));
+        blocksSection.append(blocksList); content.append(blocksSection);
+
+        const verifySection = el("section", "section-card");
+        verifySection.append(el("h2", "", "待验证"));
+        const verifyList = el("div", "attention-list");
+        projects.forEach(project => {
+          if (project.summary?.verification_pending > 0) verifyList.append(el("div", "attention-item", `${project.name} · ${project.summary.verification_pending} 项待验证`));
+        });
+        if (!verifyList.childElementCount) verifyList.append(el("div", "muted", "没有待验证项。"));
+        verifySection.append(verifyList); content.append(verifySection);
+
+        const memorySection = el("section", "section-card");
+        memorySection.append(el("h2", "", "记忆服务待处理"));
+        const memoryList = el("div", "attention-list");
+        if (pendingApproval) memoryList.append(el("div", "attention-item", `${pendingApproval} 条全局/Profile 待审批`));
+        if (pendingSync) memoryList.append(el("div", "attention-item", `${pendingSync} 条项目记录待同步`));
+        if (!memoryList.childElementCount) memoryList.append(el("div", "muted", "记忆服务无需处理。"));
+        memorySection.append(memoryList); content.append(memorySection);
+
+        const settingsButton = el("button", "service-action", "前往记忆服务");
+        settingsButton.type = "button";
+        settingsButton.addEventListener("click", () => { state.view = "settings"; writeUrlState(); render(); });
+        content.append(settingsButton);
+      }
+
+      function renderSettings() {
+        renderBrain();
+      }
+
+      function renderPortfolio() {
+        content.replaceChildren();
+        const projects = state.portfolio?.projects || [];
+        const summary = state.portfolio?.summary || {};
+        const validProjects = projects.filter(item => item.validation === "valid");
+        const brainHealth = state.brainHealth || {};
+        const localStatus = brainHealth.local_write?.status || "unavailable";
+        const pendingSync = brainHealth.remote_sync?.pending_local_records || 0;
+        const pendingApproval = brainHealth.approval_inbox?.pending || 0;
+        const pendingBlocks = summary.active_blocks || 0;
+        const pendingVerify = validProjects.reduce((sum, project) => sum + (project.summary?.verification_pending || 0), 0);
+        const inboxTotal = pendingBlocks + pendingVerify + pendingApproval + pendingSync;
+
+        const top = el("div", "topline");
+        const titleWrap = el("div", "");
+        titleWrap.append(el("div", "eyebrow", "个人工作指挥台"));
+        titleWrap.append(el("h1", "", "工作台"));
+        top.append(titleWrap, el("div", "freshness", state.portfolio?.generated_at || "尚未同步"));
+        content.append(top);
+        if (state.notice) content.append(el("p", "warning-line", state.notice));
+
+        const inboxCard = el("section", "section-card inbox-summary workbench-card");
+        const inboxHead = el("div", "inbox-head");
+        inboxHead.append(el("h2", "", "待你处理"));
+        const inboxButton = el("button", "service-action", "查看全部待处理");
+        inboxButton.type = "button";
+        inboxButton.addEventListener("click", () => { state.view = "inbox"; writeUrlState(); render(); });
+        inboxHead.append(inboxButton);
+        inboxCard.append(inboxHead);
+        if (!inboxTotal) {
+          inboxCard.append(el("p", "muted", "当前没有需要你处理的事项。"));
+        } else {
+          const items = el("div", "inbox-items");
+          if (pendingBlocks) items.append(el("span", "inbox-item error", `${pendingBlocks} 项阻塞`));
+          if (pendingVerify) items.append(el("span", "inbox-item", `${pendingVerify} 项待验证`));
+          if (pendingApproval) items.append(el("span", "inbox-item", `${pendingApproval} 条全局/Profile 待审批`));
+          if (pendingSync) items.append(el("span", "inbox-item", `${pendingSync} 条项目记录待同步`));
+          inboxCard.append(items);
+        }
+        content.append(inboxCard);
+
+        const tableCard = el("section", "section-card workbench-card");
+        tableCard.append(el("h2", "", "正在推进项目"));
+        if (!validProjects.length) {
+          tableCard.append(el("div", "empty", "还没有可监控的项目。请先在项目目录运行 harness init。"));
+        } else {
+          const wrap = el("div", "table-wrap");
+          const table = el("table", "project-table");
+          table.append(el("caption", "sr-only", "正在推进的项目"));
+          const head = el("thead", "");
+          const headRow = el("tr", "");
+          ["项目", "阶段", "负责人", "下一步", "进度", "异常"].forEach(label => headRow.append(el("th", "", label)));
+          head.append(headRow); table.append(head);
+          const body = el("tbody", "");
+          validProjects.forEach(project => {
+            const row = el("tr", "");
+            const nameCell = el("td", "");
+            const link = el("button", "project-link");
+            link.type = "button";
+            link.append(el("span", "", project.name));
+            link.addEventListener("click", () => selectProject(project.project_id));
+            nameCell.append(link);
+            row.append(nameCell);
+            row.append(el("td", "", project.stage));
+            row.append(el("td", "", roleLabel(project.owner_role)));
+            const next = project.recent_work;
+            row.append(el("td", "muted", next ? `${roleLabel(next.role)} · ${next.summary || next.objective || "—"}` : "—"));
+            const projectSummary = project.summary || {};
+            row.append(el("td", "", `${projectSummary.task_completed || 0}/${projectSummary.task_total || 0}`));
+            const blockCount = projectSummary.active_blocks || 0;
+            row.append(el("td", blockCount ? "error" : "", blockCount ? `${blockCount} 阻塞` : "无"));
+            body.append(row);
+          });
+          table.append(body); wrap.append(table); tableCard.append(wrap);
+        }
+        content.append(tableCard);
+
+        const deliveryCard = el("section", "section-card workbench-card");
+        deliveryCard.append(el("h2", "", "最近交付"));
+        const deliveries = validProjects
+          .filter(project => project.recent_work)
+          .sort((left, right) => (right.recent_work.derived_from_sequence || 0) - (left.recent_work.derived_from_sequence || 0))
+          .slice(0, 5);
+        if (!deliveries.length) {
+          deliveryCard.append(el("div", "muted", "角色开始回写工作后，最近交付会出现在这里。"));
+        } else {
+          const deliveryList = el("div", "delivery-list");
+          deliveries.forEach(project => {
+            const work = project.recent_work;
+            const item = el("div", "delivery-item");
+            item.append(el("span", "delivery-role", roleLabel(work.role)));
+            item.append(el("span", "delivery-summary", work.summary || work.objective || "已回写工作"));
+            item.append(el("span", "muted", project.name));
+            if (project.updated_at) item.append(el("span", "muted", new Date(project.updated_at).toLocaleString()));
+            deliveryList.append(item);
+          });
+          deliveryCard.append(deliveryList);
+        }
+        content.append(deliveryCard);
+
+        const systemCard = el("section", "section-card system-status workbench-card");
+        systemCard.append(el("h2", "", "系统状态"));
+        const brainRow = el("div", "system-row");
+        brainRow.append(el("span", "system-label", "Brain 接入状态"));
+        brainRow.append(el("span", "muted", `本地写入 ${statusLabel(localStatus)} · ${pendingSync} 条待同步 · ${pendingApproval} 条待审批`));
+        const brainButton = el("button", "service-action", "查看记忆与审批");
+        brainButton.type = "button";
+        brainButton.addEventListener("click", () => { state.project = null; state.view = "settings"; writeUrlState(); render(); });
+        brainRow.append(brainButton);
+        systemCard.append(brainRow);
+        const agents = state.agents?.agents || [];
+        const loadedAgents = agents.filter(agent => agent.layers?.loaded?.status === "verified").length;
+        const agentRow = el("div", "system-row");
+        agentRow.append(el("span", "system-label", "Agent 接入"));
+        agentRow.append(el("span", "muted", `${agents.length} 个 Agent · ${loadedAgents} 个已加载验证 · 进入项目查看五层诊断`));
+        systemCard.append(agentRow);
+        content.append(systemCard);
       }
 
       function renderHeader(root) {
@@ -944,27 +1185,42 @@
         const version = currentVersion();
         const versionRequirements = version?.requirements || [];
         const completed = versionRequirements.filter(item => item.status === "completed").length;
-        const allDelivered = Boolean(versionRequirements.length) && completed === versionRequirements.length;
+        const transition = organization.current_transition;
+        const currentRole = organization.current_role;
+        const blockCount = activeBlocksFor().length;
+
+        const questionCard = el("section", "section-card six-questions");
+        questionCard.append(el("h2", "", "版本概览"));
+        const questionGrid = el("div", "question-grid");
+        const nextStep = transition
+          ? `${transition.kind === "handoff" ? "等待" : "建议"} ${roleLabel(transition.to_role)} 接手`
+          : (currentRole ? "由当前负责人推进" : "等待 PM 规划");
+        [
+          ["当前版本", version ? `v${version.version}` : "尚未规划"],
+          ["版本目标", version?.goal || "尚未建立版本计划"],
+          ["完成度", versionRequirements.length ? `${completed}/${versionRequirements.length}` : "—"],
+          ["当前负责人", currentRole ? roleLabel(currentRole) : "未分配"],
+          ["下一步", nextStep],
+          ["阻塞", blockCount ? `${blockCount} 项` : "无"]
+        ].forEach(([label, value]) => {
+          const item = el("div", "question-item");
+          item.append(el("span", "question-label", label), el("span", "question-value", value));
+          questionGrid.append(item);
+        });
+        questionCard.append(questionGrid);
+        root.append(questionCard);
 
         const goal = el("section", "goal-card");
         goal.append(el("div", "goal-label", "项目目标"));
         goal.append(el("p", "goal-text", project.goal || "PM 尚未建立稳定项目目标。"));
         goal.append(el("div", "project-goal-source", project.source ? `长期目标来自 ${project.source}` : "请由 PM 在 docs/PROJECT.md 中建立长期目标。"));
-        const versionFocus = el("div", "version-focus");
-        const versionCopy = el("div", "");
-        versionCopy.append(el("div", "version-name", version ? `当前版本 · v${version.version}` : "当前版本 · 尚未规划"));
-        versionCopy.append(el("p", "version-goal", version?.goal || "PM 尚未为这个项目建立版本计划。"));
-        const versionProgress = el("div", "version-progress");
-        versionProgress.append(el("strong", "", version ? `${completed}/${versionRequirements.length}` : "—"));
-        versionProgress.append(el("span", "", allDelivered ? "本版本已交付，等待 PM 定义下一版本" : version ? "已确认进入本版本" : "等待 PM 规划"));
-        versionFocus.append(versionCopy, versionProgress); goal.append(versionFocus); root.append(goal);
+        root.append(goal);
 
         const office = el("section", "section-card office-shell");
         const officeHead = el("div", "office-head");
         const officeCopy = el("div", "");
         officeCopy.append(el("h2", "", "角色办公室"), el("p", "section-help", "点击角色查看他负责的需求、执行详情和交付物。"));
         officeHead.append(officeCopy);
-        const transition = organization.current_transition;
         if (transition) {
           const current = el("div", "flow-line");
           current.dataset.kind = transition.kind;
@@ -985,24 +1241,26 @@
         }
         office.append(officeHead);
 
-        const scroll = el("div", "office-scroll");
-        const roleGrid = el("div", "office-grid");
+        const roleList = el("div", "office-roles");
         (organization.roles || []).forEach(role => {
-          const button = el("button", "office-role");
+          const button = el("button", "office-role-row");
           button.type = "button";
           button.dataset.status = role.status;
-          if (transition?.from_role === role.role_id) button.dataset.flow = "source";
-          if (transition?.to_role === role.role_id) button.dataset.flow = "target";
+          if (role.role_id === currentRole) button.dataset.current = "true";
           button.setAttribute("aria-pressed", String(state.selectedRole === role.role_id));
           button.setAttribute("aria-label", `${role.label}，${officeStatusLabel(role.status)}`);
-          const top = el("span", "role-top");
-          top.append(el("span", "role-avatar", roleAvatar(role.role_id)), el("span", "role-light"));
-          button.append(top, el("span", "role-name", role.label), el("span", "role-state", officeStatusLabel(role.status)));
+          button.append(
+            el("span", "role-avatar", roleAvatar(role.role_id)),
+            el("span", "role-light"),
+            el("span", "role-name", role.label),
+            el("span", "role-state", officeStatusLabel(role.status))
+          );
           if (role.latest_summary) button.append(el("span", "role-summary", role.latest_summary));
-          button.addEventListener("click", () => { state.selectedRole = role.role_id; writeUrlState(); render(); });
-          roleGrid.append(button);
+          button.addEventListener("click", () => { state.selectedRole = state.selectedRole === role.role_id ? null : role.role_id; writeUrlState(); render(); });
+          roleList.append(button);
         });
-        scroll.append(roleGrid); office.append(scroll);
+        office.append(roleList);
+
         const trail = el("div", "transition-trail");
         (organization.transitions || []).slice(-5).forEach(item => {
           const pill = el("span", "transition-pill", `${roleLabel(item.from_role)} → ${roleLabel(item.to_role)} · ${item.kind === "handoff" ? "已交接" : "建议"}`);
@@ -1010,13 +1268,8 @@
           trail.append(pill);
         });
         if (!trail.childElementCount) trail.append(el("span", "muted", "角色开始工作后，流转会出现在这里。"));
-        office.append(trail); root.append(office);
-
-        const selectedRole = (organization.roles || []).find(item => item.role_id === state.selectedRole)
-          || (organization.roles || []).find(item => item.role_id === organization.current_role)
-          || organization.roles?.[0];
-        const detailGrid = el("div", "role-detail-grid");
-        if (selectedRole) renderRoleDetail(detailGrid, selectedRole);
+        office.append(trail);
+        root.append(office);
 
         const attention = el("section", "section-card");
         attention.append(el("h2", "", "需要你处理"));
@@ -1026,7 +1279,22 @@
           attentionList.append(el("div", "attention-item", item.summary));
         });
         if (!attentionList.childElementCount) attentionList.append(el("div", "muted", "目前没有需要你处理的事项。"));
-        attention.append(attentionList); detailGrid.append(attention); root.append(detailGrid);
+        attention.append(attentionList);
+        root.append(attention);
+
+        const selectedRole = (organization.roles || []).find(item => item.role_id === state.selectedRole);
+        if (selectedRole) {
+          const backdrop = el("div", "role-drawer-backdrop");
+          backdrop.addEventListener("click", () => { state.selectedRole = null; writeUrlState(); render(); });
+          const drawer = el("aside", "role-drawer");
+          drawer.setAttribute("aria-label", "角色详情");
+          const close = el("button", "role-drawer-close", "关闭");
+          close.type = "button";
+          close.addEventListener("click", () => { state.selectedRole = null; writeUrlState(); render(); });
+          drawer.append(close);
+          renderRoleDetail(drawer, selectedRole);
+          root.append(backdrop, drawer);
+        }
       }
 
       function resolveArtifactLink(documentPath, href) {
@@ -1426,73 +1694,6 @@
         root.append(main);
       }
 
-      function renderGraph(panel) {
-        const tasks = Object.values(state.snapshot.tasks || {}).filter(task => task.status !== "abandoned");
-        const sessions = Object.values(state.snapshot.agent_sessions || {});
-        const commands = Object.values(state.snapshot.harness_commands || {}).slice(-12);
-        if (!tasks.length && !sessions.length && !commands.length) {
-          panel.append(el("div", "empty", "当前来源中没有发现任务。"));
-          return;
-        }
-        const roles = new Map();
-        tasks.forEach(task => {
-          const role = task.role || "Unknown";
-          if (!roles.has(role)) roles.set(role, []);
-          roles.get(role).push(task);
-        });
-        const lanes = el("div", "lanes");
-        if (sessions.length) {
-          const lane = el("section", "lane");
-          lane.append(el("div", "lane-label", "Agent"));
-          const sessionGrid = el("div", "lane-tasks");
-          sessions.forEach(session => {
-            const card = el("div", "task");
-            card.append(el("span", "task-title", `${session.platform} · ${session.session_ref.slice(0, 18)}`));
-            const status = el("span", "status", statusLabel(session.state));
-            status.dataset.status = session.state === "turn_started" ? "in_progress" : session.state === "session_ended" ? "completed" : "active";
-            card.append(status);
-            sessionGrid.append(card);
-          });
-          lane.append(sessionGrid);
-          lanes.append(lane);
-        }
-        if (commands.length) {
-          const lane = el("section", "lane");
-          lane.append(el("div", "lane-label", "Harness"));
-          const commandGrid = el("div", "lane-tasks");
-          commands.slice().reverse().forEach(command => {
-            const card = el("div", "task");
-            card.append(el("span", "task-title", `harness ${command.command}`));
-            const status = el("span", "status", statusLabel(command.state));
-            status.dataset.status = command.state === "started" ? "in_progress" : command.exit_code === 0 ? "completed" : "blocked";
-            card.append(status);
-            commandGrid.append(card);
-          });
-          lane.append(commandGrid);
-          lanes.append(lane);
-        }
-        roles.forEach((roleTasks, role) => {
-          const lane = el("section", "lane");
-          lane.append(el("div", "lane-label", role));
-          const taskGrid = el("div", "lane-tasks");
-          roleTasks.forEach(task => {
-            const button = el("button", "task");
-            button.type = "button";
-            button.setAttribute("aria-pressed", String(state.taskId === task.task_id));
-            button.setAttribute("aria-label", `${task.title}, ${role}, ${statusLabel(task.status)}, ${task.depends_on?.length || 0} 个依赖`);
-            button.append(el("span", "task-title", task.title));
-            const status = el("span", "status", statusLabel(task.status));
-            status.dataset.status = task.status;
-            button.append(status);
-            button.addEventListener("click", () => { state.taskId = task.task_id; writeUrlState(); render(); });
-            taskGrid.append(button);
-          });
-          lane.append(taskGrid);
-          lanes.append(lane);
-        });
-        panel.append(lanes);
-      }
-
       function renderTimeline(panel) {
         if (!state.events.length) {
           panel.append(el("div", "empty", "当前 run 没有事件。"));
@@ -1575,8 +1776,11 @@
 
       function render() {
         renderNavTree();
-        if (!state.project) {
-          if (state.view === "brain") renderBrain();
+        const isGlobalView = ["workbench", "projects", "inbox", "settings"].includes(state.view);
+        if (!state.project || isGlobalView) {
+          content.replaceChildren();
+          if (state.view === "settings") renderSettings();
+          else if (state.view === "inbox") renderInbox();
           else renderPortfolio();
           return;
         }
@@ -1597,6 +1801,10 @@
           renderOverview(content);
           return;
         }
+        if (state.view === "workflow") {
+          content.append(el("div", "empty", "工作流页将在后续阶段实现。"));
+          return;
+        }
         if (state.view === "artifacts") {
           renderArtifacts(content);
           return;
@@ -1610,7 +1818,8 @@
         panel.setAttribute("role", "tabpanel");
         if (state.view === "timeline") renderTimeline(panel);
         else if (state.view === "events") renderEvents(panel);
-        else renderGraph(panel);
+        else if (state.view === "agents") renderAgents(panel);
+        else if (state.view === "runs") renderRuns(panel);
         workspace.append(panel);
         renderDetail(workspace);
         content.append(workspace);
@@ -1632,8 +1841,8 @@
           state.taskId = snapshot.plan.current_task_id;
         }
         const officeRoles = state.workspace?.organization?.roles || [];
-        if (!officeRoles.some(item => item.role_id === state.selectedRole)) {
-          state.selectedRole = state.workspace?.organization?.current_role || officeRoles[0]?.role_id || null;
+        if (state.selectedRole && !officeRoles.some(item => item.role_id === state.selectedRole)) {
+          state.selectedRole = null;
         }
         writeUrlState();
         render();
@@ -1662,6 +1871,9 @@
           writeUrlState();
           render();
           return;
+        }
+        if (["workbench", "projects", "inbox", "settings"].includes(state.view)) {
+          state.view = "overview";
         }
         [state.index, state.workspace] = await Promise.all([
           fetchJson(`/api/projects/${encodeURIComponent(state.project.project_id)}/index.json`),

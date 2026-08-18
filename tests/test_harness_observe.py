@@ -1009,7 +1009,7 @@ class ObserveRuntimeTests(unittest.TestCase):
         self.assertIn("nav-tree", dashboard)
         self.assertIn("renderNavTree", dashboard)
         self.assertIn("所有项目", dashboard)
-        for label in ("需求导航", "产物", "版本规划", "技术记录", "事件明细"):
+        for label in ("工作台", "项目", "待处理", "设置", "概览", "工作流", "版本", "产物", "更多", "诊断", "Agent 接入", "技术记录", "事件日志", "原始运行"):
             self.assertIn(label, dashboard)
         for removed in ("进展记录", "run-list", "renderRunList", "run-button", "project-button", "renderTabs"):
             self.assertNotIn(removed, dashboard)
@@ -1251,7 +1251,7 @@ class ObserveRuntimeTests(unittest.TestCase):
     def test_phase6_dashboard_has_safe_artifact_reader_and_version_views(self) -> None:
         dashboard = DASHBOARD.read_text(encoding="utf-8")
 
-        for label in ("产物", "版本规划", "Markdown 阅读", "代码产物", "版本与 Git 关系", "版本需求"):
+        for label in ("产物", "版本", "Markdown 阅读", "代码产物", "版本与 Git 关系", "版本需求"):
             self.assertIn(label, dashboard)
         for label in ("工作区", "当前分支", "发布标签", "未分配分支"):
             self.assertIn(label, dashboard)
