@@ -142,7 +142,7 @@ CURRENT_STEP_RE = re.compile(
 )
 VERSION_HEADING_RE = re.compile(r"^##\s+v?([0-9]+(?:\.[0-9A-Za-z-]+)+)\s*$", re.MULTILINE)
 VERSION_FIELD_RE = re.compile(
-    r"^-\s+(Status|Branch|Tag|Goal|状态|分支|标签|目标)\s*:\s*(.+?)\s*$",
+    r"^-\s+(Status|Branch|Work Branches|Tag|Goal|状态|分支|工作分支|标签|目标)\s*:\s*(.+?)\s*$",
     re.MULTILINE | re.IGNORECASE,
 )
 VERSION_REQUIREMENT_RE = re.compile(r"^-\s+\[([ x~])\]\s+(?:`([^`]+)`\s+)?(.+?)\s*$", re.MULTILINE)
@@ -2334,6 +2334,45 @@ def run_git(project: Path, arguments: list[str], *, timeout: float = 2.0) -> sub
     )
 
 
+def _git_worktree_records(project: Path) -> list[dict[str, Any]]:
+    result = run_git(project, ["worktree", "list", "--porcelain"])
+    if result.returncode != 0:
+        return []
+    records: list[dict[str, Any]] = []
+    current: dict[str, Any] = {}
+    for line in [*result.stdout.splitlines(), ""]:
+        if not line:
+            if current.get("path"):
+                records.append(current)
+            current = {}
+            continue
+        key, _, value = line.partition(" ")
+        if key == "worktree":
+            current["path"] = value
+        elif key == "HEAD":
+            current["head_full"] = value
+            current["head"] = value[:7]
+        elif key == "branch":
+            current["branch"] = value.removeprefix("refs/heads/")
+        elif key == "detached":
+            current["detached"] = True
+        elif key in {"locked", "prunable"}:
+            current[key] = value or True
+    return records
+
+
+def _git_repository_identity(project: Path, worktrees: list[dict[str, Any]]) -> tuple[str, str | None]:
+    common_result = run_git(project, ["rev-parse", "--git-common-dir"])
+    if common_result.returncode != 0 or not common_result.stdout.strip():
+        canonical = project.resolve()
+    else:
+        common_value = Path(common_result.stdout.strip()).expanduser()
+        canonical = common_value.resolve() if common_value.is_absolute() else (project / common_value).resolve()
+    repository_id = f"repository-{hashlib.sha256(str(canonical).encode()).hexdigest()[:12]}"
+    repository_path = worktrees[0].get("path") if worktrees else None
+    return repository_id, repository_path
+
+
 def git_workspace_snapshot(project: Path) -> dict[str, Any]:
     try:
         inside = run_git(project, ["rev-parse", "--is-inside-work-tree"])
@@ -2342,9 +2381,40 @@ def git_workspace_snapshot(project: Path) -> dict[str, Any]:
     if inside.returncode != 0 or inside.stdout.strip() != "true":
         return {"available": False, "reason": "not-a-git-project", "branches": [], "tags": []}
 
+    project = project.resolve()
     branch = run_git(project, ["branch", "--show-current"]).stdout.strip() or None
     head_parts = run_git(project, ["show", "-s", "--format=%h%x1f%s", "HEAD"]).stdout.strip().split("\x1f", 1)
     status_lines = [line for line in run_git(project, ["status", "--porcelain=v1"]).stdout.splitlines() if line]
+    worktrees = _git_worktree_records(project)
+    for worktree in worktrees:
+        worktree_path = Path(str(worktree["path"])).resolve()
+        worktree["path"] = str(worktree_path)
+        worktree["current"] = worktree_path == project
+        worktree["primary"] = worktree is worktrees[0]
+        if not worktree_path.is_dir():
+            worktree.update({"available": False, "clean": None, "dirty_count": None})
+            continue
+        try:
+            worktree_status = [
+                line for line in run_git(worktree_path, ["status", "--porcelain=v1"]).stdout.splitlines() if line
+            ]
+            subject_result = run_git(worktree_path, ["show", "-s", "--format=%s", "HEAD"])
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            worktree.update({"available": False, "clean": None, "dirty_count": None})
+            continue
+        worktree.update(
+            {
+                "available": True,
+                "clean": not worktree_status,
+                "dirty_count": len(worktree_status),
+                "head_subject": subject_result.stdout.strip() if subject_result.returncode == 0 else None,
+            }
+        )
+    repository_id, repository_path = _git_repository_identity(project, worktrees)
+    checked_out_by_branch: dict[str, list[str]] = {}
+    for worktree in worktrees:
+        if worktree.get("branch"):
+            checked_out_by_branch.setdefault(worktree["branch"], []).append(worktree["path"])
     branches: list[dict[str, Any]] = []
     branch_output = run_git(
         project,
@@ -2367,17 +2437,21 @@ def git_workspace_snapshot(project: Path) -> dict[str, Any]:
                 "tracking": tracking or None,
                 "sha": sha,
                 "subject": subject,
+                "checked_out_in": checked_out_by_branch.get(name, []),
             }
         )
     tags = [line for line in run_git(project, ["tag", "--sort=-version:refname"]).stdout.splitlines() if line]
     return {
         "available": True,
+        "repository_id": repository_id,
+        "repository_path": repository_path,
         "current_branch": branch,
         "detached": branch is None,
         "head": head_parts[0] if head_parts else None,
         "head_subject": head_parts[1] if len(head_parts) > 1 else None,
         "clean": not status_lines,
         "dirty_count": len(status_lines),
+        "worktrees": worktrees,
         "branches": branches,
         "tags": tags,
     }
@@ -2388,6 +2462,7 @@ def parse_versions_markdown(value: str) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     field_names = {
         "status": "status", "状态": "status", "branch": "branch", "分支": "branch",
+        "work branches": "work_branches", "工作分支": "work_branches",
         "tag": "tag", "标签": "tag", "goal": "goal", "目标": "goal",
     }
     status_names = {
@@ -2403,7 +2478,12 @@ def parse_versions_markdown(value: str) -> list[dict[str, Any]]:
         for match in VERSION_FIELD_RE.finditer(section):
             key = field_names[match.group(1).lower()]
             field_value = match.group(2).strip()
-            item[key] = status_names.get(field_value.lower(), field_value) if key == "status" else field_value
+            if key == "status":
+                item[key] = status_names.get(field_value.lower(), field_value)
+            elif key == "work_branches":
+                item[key] = [part.strip() for part in re.split(r"[,，]", field_value) if part.strip()]
+            else:
+                item[key] = field_value
         requirements_section = section.split("### Requirements", 1)
         requirement_value = requirements_section[1] if len(requirements_section) == 2 else section
         for match in VERSION_REQUIREMENT_RE.finditer(requirement_value):
@@ -2432,17 +2512,32 @@ def version_plan_snapshot(project: Path, snapshot: dict[str, Any], git: dict[str
     source = project / "docs" / "VERSIONS.md"
     planned = parse_versions_markdown(source.read_text(encoding="utf-8")) if source.is_file() else []
     branch_names = {item.get("name") for item in git.get("branches", [])}
+    checked_out_branches = {item.get("branch") for item in git.get("worktrees", []) if item.get("branch")}
     tags = set(git.get("tags", []))
     referenced: set[str] = set()
     for version in planned:
+        version.setdefault("work_branches", [])
         version["branch_exists"] = bool(version.get("branch") and version["branch"] in branch_names)
+        version["work_branch_states"] = [
+            {
+                "name": branch_name,
+                "exists": branch_name in branch_names,
+                "checked_out": branch_name in checked_out_branches,
+            }
+            for branch_name in version["work_branches"]
+        ]
+        version["checked_out_work_branches"] = [
+            branch_name for branch_name in version["work_branches"] if branch_name in checked_out_branches
+        ]
         version["tag_exists"] = bool(version.get("tag") and version["tag"] in tags)
         version["is_current_branch"] = bool(version.get("branch") and version["branch"] == git.get("current_branch"))
+        version["is_current_work_branch"] = git.get("current_branch") in version["work_branches"]
         version["branch_mismatch"] = bool(
             version.get("status") == "in_progress"
             and version.get("branch")
             and git.get("current_branch")
             and version["branch"] != git["current_branch"]
+            and git["current_branch"] not in version["work_branches"]
         )
         for requirement in version["requirements"]:
             requirement_id = requirement.get("requirement_id")
@@ -3246,13 +3341,14 @@ def serve_runtime(
         def do_POST(self) -> None:  # noqa: N802
             parsed = urlparse(self.path)
             brain_candidate_action = re.fullmatch(
-                r"/api/brain/candidates/(memory_[a-f0-9]{20})/(approve|reject|retry)", parsed.path
+                r"/api/brain/candidates/(memory_[a-f0-9]{20})/(approve|reject|retry|update|merge|ignore-similar)", parsed.path
             )
             project_memory_action = re.fullmatch(
                 r"/api/brain/project-memory/(project_memory_[a-f0-9]{20})/(correct|undo|promote)", parsed.path
             )
+            project_memory_merge_action = parsed.path == "/api/brain/project-memory/merge"
             brain_sync_action = parsed.path == BRAIN_SYNC_PATH
-            if brain_candidate_action or project_memory_action or brain_sync_action:
+            if brain_candidate_action or project_memory_action or project_memory_merge_action or brain_sync_action:
                 supplied_action_token = self.headers.get("X-Harness-Action-Token", "")
                 if not supplied_action_token or not hmac.compare_digest(supplied_action_token, action_token):
                     self._send_bytes(401, "application/json", json_bytes({"error": "unauthorized-action"}))
@@ -3272,16 +3368,37 @@ def serve_runtime(
                             confirmed=body.get("confirmed") is True,
                             dry_run=body.get("dry_run") is True,
                         )
+                    elif project_memory_merge_action:
+                        memory_ids = body.get("memory_ids")
+                        if not isinstance(memory_ids, list) or not all(isinstance(value, str) for value in memory_ids):
+                            raise ValueError("memory_ids-must-be-string-list")
+                        result = brain.merge_project_memories(memory_ids, summary=str(body.get("summary") or ""))
                     elif brain_candidate_action:
                         identifier, action = brain_candidate_action.groups()
-                        if body.get("summary") is not None or body.get("layer") is not None:
-                            brain.update_candidate(identifier, summary=body.get("summary"), layer=body.get("layer"))
                         if action == "approve":
+                            if body.get("summary") is not None or body.get("layer") is not None or body.get("profile") is not None:
+                                brain.update_candidate(
+                                    identifier, summary=body.get("summary"), layer=body.get("layer"), profile=body.get("profile")
+                                )
                             result = brain.approve(identifier, yes=True, dry_run=False)
                         elif action == "reject":
                             result = brain.reject(identifier, reason=body.get("reason"))
-                        else:
+                        elif action == "retry":
                             result = brain.retry(identifier)
+                        elif action == "update":
+                            result = brain.update_candidate(
+                                identifier, summary=body.get("summary"), layer=body.get("layer"), profile=body.get("profile")
+                            )
+                        elif action == "merge":
+                            duplicate_ids = body.get("candidate_ids")
+                            if not isinstance(duplicate_ids, list) or not all(isinstance(value, str) for value in duplicate_ids):
+                                raise ValueError("candidate_ids-must-be-string-list")
+                            result = brain.merge_candidates(
+                                identifier, duplicate_ids, summary=body.get("summary"),
+                                layer=body.get("layer"), profile=body.get("profile"),
+                            )
+                        else:
+                            result = brain.ignore_similar_candidates(identifier)
                     else:
                         identifier, action = project_memory_action.groups()
                         if action == "correct":

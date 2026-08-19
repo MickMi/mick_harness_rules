@@ -1,4 +1,4 @@
-> 🧭 状态：进行中 | 进度 99/104 | 当前归属：Reviewer（v0.18.0 自动化优先与 Brain 信息精简已交付）| 最近卡点：无
+> 🧭 状态：发布候选已通过 | 进度 126/126 | 当前归属：Reviewer（v0.18 Release Gate）| 最近卡点：无
 
 # Plan: Company Runtime V0 → Portfolio V0.2
 
@@ -1324,3 +1324,242 @@ Planner 回复：采用建议方案；这修复的是本轮真实执行触发的
 - files: `scripts/harness-brain-boundary.py`, `web/observe-dashboard.html`, `docs/BRAIN-INTEGRATION.md`, `tests/test_harness_agents.py`, `tests/test_harness_observe.py`, `docs/VERSIONS.md`, `plan.md`, installed `~/.mick-harness` runtime files
 - verify: 新增契约先得到 1 failure / 1 error；实现后聚焦测试 2 tests / 0 failures、全量 89 tests / 0 failures，Python/JavaScript、`./generate.sh --check` 与 `git diff --check` 通过；6425 重启后 health=ok；真实浏览器确认总览分别显示项目记录待同步与全局/Profile 待审批，Brain 仓库只显示配置目标、生效状态和当前分支，空审批箱解释审批范围，页面日志 0 条
 - notes: 可确定的项目扫描、状态识别、去重、落盘、队列、重试、仓库核对和同步保护由常驻服务代码负责；Hook 只将不同 Agent 节点适配为结构化事件，Prompt 只用于摘要与跨项目语义判断。计划、版本与 Git 等可观察事实不因 Hook 或会话未关闭而停止沉淀；仅存在于对话中的语义事实仍需事件适配或后续服务端语义处理，远端推送和全局/Profile 发布保留用户控制。
+
+## v0.18.0 · 2026-08-18 · 工作台与项目概览设计修正
+
+### 用户目标
+
+保留 DS 分支已经建立的全局/项目导航结构，但重做工作台和项目概览的视觉层级与内容表达：用户进入页面后先看见待处理事项、当前推进项目、当前版本、负责人和下一步，而不是平均权重的卡片、后台表格或大段原始事件摘要。
+
+### 设计方向
+
+- 页面模式为 **Operate**：第一注意力是“现在该处理什么”，第二层是“哪些项目正在推进”，系统诊断退居背景。
+- 视觉气质采用安静、克制的个人工作指挥台；以排版、空间和对比建立层级，不靠渐变、卡片矩阵、过量胶囊或装饰动画。
+- 全局导航与项目列表分层：全局导航保持稳定，项目列表只承担切换，不重复展示首页已有的完整项目状态。
+- 用户语言优先：默认界面不展示内部 task/seq、原始事件类型或未经整理的英文/技术摘要；真实事实保持不变，技术细节可在诊断层查看。
+
+### 范围与禁止项
+
+- 只修改 `web/observe-dashboard.html`、`tests/test_harness_observe.py` 和本段 `plan.md`；不修改后端 API、事件投影、版本/产物/Brain 页面业务，不新增依赖。
+- 只在 `feat/design-refactor` 上开发并使用 `127.0.0.1:6246` 验收；不修改 main，不安装到 `~/.mick-harness`，不重启 6425 服务。
+- 工作台不得继续使用承载长段落的六列表格；项目概览不得把版本目标拆成同权重的六格卡片。
+- 不虚构项目优先级、角色状态或下一步；缺少可确定信息时显示简短空态，不从事件文本猜测。
+
+### 实施步骤
+
+- [x] 105. [修改] `tests/test_harness_observe.py` — 固定工作台首屏层级、精简项目行、项目概览主次关系、角色流转语义、窄屏与无障碍设计契约，并记录当前设计分支基线。
+- [x] 106. [修改] `web/observe-dashboard.html` — 重构工作台和项目概览的布局、排版、内容摘要、交互反馈与响应式状态；保留 DS 导航架构及既有数据来源。
+- [x] 107. [运行] 聚焦与全量验证，在 6246 完成工作台 → 项目概览 → 角色详情 → 返回/刷新真实路径，并检查桌面与窄屏截图；不部署 6425。
+
+### Interaction QA
+
+- 工作台：首屏按“待处理 → 推进项目 → 最近交付 → 系统状态”建立明确层级，项目行可进入真实项目，长摘要被压缩为可扫读下一步。
+- 项目概览：首屏同时可识别当前版本、完成度、负责人、下一步和阻塞；长期项目目标为辅助信息，角色流转只高亮真实来源与建议目标。
+- 状态往返：工作台进入项目、打开角色详情、关闭详情、返回工作台与刷新后 URL/选择保持正确。
+- 响应式：1440×900、1024 宽度和约 390 宽度均不出现关键操作溢出、六列硬挤或只能横向滚动才能理解的主内容。
+- 可访问性：交互项具备语义、可见焦点与键盘路径；状态不只依赖颜色，动画遵守 reduced-motion。
+
+### 完成判定
+
+- [x] 1440×900 首屏无需滚动即可看见主要待处理、至少三个推进项目及进入项目的动作。
+- [x] 用户可在项目概览五秒内指出当前版本、负责人、下一步和阻塞；页面不再出现六格同权重信息墙。
+- [x] 项目长摘要在默认列表中保持两行以内，完整内容进入详情或辅助文本，不破坏真实状态。
+- [x] 角色状态明确区分当前负责、等待接手、建议下一步、已交付和未参与，箭头起点/终点含义唯一。
+- [x] 聚焦测试、全量 unittest、HTML/JavaScript、`git diff --check` 均通过；6246 真实页面 console 无 error。
+
+### Step 105 设计契约基线 — 2026-08-18
+- files: `tests/test_harness_observe.py`, `plan.md`
+- verify: 原导航/角色投影聚焦测试 2 tests / 0 failures；新增工作台与项目概览设计契约按预期得到 1 failure，首个缺失标记为 `nav-section-label`
+- notes: 契约要求用可扫读项目行替代后台表格、用主版本叙事替代六格信息墙，同时固定两行摘要、窄屏和 reduced-motion 边界；本轮只证明旧布局尚未达标，尚未声明页面完成。
+
+### Step 106 页面实现 — 2026-08-18
+- files: `web/observe-dashboard.html`, `tests/test_harness_observe.py`, `plan.md`
+- verify: 新设计契约与原导航、角色工作、项目目标投影聚焦测试 4 tests / 0 failures；HTML 标准解析与 JavaScript 语法检查均通过；`git diff --check` 通过
+- notes: 工作台改为待处理优先带 + 可扫读项目行 + 次要交付/系统区；项目概览改为版本主叙事 + 负责人/下一步/阻塞命令区 + 辅助长期目标 + 明确语义的角色流转。全量测试首次在受限沙箱内得到 49 pass / 1 failure / 4 permission errors，其中 failure 为旧文案契约且已修正，4 个 error 均为测试无法绑定本地临时端口，需在允许本地端口的环境复跑。
+
+### Step 107 真实交互与回归验收 — 2026-08-18
+- files: `web/observe-dashboard.html`, `tests/test_harness_observe.py`, `plan.md`
+- verify: 全仓 90 tests / 0 failures；HTML、JavaScript、`./generate.sh --check`、`git diff --check` 均通过；6246 真实数据完成工作台 → 项目概览 → 设计角色详情 → 关闭 → 返回工作台 → 刷新，桌面 1440×900 与窄屏 390×844 截图通过，console 0 warning / 0 error
+- notes: 窄屏首次验收发现项目侧栏把主内容推离首屏，已改为全局导航横排、项目概览只聚焦当前项目；角色流转历史按来源/目标/类型去重，保留五条不同语义记录。当前修正版仅存在 `feat/design-refactor` 工作区，未安装到用户目录、未重启 6425、未修改 main。
+
+## v0.18.0 · 2026-08-18 · 工作台审批闭环与 Brain 精简
+
+### 用户裁决
+
+- 全局“项目”与“工作台”内容重复，移除“项目”；独立“待处理”也不再作为一级页面。
+- 项目阻塞与待验证状态合并进工作台项目行；Brain 待同步、全局偏好与 Profile 候选必须能从工作台或本地写入路径直接进入对应操作区。
+- Brain 仓库默认只展示配置仓库与生效状态；分支继续参与同步安全校验和最终确认，但不占用普通阅读层级。
+
+### 实施步骤
+
+- [x] 108. [修改] `tests/test_harness_observe.py` — 固定精简导航、项目行待处理、Brain 聚焦跳转、可操作写入路径和单行仓库契约，并记录旧页面预期失败。
+- [x] 109. [修改] `web/observe-dashboard.html` — 移除重复入口与独立待处理页，把项目事项归入项目行，为同步/审批/记忆活动提供直达操作，并压缩 Brain 仓库。
+- [x] 110. [运行] 聚焦与全量回归，在 6246 验证工作台项目事项 → Brain 同步确认、审批区、写入路径和返回工作台；不执行真实远端同步，不修改 main/6425。
+
+### 完成判定
+
+- [x] 一级导航只保留“工作台”和“设置”，旧 `view=projects|inbox` 自动回到工作台。
+- [x] 每个项目行显示自己的阻塞/待验证数量并可进入项目；跨项目的同步与审批项可直接跳到 Brain 对应操作区。
+- [x] Brain 顶部待同步、待审批和项目记忆指标可点击；本地写入路径提供与其真实权限一致的动作，不制造不可执行按钮。
+- [x] Brain 仓库压缩为一行，只显示配置仓库和生效状态；分支只在同步确认与安全诊断中出现。
+- [x] 6246 真实浏览器完成状态往返，console 0 error；全仓测试、HTML/JavaScript 与 diff 检查通过。
+
+### Step 108 交互契约基线 — 2026-08-18
+- files: `tests/test_harness_observe.py`, `plan.md`
+- verify: 新增导航与 Brain 操作闭环契约按预期得到 1 failure，首个缺口是旧导航仍包含 `[“projects”, “项目”]`
+- notes: 契约同时固定了项目行待验证/阻塞提示、Brain 区域直达、写入路径动作与单行仓库；本步只证明旧页面尚未闭环。
+
+### Step 109 页面闭环实现 — 2026-08-18
+- files: `web/observe-dashboard.html`, `plan.md`
+- verify: 新契约 1 test / 0 failures，HTML 标准解析与 JavaScript 语法检查通过；6246 真实页面只剩“工作台 / 设置”两个全局入口
+- notes: 项目阻塞/待验证已进入各自项目行；Brain 指标与写入路径直达项目记忆、审批或同步区；仓库收缩为“配置仓库 + 生效状态”单行，分支只留在同步二次确认中。
+
+### Step 110 全量与真实交互验收 — 2026-08-18
+- files: `web/observe-dashboard.html`, `tests/test_harness_observe.py`, `plan.md`
+- verify: 全仓 91 tests / 0 failures；HTML、JavaScript、`./generate.sh --check` 与 `git diff --check` 全部 exit 0；6246 真实页面 console 0 warning / 0 error
+- notes: 已验证旧 `view=projects` 回落工作台、项目行与失效项目诊断进入、项目记忆/审批/同步聚焦及刷新恢复、同步二次确认后取消和返回工作台；未点击“确认并同步”，未改动 main/6425。
+
+## v0.18.0 · 2026-08-18 · 单一服务下的多分支开发现场
+
+### 用户目标
+
+本机始终只有一个 Harness 后端服务和一个工作台。项目以 Git 仓库为身份；不同 worktree、分支与 Agent 开发现场只是同一项目下的子状态，不能要求用户为每条分支启动另一套服务，也不能把 worktree 误登记成多个项目。
+
+### 范围与禁止项
+
+- 本轮先交付可验证的 V0 投影：识别同仓库的全部 worktree、已检出分支和工作区状态，并允许版本同时声明“集成目标分支”和多个“工作分支”。
+- 保留现有 `project_id` 与历史运行数据的兼容性；新增仓库级身份，不在本轮迁移历史事件目录或合并多个已登记项目的数据。
+- 只修改 `scripts/harness-observe.py`、`tests/test_harness_observe.py`、`docs/VERSIONS.md`、`web/observe-dashboard.html` 和本段 `plan.md`；不新增依赖。
+- 只在 `feat/design-refactor` 与 6246 预览服务验收；不切换/删除真实分支，不修改 main，不安装到 `~/.mick-harness`，不重启 6425，不执行远端同步。
+- “已检出工作区”只表示 Git worktree 存在，不推断 Agent 正在运行；Agent 活跃度必须等待真实 session/heartbeat 证据。
+
+### 实施步骤
+
+- [x] 111. [修改] `tests/test_harness_observe.py` — 用临时 Git 仓库和多个 worktree 固定仓库身份、工作区状态、目标分支/工作分支关联与页面语义，先记录旧实现的预期失败。
+- [x] 112. [修改] `scripts/harness-observe.py` — 从 Git common dir 生成稳定仓库身份，读取 `git worktree list --porcelain`，投影每个工作区的分支、HEAD、脏状态，并解析版本的多个工作分支。
+- [x] 113. [修改] `docs/VERSIONS.md` — 为 v0.18.0 明确 `main` 是集成目标，`feat/v0.18-brain` 与 `feat/design-refactor` 是当前工作分支。
+- [x] 114. [修改] `web/observe-dashboard.html` — 在同一项目的 Git 图中展示多个已检出工作区，并区分集成目标、工作分支和普通分支；不把它们渲染成多个项目。
+- [x] 115. [运行] 聚焦与全量回归，使用临时多 worktree 仓库验证后端投影，并在 6246 验证真实项目页面和刷新路径。
+
+### Interaction QA
+
+- 用户在一个项目页面内看到仓库身份、全部已检出工作区、每个工作区所在分支和待提交状态。
+- 同一个版本可同时关联一个集成目标分支和多个工作分支；`main` 不再被误解为“当前所有开发都发生在这里”。
+- 没有 worktree 的本地分支仍可见，但明确显示为“未检出”；工作区存在不等于 Agent 活跃。
+- 从工作台进入项目、切到版本规划并刷新后，项目与视图选择保持正确；console 无 error。
+
+### 完成判定
+
+- [x] 从同一仓库的两个 worktree 调用快照时得到相同 `repository_id`，且两处工作区只归属于同一仓库。
+- [x] v0.18.0 同时关联 `main` 集成目标与两条工作分支，当前 design 工作区不再触发错误的分支冲突提示。
+- [x] 页面将 worktree 称为“已检出工作区”，不虚构“活跃 Agent”；每个工作区只显示一次自己的脏状态。
+- [x] 聚焦测试、全量 unittest、HTML/JavaScript、`./generate.sh --check` 与 `git diff --check` 通过；6246 真实页面 console 无 error。
+
+### Step 111 多工作区契约基线 — 2026-08-18
+- files: `tests/test_harness_observe.py`, `plan.md`
+- verify: 新增 2 项聚焦契约得到预期的 1 error / 1 failure；后端首个缺口为快照没有 `repository_id`，页面首个缺口为没有“同一仓库”语义
+- notes: 测试只创建并回收临时 Git 仓库和 worktree，不切换或修改真实项目分支；契约明确“已检出工作区”不等于“活跃 Agent”。
+
+### Step 112–113 仓库投影与版本归属 — 2026-08-18
+- files: `scripts/harness-observe.py`, `docs/VERSIONS.md`, `plan.md`
+- verify: 临时双 worktree 后端契约与原 Git/版本契约共 3 tests / 0 failures；两个入口产生相同 `repository_id`，design 工作区识别 1 处未提交状态，v0.18.0 当前分支不再被误报冲突
+- notes: `main` 继续作为集成目标，`feat/v0.18-brain` 与 `feat/design-refactor` 显式登记为工作分支；后端只确认 worktree 已检出，不推断 Agent 在线。
+
+### Step 114–115 页面与真实路径验收 — 2026-08-18
+- files: `web/observe-dashboard.html`, `tests/test_harness_observe.py`, `plan.md`
+- verify: 全仓 93 tests / 0 failures；Python、HTML、JavaScript、`./generate.sh --check` 与 `git diff --check` 全部 exit 0；6246 刷新后保留版本 URL，识别 1 个仓库、1 个已检出工作区、2 条工作分支、1 个集成目标，旧分支冲突提示为 false，console 0 warning / 0 error
+- notes: 真实仓库当前只有 `feat/design-refactor` 一个 worktree，因此 `feat/v0.18-brain` 正确显示为“未检出”；临时双 worktree 测试已证明增加第二个 worktree 后会自动归入同一仓库和工作台。当前实现未迁移旧 `project_id` 或聚合多个已登记 worktree 的历史事件，这一兼容迁移留给后续阶段。
+
+## v0.18.0 · 2026-08-18 · Brain 连接与同步透明化
+
+### 用户目标
+
+把 Brain 从一个过重的独立工作台收敛为“设置 → 记忆与同步”。用户在操作前必须看懂本地记录在哪里、远端连接到哪里、哪些内容会进入本次同步、哪些内容明确不会上传，并按“待同步 → 全局审批 → 项目记忆 → 连接与高级设置”的顺序完成操作。
+
+### 产品边界
+
+- 本地写入与远端同步继续分离；本轮不执行真实同步，也不修改用户 Brain 仓库、远端地址或凭据。
+- 项目事实仍免审批写入本地；全局偏好与 Profile 仍先审批；Session 只作为默认关闭的补漏来源，不作为正式记忆层。
+- 同步前必须由后端生成真实清单，包含目标仓库/分支、按范围和项目分组的记录、涉及文件、当前待推送提交以及明确排除的内容。
+- 页面不得根据数量猜同步内容；清单无法生成、仓库不匹配、远端领先或存在异常时，不得出现可执行的最终同步确认。
+- 只在 `feat/design-refactor` 和 6246 验收；不合并 main，不安装到 `~/.mick-harness`，不重启 6425，不执行 Git push。
+
+### 实施步骤
+
+- [x] 116. [修改] `tests/test_harness_agents.py` 与 `tests/test_harness_observe.py` — 固定同步清单、范围/项目分组、待推送提交、隐私排除项、页面优先级、默认折叠与 Profile 降级契约，并记录旧实现预期失败。
+- [x] 117. [修改] `scripts/harness-brain-boundary.py` — 扩展只读同步预览，返回真实目标、记录摘要、项目分组、涉及文件、待推送提交和安全说明，不改变确认同步的保护条件。
+- [x] 118. [修改] `web/observe-dashboard.html` — 将页面改为“记忆与同步”，顶部展示可操作同步清单，其后依次为全局审批、默认折叠的项目记忆和默认折叠的连接/写入规则；Profile 只在审批或高级状态出现。
+- [x] 119. [修改] `docs/BRAIN-INTEGRATION.md` — 面向用户说明收集范围、本地路径、审批规则、同步目标、Git push 边界、明确排除项和仅本地模式。
+- [x] 120. [运行] 聚焦与全量回归，6246 完成“查看同步清单 → 展开记录/文件/提交 → 取消 → 审批 → 展开项目记忆 → 刷新”路径；不得点击最终同步。
+
+### 完成判定
+
+- [x] 用户在首次操作前能回答：连接到哪里、这次上传什么、不会上传什么、为什么需要审批、如何取消。
+- [x] “查看同步清单”只执行 dry-run；最终确认只能在清单成功生成后出现，且清单明确说明 Git 会推送当前分支全部领先提交。
+- [x] 页面顺序固定为待同步、全局审批、项目记忆、连接与高级设置；项目记忆和连接详情默认收起。
+- [x] Profile 无候选时不再占据独立大卡片；有候选时在全局审批中展示版本差异。
+- [x] 后端聚焦测试、全仓测试、HTML/JavaScript、`./generate.sh --check` 与 `git diff --check` 通过；6246 console 无 error。
+
+### 验证记录
+
+- Step 116 基线：聚焦测试按预期暴露旧实现缺口——后端同步预览缺少 `destination`（1 error），页面仍使用旧标题与旧层级（1 failure）；证明新契约能够捕获本轮目标，而不是由既有实现误通过。
+- Step 117-119：聚焦合同 2 tests / 0 failures；同步预览返回真实仓库/上游、23 条项目记录、涉及文件、领先提交和明确排除项，页面与说明文档使用同一边界。
+- Step 120：全仓 93 tests / 0 failures；`./generate.sh --check` 与 `git diff --check` 通过；6246 完成查看清单、展开记录/文件/提交、取消、展开两类折叠区与刷新，确认最终同步按钮存在但未点击，刷新后两类详情默认收起，console 0 error。
+
+## v0.18.0 · 2026-08-19 · 审批动作与验证成本收口
+
+### 版本归属决策
+
+- “项目问题回流并修正中央 Harness”属于 **new value**：v0.18 的 Brain 分层写入、审批和同步目标不依赖它即可成立，因此正式分配到 draft `v0.19.0 / task-132`，不继续扩张 v0.18。
+- v0.18 本轮只收口已在版本计划中的 `task-97`、`task-98` 与 `task-101`：补全已有审批流水线，减少同一代码/环境下重复发布验证，并用现有 PRD Profile 证明版本化 Profile 链路。
+
+### 产品边界
+
+- 审批动作只作用于 Brain 候选和项目记忆，不直接修改中央 Harness 规则；候选合并、忽略同类和换层都必须由用户显式触发并保留状态。
+- 相似项只能由确定性规则提供建议，不能自动合并；合并前用户能看见目标摘要和涉及条目。
+- 验证分为 `fast / subsystem / release` 三档；只有相同代码指纹、相同环境与相同命令集的成功 Gate 可以复用，失败或代码变化必须重跑。
+- PRD 功能继续冻结：不新增章节模板或技术交付内容，只验证 `prd-for-humans`、Profile 来源/版本和差异审批已经贯通。
+- 继续只在 `feat/design-refactor` 与 6246 验收；不合并 main、不安装到 `~/.mick-harness`、不重启 6425、不执行 Brain 远端同步。
+
+### 实施步骤
+
+- [x] 121. [版本规划] `docs/VERSIONS.md` — 正式建立 draft v0.19.0，并把 Harness 改进闭环分配为 `task-132`；记录它不进入 v0.18 的原因。
+- [x] 122. [测试基线] `tests/test_harness_agents.py`、`tests/test_harness_observe.py` 与 `tests/test_harness_verify.py` — 固定候选换层/合并/忽略同类、项目记录合并、三档验证与成功 Gate 复用合同，并记录旧实现预期失败。
+- [x] 123. [Brain 动作] `scripts/harness-brain-boundary.py` 与 `scripts/harness-observe.py` — 实现显式候选更新、确定性相似建议、合并/忽略同类和项目记录合并，保留审计状态并限制操作范围。
+- [x] 124. [工作台交互] `web/observe-dashboard.html` — 为真实可用动作补齐换层、合并同类、忽略同类和项目记录合并入口；无建议时不展示无效按钮。
+- [x] 125. [验证与 Profile] `scripts/harness-verify.py`、`docs/VERIFY-CONTRACT.md` 与现有 PRD/Profile 契约 — 实现 fast/subsystem/release 三档和指纹复用；验证 PRD Profile 来源、版本差异与发布链路后冻结功能范围。
+- [x] 126. [验收] 聚焦与全量回归，在 6246 完成审批动作和刷新路径；只生成同步 dry-run，不执行最终同步。
+
+### 完成判定
+
+- [x] 项目记录和全局/Profile 候选的每个可见动作都能在工作台完成并得到刷新后的真实状态；不再只有说明文字或断点按钮。
+- [x] “合并”和“忽略同类”都由用户确认；相似建议错误不会自动改变任何记录。
+- [x] 同一 release 指纹第二次验证明确复用成功结果，代码、环境或命令变化后不复用。
+- [x] `prd-for-humans` 仍只在用户明确要求 PRD 时加载；工作台只显示 Profile 来源、版本和差异，不泄露私人正文。
+- [x] 全仓测试、生成文件、diff 检查与 6246 真实路径通过；未执行 Brain push、未部署 6425。
+
+### 验证记录
+
+- Step 121：`docs/VERSIONS.md` 已建立 draft v0.19.0；项目问题回流以 `task-132` 进入新版本，单次项目问题默认不改写中央 Harness。
+- Step 122 基线：新增合同在旧实现上得到候选相似字段与项目记忆相似字段 2 errors、页面合同 1 failure、验证器缺失 2 errors；真实页面进一步复现 `prompt() is not supported`，随后补入禁止原生 prompt/confirm 的回归断言。
+- Step 123-124：候选换层/合并/忽略同类、项目记忆合并与 HTTP 动作接口通过；页面改为内嵌表单与二次确认，不再依赖浏览器原生 prompt/confirm。
+- Step 125：`fast / subsystem / release` 三档验证与成功 Gate 指纹复用测试通过；PRD 子系统验证覆盖 `prd-for-humans`、Profile 来源、版本与发布链路，功能范围保持冻结。
+- Step 126：相关子系统 89 tests / 0 failures；发布 Gate 的全仓测试、`./generate.sh --check`、`git diff --check` 均通过，同一 release 指纹第二次返回 `REUSED`；6246 真实页面完成项目记录合并表单、纠正表单、同步清单、取消与刷新，console 0 warning / 0 error，未点击确认合并、确认同步或其他真实写入动作。
+
+### Step 121 — 2026-08-19
+- verify: passed — v0.19.0 draft 与 task-132 版本归属已由版本解析合同确认。
+
+### Step 122 — 2026-08-19
+- verify: passed — 新增测试先复现相似字段、验证器与原生弹窗缺口，再由回归断言固定。
+
+### Step 123 — 2026-08-19
+- verify: passed — Brain 候选与项目记忆动作通过单元及 HTTP 集成测试。
+
+### Step 124 — 2026-08-19
+- verify: passed — 6246 页面内合并与纠正表单可打开和取消，刷新后状态稳定，console 0 warning / 0 error。
+
+### Step 125 — 2026-08-19
+- verify: passed — PRD 子系统通过，release Gate 在相同最终指纹下返回 REUSED。
+
+### Step 126 — 2026-08-19
+- verify: passed — 全仓测试、生成一致性、diff 检查与 6246 真实路径均通过，未执行 Brain push 或 6425 部署。

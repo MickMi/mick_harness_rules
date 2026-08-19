@@ -45,13 +45,13 @@ last_verified: YYYY-MM-DD    # 最后一次跑通、确认还有效的日期
 cd "$(git rev-parse --show-toplevel)"
 
 # 2. 保存 baseline（如果这是"改前基线"跑法）
-bash .harness/verify.sh --profile fast > /tmp/verify.baseline.log 2>&1
+bash .harness/verify.sh --tier fast > /tmp/verify.baseline.log 2>&1
 echo "baseline exit: $?" >> /tmp/verify.baseline.log
 
 # 3. 改代码 ...（这一段留给 plan 步骤本身）
 
 # 4. 跑改后验证
-bash .harness/verify.sh --profile fast > /tmp/verify.after.log 2>&1
+bash .harness/verify.sh --tier fast > /tmp/verify.after.log 2>&1
 after_exit=$?
 
 # 5. diff 输出
@@ -79,7 +79,7 @@ diff /tmp/verify.baseline.log /tmp/verify.after.log > /tmp/verify.diff.log
 列出这个 Skill 历史上被误用的方式，帮后来者避坑：
 
 - ❌ 只跑一次不留 baseline，改完拿 exit code 说事
-- ❌ 用 `--profile fast` 之外的档位说"我跑了 verify"（fast/full 覆盖面不同）
+- ❌ 用 `fast` 的结果声称子系统或发布 Gate 已通过（三档覆盖面不同）
 - ❌ 失败时改 `.harness/verify.d/` 里的 checker 让它变绿
 
 ## 变更历史（可选段）

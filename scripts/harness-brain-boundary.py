@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import datetime as dt
+import difflib
 import hashlib
 import json
 import os
@@ -63,6 +64,10 @@ def candidate_root() -> Path:
     return state_root() / "brain-candidates"
 
 
+def suppression_root() -> Path:
+    return state_root() / "brain-suppressions"
+
+
 def project_memory_root() -> Path:
     return state_root() / "brain-project-memory"
 
@@ -91,9 +96,46 @@ def validate_summary(summary: str) -> str:
     return cleaned
 
 
+def normalized_similarity(left: str, right: str) -> float:
+    def normalize(value: str) -> str:
+        return re.sub(r"[^a-z0-9\u3400-\u9fff]+", "", value.lower())
+
+    first, second = normalize(left), normalize(right)
+    if not first or not second:
+        return 0.0
+    return difflib.SequenceMatcher(a=first, b=second, autojunk=False).ratio()
+
+
+def summaries_are_similar(left: str, right: str) -> bool:
+    return normalized_similarity(left, right) >= 0.62
+
+
 def stable_candidate_id(kind: str, layer: str, project: str | None, summary: str) -> str:
     material = json.dumps([kind, layer, project or "", summary], ensure_ascii=False, separators=(",", ":"))
     return f"memory_{hashlib.sha256(material.encode('utf-8')).hexdigest()[:20]}"
+
+
+def active_suppressions() -> list[dict[str, Any]]:
+    if not suppression_root().exists():
+        return []
+    values: list[dict[str, Any]] = []
+    for path in suppression_root().glob("*.json"):
+        with contextlib.suppress(OSError, json.JSONDecodeError):
+            value = json.loads(path.read_text(encoding="utf-8"))
+            if value.get("status") == "active":
+                values.append(value)
+    return values
+
+
+def matching_suppression(*, kind: str, layer: str, profile: str | None, summary: str) -> dict[str, Any] | None:
+    for value in active_suppressions():
+        if value.get("kind") != kind or value.get("layer") != layer:
+            continue
+        if layer == "profile" and value.get("profile") != profile:
+            continue
+        if summaries_are_similar(str(value.get("summary") or ""), summary):
+            return value
+    return None
 
 
 def atomic_json(path: Path, value: dict[str, Any]) -> None:
@@ -161,6 +203,7 @@ def create_candidate(
     if path.exists():
         return json.loads(path.read_text(encoding="utf-8"))
     timestamp = now_iso()
+    suppression = matching_suppression(kind=kind, layer=layer, profile=profile, summary=cleaned)
     record = {
         "schema_version": "2",
         "candidate_id": identifier,
@@ -170,13 +213,16 @@ def create_candidate(
         "profile": profile,
         "summary": cleaned,
         "summary_digest": f"sha256:{hashlib.sha256(cleaned.encode('utf-8')).hexdigest()}",
-        "status": "pending_confirmation",
+        "status": "ignored_similar" if suppression else "pending_confirmation",
         "source": source,
         "created_at": timestamp,
         "updated_at": timestamp,
         "attempt_count": 0,
         "last_error": None,
     }
+    if suppression:
+        record["suppression_id"] = suppression.get("suppression_id")
+        record["ignored_at"] = timestamp
     atomic_json(path, record)
     return record
 
@@ -204,6 +250,7 @@ def public_metadata(record: dict[str, Any]) -> dict[str, Any]:
     keys = (
         "candidate_id", "kind", "layer", "project", "profile", "summary_digest",
         "status", "source", "created_at", "updated_at", "attempt_count", "last_error",
+        "occurrence_count", "merged_from", "merged_into", "suppression_id",
     )
     return {key: record.get(key) for key in keys}
 
@@ -223,20 +270,111 @@ def list_candidates(*, statuses: set[str] | None = None) -> list[dict[str, Any]]
     records = [json.loads(path.read_text(encoding="utf-8")) for path in candidate_root().glob("*.json")]
     if statuses is not None:
         records = [record for record in records if record.get("status") in statuses]
-    return sorted((candidate_view(record) for record in records), key=lambda item: item.get("updated_at") or "", reverse=True)
+    views = [candidate_view(record) for record in records]
+    for current in views:
+        current["similar_candidate_ids"] = [
+            other["candidate_id"]
+            for other in views
+            if other["candidate_id"] != current["candidate_id"]
+            and other.get("kind") == current.get("kind")
+            and other.get("layer") == current.get("layer")
+            and other.get("status") in PENDING_STATUSES | {"rejected"}
+            and current.get("status") in PENDING_STATUSES | {"rejected"}
+            and summaries_are_similar(str(current.get("summary") or ""), str(other.get("summary") or ""))
+        ]
+    return sorted(views, key=lambda item: item.get("updated_at") or "", reverse=True)
 
 
-def update_candidate(identifier: str, *, summary: str | None = None, layer: str | None = None) -> dict[str, Any]:
+def update_candidate(
+    identifier: str, *, summary: str | None = None, layer: str | None = None,
+    profile: str | None = None,
+) -> dict[str, Any]:
     record = get_candidate(identifier)
     if layer is not None:
         if layer not in {"global", "profile"}:
             raise BrainBoundaryError("Workbench candidates may only target global or profile layers.")
         record["layer"] = layer
+    if record.get("layer") == "profile":
+        resolved_profile = profile or record.get("profile")
+        if not resolved_profile:
+            raise BrainBoundaryError("Profile candidates require a profile identifier.")
+        record["profile"] = safe_slug(str(resolved_profile))
+    elif layer == "global":
+        record["profile"] = None
     if summary is not None:
         record["summary"] = validate_summary(summary)
         record["summary_digest"] = f"sha256:{hashlib.sha256(record['summary'].encode('utf-8')).hexdigest()}"
     record["status"] = "pending_confirmation"
     record["last_error"] = None
+    return candidate_view(save_candidate(record))
+
+
+def merge_candidates(
+    identifier: str, duplicate_ids: list[str], *, summary: str | None = None,
+    layer: str | None = None, profile: str | None = None,
+) -> dict[str, Any]:
+    primary = get_candidate(identifier)
+    identifiers = list(dict.fromkeys(value for value in duplicate_ids if value != identifier))
+    if not identifiers:
+        raise BrainBoundaryError("Merging candidates requires at least one other candidate.")
+    if len(identifiers) > 20:
+        raise BrainBoundaryError("A single merge may include at most 20 candidates.")
+    duplicates = [get_candidate(value) for value in identifiers]
+    for record in [primary, *duplicates]:
+        if record.get("status") == "written_local":
+            raise BrainBoundaryError("Published candidates cannot be merged.")
+    if any(record.get("kind") != primary.get("kind") for record in duplicates):
+        raise BrainBoundaryError("Only candidates of the same kind can be merged.")
+
+    if summary is not None or layer is not None or profile is not None:
+        update_candidate(identifier, summary=summary, layer=layer, profile=profile)
+        primary = get_candidate(identifier)
+    timestamp = now_iso()
+    merged_from = list(dict.fromkeys([
+        *primary.get("merged_from", []),
+        *identifiers,
+        *(item for record in duplicates for item in record.get("merged_from", [])),
+    ]))
+    primary["merged_from"] = merged_from
+    primary["occurrence_count"] = 1 + len(merged_from)
+    primary["status"] = "pending_confirmation"
+    primary["last_error"] = None
+    primary["updated_at"] = timestamp
+    save_candidate(primary)
+    for record in duplicates:
+        record["status"] = "merged"
+        record["merged_into"] = identifier
+        record["updated_at"] = timestamp
+        save_candidate(record)
+    return candidate_view(primary)
+
+
+def ignore_similar_candidates(identifier: str) -> dict[str, Any]:
+    record = get_candidate(identifier)
+    if record.get("status") == "written_local":
+        raise BrainBoundaryError("Published candidates cannot be ignored retroactively.")
+    timestamp = now_iso()
+    material = json.dumps(
+        [record.get("kind"), record.get("layer"), record.get("profile"), record.get("summary")],
+        ensure_ascii=False,
+    )
+    suppression_id = f"suppression_{hashlib.sha256(material.encode('utf-8')).hexdigest()[:20]}"
+    suppression = {
+        "schema_version": "1",
+        "suppression_id": suppression_id,
+        "kind": record.get("kind"),
+        "layer": record.get("layer"),
+        "profile": record.get("profile"),
+        "summary": record.get("summary"),
+        "summary_digest": record.get("summary_digest"),
+        "status": "active",
+        "created_at": timestamp,
+        "source_candidate_id": identifier,
+    }
+    atomic_json(suppression_root() / f"{suppression_id}.json", suppression)
+    record["status"] = "ignored_similar"
+    record["suppression_id"] = suppression_id
+    record["ignored_at"] = timestamp
     return candidate_view(save_candidate(record))
 
 
@@ -415,7 +553,7 @@ def project_memory_view(record: dict[str, Any]) -> dict[str, Any]:
     keys = (
         "memory_id", "project", "kind", "summary", "status", "sync_status",
         "source_event_type", "source_event_id", "source_agent", "created_at", "updated_at", "brain_path",
-        "occurrence_count",
+        "occurrence_count", "merged_from", "merged_into", "similar_memory_ids",
     )
     return {key: record.get(key) for key in keys}
 
@@ -425,7 +563,7 @@ def list_project_memories(*, project: str | None = None) -> list[dict[str, Any]]
     paths = (root / safe_slug(project)).glob("*.json") if project else root.glob("*/*.json")
     records = [json.loads(path.read_text(encoding="utf-8")) for path in paths] if root.exists() else []
     grouped: dict[str, dict[str, Any]] = {}
-    for record in records:
+    for record in (value for value in records if value.get("status") != "merged"):
         semantic = hashlib.sha256(
             f"{record.get('project', '')}\0{record.get('kind', '')}\0{record.get('summary', '')}".encode("utf-8")
         ).hexdigest()
@@ -435,7 +573,17 @@ def list_project_memories(*, project: str | None = None) -> list[dict[str, Any]]
             grouped[semantic] = record
         else:
             current["occurrence_count"] = int(current.get("occurrence_count", 1)) + 1
-    return sorted((project_memory_view(record) for record in grouped.values()), key=lambda item: item.get("created_at") or "", reverse=True)
+    values = list(grouped.values())
+    for current in values:
+        current["similar_memory_ids"] = [
+            other["memory_id"]
+            for other in values
+            if other["memory_id"] != current["memory_id"]
+            and other.get("project") == current.get("project")
+            and other.get("kind") == current.get("kind")
+            and summaries_are_similar(str(current.get("summary") or ""), str(other.get("summary") or ""))
+        ]
+    return sorted((project_memory_view(record) for record in values), key=lambda item: item.get("created_at") or "", reverse=True)
 
 
 def undo_project_memory(identifier: str) -> dict[str, Any]:
@@ -498,6 +646,65 @@ def promote_project_memory(identifier: str) -> dict[str, Any]:
         source=f"project-memory:{identifier}",
     )
     return candidate_view(candidate)
+
+
+def merge_project_memories(identifiers: list[str], *, summary: str) -> dict[str, Any]:
+    unique = list(dict.fromkeys(identifiers))
+    if len(unique) < 2:
+        raise BrainBoundaryError("Merging project memories requires at least two records.")
+    if len(unique) > 20:
+        raise BrainBoundaryError("A single merge may include at most 20 project memories.")
+    records: list[tuple[Path, dict[str, Any]]] = []
+    for identifier in unique:
+        if not re.fullmatch(r"project_memory_[a-f0-9]{20}", identifier):
+            raise BrainBoundaryError("Invalid project memory identifier.")
+        matches = list(project_memory_root().glob(f"*/{identifier}.json"))
+        if len(matches) != 1:
+            raise BrainBoundaryError(f"Unknown project memory: {identifier}")
+        records.append((matches[0], json.loads(matches[0].read_text(encoding="utf-8"))))
+    projects = {record.get("project") for _, record in records}
+    kinds = {record.get("kind") for _, record in records}
+    if len(projects) != 1 or len(kinds) != 1:
+        raise BrainBoundaryError("Only project memories from the same project and kind can be merged.")
+
+    cleaned = validate_summary(summary)
+    project = str(records[0][1]["project"])
+    kind = str(records[0][1]["kind"])
+    material = json.dumps([project, kind, sorted(unique), cleaned], ensure_ascii=False, separators=(",", ":"))
+    merged_id = f"project_memory_{hashlib.sha256(material.encode('utf-8')).hexdigest()[:20]}"
+    merged_path = project_record_path(project, merged_id)
+    if merged_path.is_file():
+        return project_memory_view(json.loads(merged_path.read_text(encoding="utf-8")))
+
+    timestamp = now_iso()
+    merged = {
+        "schema_version": "1",
+        "memory_id": merged_id,
+        "project": project,
+        "kind": kind,
+        "summary": cleaned,
+        "summary_digest": f"sha256:{hashlib.sha256(cleaned.encode('utf-8')).hexdigest()}",
+        "status": "written_local",
+        "sync_status": "pending",
+        "source_event_type": "project-memory.merge",
+        "source_event_id": merged_id,
+        "source_agent": "harness-workbench",
+        "merged_from": unique,
+        "occurrence_count": len(unique),
+        "created_at": timestamp,
+        "updated_at": timestamp,
+    }
+    target = append_project_brain(merged)
+    merged["brain_path"] = str(target.relative_to(brain_root()))
+    with target.open("a", encoding="utf-8") as stream:
+        stream.write(f"- [{timestamp[:10]}] 合并 {', '.join(unique)} → {merged_id}\n")
+    atomic_json(merged_path, merged)
+    for path, record in records:
+        record["status"] = "merged"
+        record["merged_into"] = merged_id
+        record["updated_at"] = timestamp
+        atomic_json(path, record)
+    return project_memory_view(merged)
 
 
 def profile_metadata(*, brain: Path | None = None) -> list[dict[str, Any]]:
@@ -642,6 +849,31 @@ def repository_snapshot(root: Path) -> dict[str, Any]:
     }
 
 
+def pending_git_commits(root: Path, upstream: str) -> list[dict[str, Any]]:
+    """List every local commit that a plain `git push` would send."""
+    output = git_value(root, "log", "--format=%h%x1f%s%x1f%cI", f"{upstream}..HEAD") or ""
+    commits: list[dict[str, Any]] = []
+    for line in output.splitlines():
+        parts = line.split("\x1f", 2)
+        if len(parts) != 3:
+            continue
+        sha, subject, committed_at = parts
+        files = git_value(root, "diff-tree", "--no-commit-id", "--name-only", "-r", sha) or ""
+        commits.append(
+            {
+                "sha": sha,
+                "subject": redact(subject)[:240],
+                "committed_at": committed_at,
+                "files": sorted(filter(None, files.splitlines())),
+            }
+        )
+    return commits
+
+
+def sync_item_summary(value: Any) -> str:
+    return re.sub(r"^\s*(?:[-*•—–]\s*)+", "", redact(str(value or ""))).strip()[:500]
+
+
 def raw_project_memories() -> list[tuple[Path, dict[str, Any]]]:
     root = project_memory_root()
     if not root.exists():
@@ -751,12 +983,79 @@ def sync_pending(*, confirmed: bool, dry_run: bool = False, brain: Path | None =
             if directory.is_dir():
                 owned_paths.update(str(path.relative_to(root)) for path in directory.rglob("*") if path.is_file())
 
+    staged_before = set(filter(None, (git_value(root, "diff", "--cached", "--name-only") or "").splitlines()))
+    unexpected_staged = staged_before - owned_paths
+    if unexpected_staged:
+        names = "、".join(sorted(unexpected_staged)[:5])
+        raise BrainBoundaryError(f"Brain 仓库存在 Harness 管理范围外的已暂存文件：{names}。请先处理后再同步。")
+
+    items: list[dict[str, Any]] = []
+    for _, record in pending_memories:
+        destination = str(record.get("brain_path") or "projects/")
+        items.append(
+            {
+                "scope": "project",
+                "project": record.get("project") or "unknown",
+                "kind": record.get("kind") or "project_fact",
+                "summary": sync_item_summary(record.get("summary")),
+                "destination": destination,
+                "source": record.get("source_agent") or "unknown",
+                "created_at": record.get("created_at") or record.get("updated_at"),
+            }
+        )
+    for _, record in pending_candidates:
+        scope = str(record.get("layer") or "global")
+        if scope == "profile" and record.get("profile"):
+            destination = f"global/profiles/{safe_slug(str(record['profile']))}/"
+        else:
+            destination = "global/"
+        items.append(
+            {
+                "scope": scope,
+                "project": record.get("project"),
+                "kind": record.get("kind") or "approved_candidate",
+                "summary": sync_item_summary(record.get("summary")),
+                "destination": destination,
+                "source": record.get("source_agent") or "approved_candidate",
+                "created_at": record.get("created_at") or record.get("updated_at"),
+            }
+        )
+
+    groups = {
+        "project": len(pending_memories),
+        "global": sum(record.get("layer") == "global" for _, record in pending_candidates),
+        "profile": sum(record.get("layer") == "profile" for _, record in pending_candidates),
+        "session": 0,
+    }
+    pending_commits = pending_git_commits(root, str(repository["upstream"]))
+
     preview = {
         "status": "preview",
         "repository": repository,
+        "destination": {
+            "remote": repository["remote"],
+            "configured_remote": repository["configured_remote"],
+            "branch": repository["branch"],
+            "upstream": repository["upstream"],
+            "privacy": "未验证：仓库地址本身不能证明远端仓库是私有的。",
+        },
         "pending_records": len(pending_memories),
         "pending_candidates": len(pending_candidates),
+        "groups": groups,
+        "items": items,
         "owned_paths": sorted(owned_paths),
+        "pending_files": sorted(owned_paths),
+        "pending_commits": pending_commits,
+        "push_scope_note": "Git 会推送当前分支全部领先提交；不只是在页面中显示的待同步记录。请在确认前核对下方提交清单。",
+        "excluded_content": [
+            "原始聊天全文",
+            "Prompt、模型私有推理和工具完整日志",
+            "源代码文件正文（只记录经确认的项目事实与产物路径）",
+            "凭据、令牌、环境变量和检测到的敏感值",
+            "默认关闭的 Session 会话补漏内容",
+        ],
+        "can_sync": True,
+        "blockers": [],
         "ahead": ahead or 0,
         "behind": behind or 0,
     }

@@ -18,6 +18,7 @@ from urllib.request import Request, urlopen
 
 
 ROOT = Path(__file__).resolve().parents[1]
+PRODUCT_VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 SCRIPT = ROOT / "scripts" / "harness-observe.py"
 HOOK_SCRIPT = ROOT / "scripts" / "harness-observe-hook.py"
 DASHBOARD = ROOT / "web" / "observe-dashboard.html"
@@ -98,6 +99,7 @@ class ObserveRuntimeTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
         self.project = Path(self.tempdir.name)
+        self.extra_worktrees: list[Path] = []
         self.env_patch = mock.patch.dict(
             os.environ,
             {
@@ -109,6 +111,13 @@ class ObserveRuntimeTests(unittest.TestCase):
         self.env_patch.start()
 
     def tearDown(self) -> None:
+        for worktree in self.extra_worktrees:
+            subprocess.run(
+                ["git", "worktree", "remove", "--force", str(worktree)],
+                cwd=self.project,
+                check=False,
+                capture_output=True,
+            )
         self.env_patch.stop()
         self.tempdir.cleanup()
 
@@ -527,7 +536,7 @@ class ObserveRuntimeTests(unittest.TestCase):
         events = self.events_text()
         self.assertIn("agent.turn_observed", events)
         event = next(json.loads(line) for line in events.splitlines() if "agent.turn_observed" in line)
-        self.assertEqual(event["payload"]["rule_version"], "0.17.0")
+        self.assertEqual(event["payload"]["rule_version"], PRODUCT_VERSION)
         self.assertRegex(event["payload"]["role_digest"], r"^sha256:[a-f0-9]{64}$")
         for secret in (payload["prompt"], payload["last_assistant_message"], payload["transcript_path"], payload["model"]):
             self.assertNotIn(secret, events)
@@ -580,7 +589,7 @@ class ObserveRuntimeTests(unittest.TestCase):
         registry = state_dir / "registered-projects"
         registry.write_text(f"{self.project}\n", encoding="utf-8")
         manager_report = {
-            "harness_version": "0.17.0",
+            "harness_version": PRODUCT_VERSION,
             "agents": [{
                 "id": "codex", "name": "Codex", "tier": 1, "detected": True,
                 "signals": [{"kind": "command", "found": True}],
@@ -682,7 +691,7 @@ class ObserveRuntimeTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
         context = payload["hookSpecificOutput"]["additionalContext"]
-        self.assertIn("Harness-Version: 0.17.0", context)
+        self.assertIn(f"Harness-Version: {PRODUCT_VERSION}", context)
         self.assertIn("Rules: .harness/rules/core.md", context)
 
     def test_agent_activity_supplies_stage_when_project_has_no_plan(self) -> None:
@@ -813,6 +822,20 @@ class ObserveRuntimeTests(unittest.TestCase):
             env=environment,
         )
         candidate_id = json.loads(candidate_process.stdout)["candidate_id"]
+        similar_ids = []
+        for project, summary in (("app-a", "移动端页面出现横向溢出"), ("app-b", "移动端页面再次出现横向溢出问题")):
+            created = subprocess.run(
+                [
+                    sys.executable, str(ROOT / "scripts" / "harness-brain-boundary.py"),
+                    "candidate", "--kind", "gotcha", "--layer", "global",
+                    "--project", project, "--summary", summary,
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+                env=environment,
+            )
+            similar_ids.append(json.loads(created.stdout)["candidate_id"])
         process = subprocess.Popen(
             [sys.executable, str(SCRIPT), "watch", "--all", "--port", str(port), "--scan-interval", "0.1"],
             stdout=subprocess.PIPE,
@@ -839,7 +862,54 @@ class ObserveRuntimeTests(unittest.TestCase):
             self.assertIn("local_write", brain_health)
             with urlopen(f"{base}/api/brain/candidates.json", timeout=1) as response:
                 candidates = json.loads(response.read())
-            self.assertEqual(candidates["items"][0]["candidate_id"], candidate_id)
+            candidate_map = {item["candidate_id"]: item for item in candidates["items"]}
+            self.assertIn(candidate_id, candidate_map)
+            self.assertIn(similar_ids[1], candidate_map[similar_ids[0]]["similar_candidate_ids"])
+
+            update_url = f"{base}/api/brain/candidates/{candidate_id}/update"
+            with urlopen(
+                Request(
+                    update_url,
+                    data=json.dumps({"summary": "更新后的跨项目候选", "layer": "global"}).encode("utf-8"),
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-Harness-Action-Token": brain_health["action_token"],
+                    },
+                ),
+                timeout=1,
+            ) as response:
+                updated = json.loads(response.read())
+            self.assertEqual(updated["summary"], "更新后的跨项目候选")
+
+            merge_url = f"{base}/api/brain/candidates/{similar_ids[0]}/merge"
+            with urlopen(
+                Request(
+                    merge_url,
+                    data=json.dumps({"candidate_ids": [similar_ids[1]], "summary": "移动端布局必须检查横向溢出"}).encode("utf-8"),
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-Harness-Action-Token": brain_health["action_token"],
+                    },
+                ),
+                timeout=1,
+            ) as response:
+                merged = json.loads(response.read())
+            self.assertEqual(merged["occurrence_count"], 2)
+
+            ignore_url = f"{base}/api/brain/candidates/{similar_ids[0]}/ignore-similar"
+            with urlopen(
+                Request(
+                    ignore_url,
+                    data=b"{}",
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-Harness-Action-Token": brain_health["action_token"],
+                    },
+                ),
+                timeout=1,
+            ) as response:
+                ignored = json.loads(response.read())
+            self.assertEqual(ignored["status"], "ignored_similar")
             action_url = f"{base}/api/brain/candidates/{candidate_id}/reject"
             with self.assertRaises(HTTPError) as unauthenticated_action:
                 urlopen(Request(action_url, data=b"{}", headers={"Content-Type": "application/json"}), timeout=1)
@@ -947,7 +1017,7 @@ class ObserveRuntimeTests(unittest.TestCase):
     def test_dashboard_uses_real_role_work_events(self) -> None:
         dashboard = DASHBOARD.read_text(encoding="utf-8")
 
-        for label in ("角色办公室", "当前流转", "执行详情", "需求决策", "交付物", "尚未参与"):
+        for label in ("角色办公室", "建议下一步", "正在交接", "执行详情", "需求决策", "交付物", "尚未参与"):
             self.assertIn(label, dashboard)
         self.assertIn("work_rounds", dashboard)
         self.assertIn("decisions", dashboard)
@@ -966,17 +1036,30 @@ class ObserveRuntimeTests(unittest.TestCase):
             "/api/brain/status.json", "/api/brain/candidates.json", "/api/brain/project-memory.json"
         ):
             self.assertIn(endpoint, dashboard)
-        for label in ("Brain 工作台", "项目记忆活动", "全局与 Profile 审批箱", "写入与同步状态", "版本化 Profile"):
+        for label in ("记忆与同步", "项目记忆", "全局待审批", "本次同步清单", "连接与高级设置"):
             self.assertIn(label, dashboard)
+        self.assertNotIn('el("h1", "", "Brain 工作台")', dashboard)
+        self.assertLess(dashboard.index("本次同步清单"), dashboard.index("全局待审批"))
+        self.assertLess(dashboard.index("全局待审批"), dashboard.index("项目记忆"))
+        self.assertLess(dashboard.index("项目记忆"), dashboard.index("连接与高级设置"))
+        for contract in (
+            "brainSyncPreview", "dry_run: true", "查看同步清单", "不会上传",
+            "待推送提交", "brain-project-details", "brain-connection-details",
+            "更改范围", "合并同类", "忽略同类", "合并项目记录",
+            "/merge", "/ignore-similar", "/update", "brainDialog",
+        ):
+            self.assertIn(contract, dashboard)
+        self.assertNotIn("window.prompt", dashboard)
+        self.assertNotIn("window.confirm", dashboard)
         self.assertIn("X-Harness-Action-Token", dashboard)
         self.assertIn("关闭会话不是写入前提", dashboard)
         self.assertIn("Brain 接入状态", dashboard)
-        self.assertIn("查看记忆与审批", dashboard)
+        self.assertIn("查看项目记录", dashboard)
         for label in (
-            "Brain 仓库", "配置仓库", "已生效", "当前分支", "本地写入路径",
+            "Brain 仓库", "配置仓库", "已生效", "本地写入路径",
             "项目记录待同步", "全局/Profile 待审批", "当前无需审批",
             "跨项目稳定偏好与可复用经验", "Profile 规则或风格的版本变化",
-            "本机服务自动记录", "Hook 只负责采集事件", "立即同步", "确认并同步", "取消同步",
+            "本机服务自动记录", "Hook 只负责采集事件", "查看同步清单", "确认并同步", "取消同步",
         ):
             self.assertIn(label, dashboard)
         for removed in ("接入仓库", "实际仓库", "先核对本地 Brain、配置仓库和 Git 实际仓库"):
@@ -1009,13 +1092,69 @@ class ObserveRuntimeTests(unittest.TestCase):
         self.assertIn("nav-tree", dashboard)
         self.assertIn("renderNavTree", dashboard)
         self.assertIn("所有项目", dashboard)
-        for label in ("工作台", "项目", "待处理", "设置", "概览", "工作流", "版本", "产物", "更多", "诊断", "Agent 接入", "技术记录", "事件日志", "原始运行"):
+        for label in ("工作台", "设置", "概览", "工作流", "版本", "产物", "更多", "诊断", "Agent 接入", "技术记录", "事件日志", "原始运行"):
             self.assertIn(label, dashboard)
         for removed in ("进展记录", "run-list", "renderRunList", "run-button", "project-button", "renderTabs"):
             self.assertNotIn(removed, dashboard)
         self.assertIn("role-light", dashboard)
         self.assertIn("flow-line", dashboard)
         self.assertIn("@keyframes", dashboard)
+
+    def test_dashboard_workbench_and_overview_prioritize_human_decisions(self) -> None:
+        dashboard = DASHBOARD.read_text(encoding="utf-8")
+
+        for marker in (
+            "nav-section-label",
+            "workbench-priority",
+            "project-summary-list",
+            "project-summary-row",
+            "project-next",
+            "workbench-secondary",
+            "project-overview-hero",
+            "overview-status-strip",
+            "project-purpose",
+            "office-flow-rail",
+            "role-brief",
+        ):
+            self.assertIn(marker, dashboard)
+        for legacy_layout in ("project-table", "question-grid", "question-item", "six-questions"):
+            self.assertNotIn(legacy_layout, dashboard)
+        self.assertNotIn("← 所有项目", dashboard)
+        self.assertIn('aria-label", `查看项目 ${project.name}`', dashboard)
+        self.assertIn("-webkit-line-clamp: 2", dashboard)
+        self.assertIn("@media (max-width: 760px)", dashboard)
+        self.assertIn("prefers-reduced-motion", dashboard)
+        for label in ("下一步", "当前负责", "建议接手"):
+            self.assertIn(label, dashboard)
+
+    def test_dashboard_navigation_and_brain_actions_close_user_paths(self) -> None:
+        dashboard = DASHBOARD.read_text(encoding="utf-8")
+
+        self.assertNotIn('["projects", "项目"]', dashboard)
+        self.assertNotIn('["inbox", "待处理"]', dashboard)
+        self.assertNotIn("function renderInbox", dashboard)
+        self.assertNotIn("查看全部待处理", dashboard)
+        self.assertNotIn('repositoryDetail("当前分支"', dashboard)
+        for marker in (
+            "openBrainFocus",
+            "focusBrainSection",
+            "metric-action",
+            "project-attention",
+            "brain-repository-line",
+            "brain-route-action",
+            'id = "brain-project-memory"',
+            'id = "brain-approvals"',
+            'id = "brain-sync"',
+        ):
+            self.assertIn(marker, dashboard)
+        for label in (
+            "查看项目记录",
+            "处理同步",
+            "查看审批",
+            "当前无需审批",
+            "待验证",
+        ):
+            self.assertIn(label, dashboard)
 
     def test_dashboard_shows_agent_five_layer_evidence_without_false_loaded_claims(self) -> None:
         dashboard = DASHBOARD.read_text(encoding="utf-8")
@@ -1137,6 +1276,61 @@ class ObserveRuntimeTests(unittest.TestCase):
         (self.project / "secret.txt").write_text("not authorized", encoding="utf-8")
         with self.assertRaises(OBSERVE.ObserveError):
             OBSERVE.read_artifact_content(self.project, snapshot, "secret.txt")
+
+    def test_repository_snapshot_groups_multiple_worktrees_and_version_work_branches(self) -> None:
+        (self.project / "AGENTS.md").write_text("# Harness\n", encoding="utf-8")
+        docs = self.project / "docs"
+        docs.mkdir()
+        (docs / "VERSIONS.md").write_text(
+            "# Versions\n\n## 0.18.0\n\n"
+            "- Status: in_progress\n"
+            "- Branch: main\n"
+            "- Work Branches: feat/v0.18-brain, feat/design-refactor\n"
+            "- Goal: 在一个工作台查看多个开发现场。\n",
+            encoding="utf-8",
+        )
+        subprocess.run(["git", "init", "-q", "-b", "main"], cwd=self.project, check=True)
+        subprocess.run(["git", "config", "user.email", "fixture@example.test"], cwd=self.project, check=True)
+        subprocess.run(["git", "config", "user.name", "Fixture"], cwd=self.project, check=True)
+        subprocess.run(["git", "add", "AGENTS.md", "docs/VERSIONS.md"], cwd=self.project, check=True)
+        subprocess.run(["git", "commit", "-qm", "fixture baseline"], cwd=self.project, check=True)
+        subprocess.run(["git", "branch", "feat/v0.18-brain"], cwd=self.project, check=True)
+        design_worktree = self.project.parent / f"{self.project.name}-design"
+        subprocess.run(
+            ["git", "worktree", "add", "-q", "-b", "feat/design-refactor", str(design_worktree)],
+            cwd=self.project,
+            check=True,
+        )
+        self.extra_worktrees.append(design_worktree)
+        (design_worktree / "design-note.txt").write_text("uncommitted\n", encoding="utf-8")
+
+        root_git = OBSERVE.git_workspace_snapshot(self.project)
+        design_git = OBSERVE.git_workspace_snapshot(design_worktree)
+        version_plan = OBSERVE.version_plan_snapshot(design_worktree, {"tasks": {}}, design_git)
+
+        self.assertEqual(root_git["repository_id"], design_git["repository_id"])
+        self.assertEqual(len(root_git["worktrees"]), 2)
+        self.assertEqual(
+            {item["branch"] for item in root_git["worktrees"]},
+            {"main", "feat/design-refactor"},
+        )
+        design_state = next(item for item in design_git["worktrees"] if item["current"])
+        self.assertEqual(design_state["branch"], "feat/design-refactor")
+        self.assertEqual(design_state["dirty_count"], 1)
+        version = version_plan["items"][0]
+        self.assertEqual(version["branch"], "main")
+        self.assertEqual(version["work_branches"], ["feat/v0.18-brain", "feat/design-refactor"])
+        self.assertEqual(version["checked_out_work_branches"], ["feat/design-refactor"])
+        self.assertFalse(version["branch_mismatch"])
+
+    def test_dashboard_presents_one_repository_with_multiple_checked_out_workspaces(self) -> None:
+        dashboard = DASHBOARD.read_text(encoding="utf-8")
+
+        for label in ("同一仓库", "已检出工作区", "集成目标", "工作分支", "未检出"):
+            self.assertIn(label, dashboard)
+        for contract in ("git.repository_id", "git.worktrees", "version.work_branches"):
+            self.assertIn(contract, dashboard)
+        self.assertNotIn("活跃 Agent", dashboard)
 
     def test_version_plan_sorts_newest_first_by_semantic_version(self) -> None:
         docs = self.project / "docs"

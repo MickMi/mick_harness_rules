@@ -11,6 +11,7 @@ from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
+PRODUCT_VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 SCRIPT = ROOT / "scripts" / "harness-agent-manager.py"
 REGISTRY = ROOT / "config" / "agent-registry.json"
 BRAIN_SCRIPT = ROOT / "scripts" / "harness-brain-boundary.py"
@@ -140,7 +141,7 @@ class AgentManagerTests(unittest.TestCase):
             env=env,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Mick Agent Harness 0.17.0", result.stdout)
+        self.assertIn(f"Mick Agent Harness {PRODUCT_VERSION}", result.stdout)
 
     def tier_one_registry(self, agent_id: str = "codex") -> dict:
         registry = self.manager.load_registry(REGISTRY)
@@ -351,6 +352,67 @@ class BrainBoundaryTests(unittest.TestCase):
         retried = self.module.retry(record["candidate_id"])
         self.assertEqual(retried["status"], "pending_confirmation")
 
+    def test_candidates_support_scope_change_merge_and_ignore_similar(self) -> None:
+        first = self.module.create_candidate(
+            kind="gotcha", layer="global", project="app-a", summary="移动端页面出现横向溢出"
+        )
+        second = self.module.create_candidate(
+            kind="gotcha", layer="global", project="app-b", summary="移动端页面再次出现横向溢出问题"
+        )
+        third = self.module.create_candidate(
+            kind="preference", layer="global", project="app-c", summary="界面保持较低信息密度"
+        )
+
+        candidates = {item["candidate_id"]: item for item in self.module.list_candidates()}
+        self.assertIn(second["candidate_id"], candidates[first["candidate_id"]]["similar_candidate_ids"])
+
+        changed = self.module.update_candidate(
+            third["candidate_id"], layer="profile", profile="designer-craft"
+        )
+        self.assertEqual(changed["layer"], "profile")
+        self.assertEqual(changed["profile"], "designer-craft")
+
+        merged = self.module.merge_candidates(
+            first["candidate_id"], [second["candidate_id"]], summary="移动端布局必须验证横向溢出"
+        )
+        self.assertEqual(merged["occurrence_count"], 2)
+        self.assertEqual(self.module.get_candidate(second["candidate_id"])["status"], "merged")
+
+        ignored = self.module.ignore_similar_candidates(first["candidate_id"])
+        self.assertEqual(ignored["status"], "ignored_similar")
+        future = self.module.create_candidate(
+            kind="gotcha", layer="global", project="app-d", summary="移动端布局必须再次验证横向溢出"
+        )
+        self.assertEqual(future["status"], "ignored_similar")
+
+    def test_project_memories_can_be_explicitly_merged(self) -> None:
+        brain = Path(self.tempdir.name) / "brain"
+        with mock.patch.dict(os.environ, {"MICK_BRAIN_ROOT": str(brain)}):
+            memories = []
+            for index, summary in enumerate(("首页窄屏出现横向溢出", "首页移动端出现横向溢出"), start=1):
+                memories.append(
+                    self.module.process_observer_event(
+                        "demo-ui",
+                        {
+                            "project_id": "demo-ui",
+                            "idempotency_key": f"ui-layout-{index}",
+                            "type": "work.round_completed",
+                            "source": {"producer": "codex-hook"},
+                            "payload": {"status": "completed", "summary": summary},
+                        },
+                    )
+                )
+            listed = {item["memory_id"]: item for item in self.module.list_project_memories(project="demo-ui")}
+            self.assertIn(memories[1]["memory_id"], listed[memories[0]["memory_id"]]["similar_memory_ids"])
+            merged = self.module.merge_project_memories(
+                [item["memory_id"] for item in memories], summary="首页必须通过窄屏横向溢出检查"
+            )
+
+        self.assertEqual(merged["status"], "written_local")
+        self.assertEqual(merged["occurrence_count"], 2)
+        remaining = self.module.list_project_memories(project="demo-ui")
+        self.assertEqual([item["memory_id"] for item in remaining], [merged["memory_id"]])
+
     def test_health_separates_local_write_from_remote_sync(self) -> None:
         brain = Path(self.tempdir.name) / "brain"
         brain.mkdir()
@@ -426,11 +488,18 @@ class BrainBoundaryTests(unittest.TestCase):
                     "payload": {"status": "completed", "summary": "需要同步的项目结论"},
                 },
             )
+            global_file = brain / "global" / "preferences.md"
+            global_file.parent.mkdir()
+            global_file.write_text("# Preferences\n\n- 用户手动确认的本地提交\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(brain), "add", "global/preferences.md"], check=True)
+            subprocess.run(["git", "-C", str(brain), "commit", "-qm", "brain: local preference"], check=True)
             preview = self.module.sync_pending(confirmed=False, dry_run=True, brain=brain)
             with self.assertRaises(self.module.BrainBoundaryError):
                 self.module.sync_pending(confirmed=False, dry_run=False, brain=brain)
             (brain / "personal-note.md").write_text("user-owned staging\n", encoding="utf-8")
             subprocess.run(["git", "-C", str(brain), "add", "personal-note.md"], check=True)
+            with self.assertRaisesRegex(self.module.BrainBoundaryError, "管理范围外"):
+                self.module.sync_pending(confirmed=False, dry_run=True, brain=brain)
             with self.assertRaisesRegex(self.module.BrainBoundaryError, "管理范围外"):
                 self.module.sync_pending(confirmed=True, dry_run=False, brain=brain)
             subprocess.run(["git", "-C", str(brain), "restore", "--staged", "personal-note.md"], check=True)
@@ -439,6 +508,19 @@ class BrainBoundaryTests(unittest.TestCase):
 
         self.assertEqual(preview["status"], "preview")
         self.assertEqual(preview["pending_records"], 1)
+        self.assertEqual(preview["destination"]["remote"], str(remote))
+        self.assertEqual(preview["destination"]["branch"], "main")
+        self.assertEqual(preview["groups"]["project"], 1)
+        self.assertEqual(preview["groups"]["global"], 0)
+        self.assertEqual(preview["groups"]["profile"], 0)
+        self.assertEqual(preview["items"][0]["project"], "demo-123")
+        self.assertEqual(preview["items"][0]["summary"], "需要同步的项目结论")
+        self.assertEqual(preview["items"][0]["destination"], "projects/demo-123/learnings.md")
+        self.assertEqual(preview["pending_files"], ["projects/demo-123/learnings.md"])
+        self.assertEqual(preview["pending_commits"][0]["subject"], "brain: local preference")
+        self.assertIn("当前分支全部领先提交", preview["push_scope_note"])
+        self.assertIn("原始聊天全文", preview["excluded_content"])
+        self.assertTrue(preview["can_sync"])
         self.assertEqual(result["status"], "synced")
         self.assertEqual(synced["sync_status"], "synced")
         self.assertEqual(

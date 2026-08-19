@@ -126,8 +126,10 @@
 
 ## 0.18.0
 
-- Status: in_progress
+- Status: released
 - Branch: main
+- Tag: v0.18.0
+- Work Branches: feat/v0.18-brain, feat/design-refactor
 - Goal: 让 Brain 不再依赖会话结束和单一 Agent：项目细节由 Claude、Codex 与通用 Harness 的结构化事件自动沉淀，全局偏好和版本化 Profile 经过审批；本地写入与远端同步分开呈现，失败可见、可重试且不丢信息。
 
 ### Requirements
@@ -135,16 +137,25 @@
 - [x] `task-94` 在工作台展示 Brain 分层健康度：仓库连通、Agent 覆盖、最近尝试、最近成功、最近错误、定时任务、待确认候选与远端同步，不用单一“已连接”掩盖回写故障
 - [x] `task-95` 让 Claude、Codex 与通用 Harness 的结构化事件进入统一识别、脱敏和去重入口；SessionEnd 只负责可选压缩与补漏，不再是写入前提
 - [x] `task-96` 将确认过的需求、版本阶段、决策、验证经验、完成结果、评审结论、交接和关键产物自动写入项目 Brain；拒绝推断、原始日志、重复进度、敏感信息和无项目归属内容
-- [ ] `task-97` 在工作台提供两条流水线：项目记忆活动流支持纠正、撤销、合并和提升为全局候选；全局偏好与 Profile 审批箱支持批准、编辑后批准、换层、合并、拒绝、忽略同类和重试
-- [ ] `task-98` 以 `fast / subsystem / release` 三档验证约束本版本开发成本，同一代码和环境下不重复发布 Gate，不采集或展示模型私有思维过程
-- [ ] `task-101` 保留已实现的 `prd-for-humans` 和版本化 PRD Profile，作为 Profile 审批、来源元数据与版本差异展示的首个真实用例；PRD 功能范围在本版本冻结
+- [x] `task-97` 在工作台提供两条流水线：项目记忆活动流支持纠正、撤销、合并和提升为全局候选；全局偏好与 Profile 审批箱支持批准、编辑后批准、换层、合并、拒绝、忽略同类和重试
+- [x] `task-98` 以 `fast / subsystem / release` 三档验证约束本版本开发成本，同一代码和环境下不重复发布 Gate，不采集或展示模型私有思维过程
+- [x] `task-101` 保留已实现的 `prd-for-humans` 和版本化 PRD Profile，作为 Profile 审批、来源元数据与版本差异展示的首个真实用例；PRD 功能范围在本版本冻结
 - [x] `task-102` 修正工作台信息层级：Brain 作为项目总览中的记忆服务入口；版本从新到旧排列；Git 用工作区、分支、版本和标签关系图展示真实开发现场
 - [x] `task-103` 展示 Brain 实际本地仓库、远端、分支和写入来源/目标，并在工作台提供受控同步、确认和真实结果反馈
 - [x] `task-104` 区分项目记录待同步与全局/Profile 待审批，精简仓库生效信息，并把确定性 Brain 行为从 Prompt/Hook 约束迁到常驻服务代码
 
+## 0.19.0
+
+- Status: draft
+- Branch: unassigned
+- Goal: 把工作台从只读观察器升级为受控的 Harness 操作与进化中心，让用户可以安全完成注入、升级、能力适配，并把跨项目反复出现的问题转化为可审批、可验证、可撤销的 Harness 改进。
+
+### Requirements
+
+- [ ] `task-130` 在首页提供 Harness update、项目注入/升级、Agent 接入修复等白名单操作，并建立幂等、互斥、恢复和审计的任务执行层
+- [ ] `task-131` 提供外部 Skill 安装前兼容诊断，并继续选择性吸收高质量开源 Skill 的方法；禁止整包静默接管角色、Hook、文档或完成定义
+- [ ] `task-132` 建立“项目问题 → Harness 改进候选 → 跨项目合并与频次 → 人工审批 → Rule/Skill/Checker/Profile → 效果复验”的工作台闭环；单次问题默认留在项目层，中央 Harness 规则不得自动改写
+
 ## Backlog
 
 > 对话中冒出的「新价值」需求先落这里；每个版本立项时从这里挑需求组成下一版本的 Goal 与 Requirements。每条写「一句话需求 + 它服务的未来 Goal 方向」。
-
-- `v0.19 候选`：在首页提供 Harness update、项目注入/升级、Agent 接入修复等白名单操作，并建立幂等、互斥、恢复和审计的任务执行层。
-- `v0.19 候选`：提供外部 Skill 安装前兼容诊断，并继续选择性吸收 `mattpocock/skills` 的方法；禁止整包静默接管角色、Hook、文档或完成定义。
