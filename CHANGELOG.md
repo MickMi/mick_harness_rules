@@ -7,6 +7,42 @@ All notable changes to Mick Agent Harness are documented in this file.
 This project follows Semantic Versioning 2.0. Git tags in the form `vX.Y.Z`
 are the release source of truth.
 
+## [0.18.0] - 2026-08-19
+
+### Brain Memory Workbench and Controlled Synchronization
+
+- **Deterministic project memory**: completed, accepted, and verified structured
+  events from Claude, Codex, and generic Harness clients are redacted,
+  deduplicated, and written locally without depending on SessionEnd. Session
+  capture remains an optional, disabled-by-default backfill path.
+- **Two explicit memory pipelines**: project facts write locally without an
+  approval bottleneck and can be corrected, reverted, merged, or promoted;
+  cross-project preferences and versioned Profiles remain visible candidates
+  that users can edit, re-scope, merge, ignore, approve, reject, and retry.
+- **Inspectable synchronization**: before any push, the workbench shows the
+  effective repository, branch/upstream, grouped records, destinations,
+  managed files, all ahead commits, and excluded content. Repository mismatch,
+  remote divergence, or unrelated staged files blocks confirmation; execution
+  rechecks the boundary to prevent state changes after preview.
+- **Workbench information architecture**: project navigation, Brain settings,
+  newest-first version planning, and Git visualization were rebuilt around one
+  machine-wide service. A repository can expose multiple checked-out worktrees
+  and work branches without pretending that every branch has an active Agent.
+- **Human PRD and cost-aware verification**: `prd-for-humans` remains isolated
+  from technical delivery contracts through a versioned Profile and
+  contamination checks. `fast`, `subsystem`, and `release` verification tiers
+  reuse a successful Gate only for the exact same code, environment, and
+  command fingerprint.
+
+Compatibility: existing Harness projects, event ledgers, loaders, Hooks, and
+Brain repositories remain valid. No dependency was added. The workbench gains
+authenticated localhost mutation routes, but Brain remote synchronization still
+requires a generated preview and an explicit user confirmation.
+
+Verification: 98 unittests, generated-rule consistency, shell syntax,
+`git diff --check`, non-interactive first-run smoke setup, and real-browser
+workbench paths with no console errors.
+
 ## [0.17.0] - 2026-08-13
 
 ### Reliable Agent Integration and Role Contracts

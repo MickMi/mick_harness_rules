@@ -54,7 +54,7 @@
 
 - 无参数模式：整仓扫描
 - `--changed`：只检查本次改动涉及的文件（Executor 单步验证时用）
-- `--profile fast|full`：可选，checker 决定是否响应
+- `--tier fast|subsystem|release`：可选，checker 决定是否响应；旧项目可继续把 `--profile` 作为兼容别名
 
 ### 输出
 
@@ -76,11 +76,38 @@
 
 1. 依次执行 `verify.d/` 下所有 `.sh` 文件（按文件名字典序）
 2. 聚合每个 checker 的 exit code
-3. 支持 `--profile fast|full`、`--changed`、`--only <name>`、`--skip <name>` 等 flag
+3. 支持 `--tier fast|subsystem|release`、`--changed`、`--only <name>`、`--skip <name>` 等 flag
 4. 输出汇总（哪个 checker 失败、失败详情摘要、总用时）
 5. 汇总退出码：任一 checker 返回 `1` → orchestrator 返回 `1`；有 `2` 且 `--strict-unknown` → 返回 `2`
 
 **orchestrator 不做业务判断，只做调度**。业务逻辑全在 checker 里。
+
+## v0.18.0 · 2026-08-19 · 三档验证与 Gate 复用
+
+验证档位按“这次声明需要多少证据”选择，而不是一律跑发布全套：
+
+| 档位 | 何时使用 | 最小覆盖 | 不能证明 |
+|---|---|---|---|
+| `fast` | 单文件、小逻辑、改动中快速反馈 | 与当前改动直接相关的最小测试或 checker | 整个子系统稳定、版本可发布 |
+| `subsystem` | 一个完整能力交付或跨文件交互 | 该子系统全部测试、接口/交互合同和关键错误路径 | 全仓无回归、生成文件与发布状态正确 |
+| `release` | 合并、部署、发版或用户明确要求最终 Gate | 全仓测试、生成一致性、diff 与发布所需检查 | 生产部署已经成功；部署仍需真实环境证据 |
+
+Harness 仓库使用：
+
+```bash
+python3 scripts/harness-verify.py fast --subsystem brain
+python3 scripts/harness-verify.py subsystem --subsystem observe
+python3 scripts/harness-verify.py release
+```
+
+成功 Gate 会记录在未提交的 `.harness-runtime/verification-gates.json`。只有以下四项全部相同才能复用：
+
+1. Git 已追踪、暂存和未追踪文件的内容指纹；
+2. 操作系统、机器架构与 Python 版本；
+3. 档位和子系统；
+4. 实际命令列表。
+
+任一项变化、上次失败或使用 `--force` 都必须重新执行。复用时输出 `REUSED` 和指纹；不能靠 Agent 记忆“刚才跑过”或用旧会话结论跳过验证。脚本只保留命令、环境摘要、指纹、时间和通过状态，不采集 Prompt、回复、模型思考过程或完整成功日志；失败输出仅用于当前终端诊断。
 
 ## 与 Skill 层的关系
 
@@ -157,12 +184,12 @@ Debug Card 修完必须走完这一步（`core.md 铁律 5`），不允许修完
 
 ```bash
 # 改前
-bash .harness/verify.sh --profile fast > /tmp/verify.before.log 2>&1
+bash .harness/verify.sh --tier fast > /tmp/verify.before.log 2>&1
 
 # ... 改代码 ...
 
 # 改后
-bash .harness/verify.sh --profile fast > /tmp/verify.after.log 2>&1
+bash .harness/verify.sh --tier fast > /tmp/verify.after.log 2>&1
 
 # diff
 diff /tmp/verify.before.log /tmp/verify.after.log

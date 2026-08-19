@@ -4,6 +4,14 @@
 
 ## 已引入
 
+### prd-for-humans（Harness 原生 Skill）
+
+- 路径：`rules/skills/prd-for-humans/`。
+- 角色：PM，仅在用户明确要求 PRD 时加载。
+- 用途：按需求体量自适应组织人类产品评审文档，加载版本化私有 Profile，并用确定性检查器阻止技术实现与 AI 交付契约混入 PRD。
+- 安全边界：Profile 私人正文只由 Agent 在生成 PRD 时读取；工作台与事件仅允许记录来源和版本。Skill 不写 Brain、不自动生成 `AI-CONTRACT`、不调用网络或外部工具。
+- 样例：三份 Harness 维护的结构样例覆盖小需求、数据需求和分期需求；样例用于回归结构弹性，不替代真实项目 PRD 的用户评审。
+
 ### designer-craft（Harness 适配 Skill）
 
 - 路径：`rules/skills/designer-craft/`
@@ -21,6 +29,7 @@
 | [nextlevelbuilder/ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) | `97eb2a20032f0833e3d317162208a60385b0f96e` | MIT | 大型风格、配色、字体与技术栈资料库，适合查询，不适合成为第二个角色路由器 | 可选人工参考；未随 Harness 分发 |
 | [vercel-labs/web-interface-guidelines](https://github.com/vercel-labs/web-interface-guidelines) | `4e799d45c17aec1498c269287a83b9dba22b966b` | MIT | 适合作为 Web 可访问性和界面质量 Gate，不足以单独定义审美 | 原则进入 Designer/QA 验收；未复制上游文件 |
 | [anthropics/skills/frontend-design](https://github.com/anthropics/skills/tree/main/skills/frontend-design) | `f17010c9bb483898c1d9c9f42dde2b3a98889434` | Apache-2.0（仓库） | 简洁的差异化前端设计基准，与 Impeccable 主能力重叠 | 仅作行为对照；未同时注入以避免重复指令 |
+| [mattpocock/skills](https://github.com/mattpocock/skills) | `8b78b531ab965735c5dc74f6f7a219e1e37326df` | MIT | 方法质量高且强调小型、可组合 Skill，但整包安装会引入独立的 AGENTS/CLAUDE、CONTEXT/ADR、Issue Tracker、自动提交和子 Agent 工作流，与 Harness 调度、权限和 `plan.md` 有重叠 | v0.18 只适配 `grilling`、`domain-modeling`、`to-spec` 的对话综合、`to-tickets` 的垂直切片、`tdd`、`diagnosing-bugs`、`code-review` 与 `writing-for-agents` 的精简原则；不运行上游 setup，不整包注入 |
 
 ## 安全审查清单
 
