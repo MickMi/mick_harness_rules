@@ -45,8 +45,14 @@ BRAIN_STATUS_PATH = "/api/brain/status.json"
 BRAIN_CANDIDATES_PATH = "/api/brain/candidates.json"
 BRAIN_PROJECT_MEMORY_PATH = "/api/brain/project-memory.json"
 BRAIN_SYNC_PATH = "/api/brain/sync"
+HARNESS_IMPROVEMENTS_PATH = "/api/harness/improvements.json"
+OPERATIONS_PATH = "/api/operations.json"
+OPERATION_PREVIEW_PATH = "/api/operations/preview"
+SKILLS_STATUS_PATH = "/api/skills.json"
 MAX_INGEST_BODY = 64 * 1024
 MAX_ARTIFACT_BYTES = 512 * 1024
+MAX_OPERATION_BODY = 16 * 1024
+OPERATION_LOCK_STALE_SECONDS = 30 * 60
 ROLES = {"PM", "Planner", "Executor", "QA", "Reviewer", "Designer", "Orchestrator", "Unknown"}
 OFFICE_ROLES = (
     {"role_id": "PM", "label": "PM", "source_roles": ("PM", "Planner", "Orchestrator")},
@@ -61,6 +67,7 @@ OFFICE_ROLE_BY_SOURCE = {
     for source_role in item["source_roles"]
 }
 _BRAIN_BOUNDARY: Any | None = None
+_SKILL_MANAGER: Any | None = None
 EVENT_TYPES = {
     "run.created",
     "run.status_changed",
@@ -97,6 +104,20 @@ def load_brain_boundary() -> Any:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     _BRAIN_BOUNDARY = module
+    return module
+
+
+def load_skill_manager() -> Any:
+    global _SKILL_MANAGER
+    if _SKILL_MANAGER is not None:
+        return _SKILL_MANAGER
+    path = Path(__file__).resolve().with_name("harness-skill-manager.py")
+    spec = importlib.util.spec_from_file_location("harness_skill_manager_runtime", path)
+    if spec is None or spec.loader is None:
+        raise ObserveError(f"Unable to load Skill manager: {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    _SKILL_MANAGER = module
     return module
 INGEST_EVENT_TYPES = {
     "agent.session_observed",
@@ -352,6 +373,28 @@ def load_registered_projects(registry_path: Path | None = None) -> list[dict[str
             }
         )
     return projects
+
+
+def unregister_project(project_identifier: str, registry_path: Path | None = None) -> dict[str, Any]:
+    """Remove an unavailable project from the registry without touching its files."""
+    path = registry_path or default_registry_path()
+    descriptors = load_registered_projects(path)
+    descriptor = next((item for item in descriptors if item["project_id"] == project_identifier), None)
+    if descriptor is None:
+        raise ObserveError("Registered project was not found", 404)
+    if descriptor["validation"] == "valid":
+        raise ObserveError("Connected projects cannot be removed from this recovery action", 409)
+    remaining = [item["path"] for item in descriptors if item["project_id"] != project_identifier]
+    value = "\n".join(remaining)
+    atomic_write(path, ((value + "\n") if value else "").encode("utf-8"))
+    return {
+        "removed": True,
+        "project_id": descriptor["project_id"],
+        "name": descriptor["name"],
+        "path": descriptor["path"],
+        "previous_validation": descriptor["validation"],
+        "files_deleted": False,
+    }
 
 
 def runtime_root(project: Path) -> Path:
@@ -1935,23 +1978,54 @@ def organization_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
         snapshot.get("handoffs", {}).values(),
         key=lambda item: item.get("derived_from_sequence", 0),
     )
+    quality_gaps_by_requirement: dict[str, dict[str, Any]] = {}
     transitions: list[dict[str, Any]] = []
     for item in rounds:
         from_role = office_role(item.get("role"))
         to_role = office_role(item.get("next_role"))
+        requirement_id = item.get("requirement_id") or item.get("task_id")
+        sequence = item.get("derived_from_sequence", 0)
+        requires_independent_qa = (
+            from_role in {"Designer", "Executor"}
+            and item.get("status") == "completed"
+            and bool(requirement_id)
+        )
+        qa_completed_after_delivery = any(
+            office_role(candidate.get("role")) == "QA"
+            and candidate.get("status") == "completed"
+            and (candidate.get("requirement_id") or candidate.get("task_id")) == requirement_id
+            and candidate.get("derived_from_sequence", 0) > sequence
+            for candidate in rounds
+        )
+        if requires_independent_qa and not qa_completed_after_delivery:
+            quality_gaps_by_requirement[str(requirement_id)] = {
+                "requirement_id": requirement_id,
+                "delivery_role": from_role,
+                "delivery_round_id": item.get("round_id"),
+                "delivery_sequence": sequence,
+                "summary": "已交付，但尚无 QA 独立验收回合",
+            }
+            to_role = "QA"
+        if item.get("status") != "completed":
+            continue
         if not from_role or not to_role or from_role == to_role:
             continue
+        transition_kind = "quality_gate" if requires_independent_qa and not qa_completed_after_delivery else "suggested"
         transitions.append(
             {
                 "transition_id": f"round:{item.get('round_id', item.get('derived_from_sequence', 'unknown'))}",
-                "kind": "suggested",
+                "kind": transition_kind,
                 "from_role": from_role,
                 "to_role": to_role,
                 "status": "pending",
-                "summary": item.get("summary") or item.get("objective"),
-                "requirement_id": item.get("requirement_id") or item.get("task_id"),
+                "summary": (
+                    "开发或设计已交付，先由 QA 完成独立验收"
+                    if transition_kind == "quality_gate"
+                    else item.get("summary") or item.get("objective")
+                ),
+                "requirement_id": requirement_id,
                 "round_id": item.get("round_id"),
-                "derived_from_sequence": item.get("derived_from_sequence", 0),
+                "derived_from_sequence": sequence,
             }
         )
     for item in handoffs:
@@ -1982,6 +2056,55 @@ def organization_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     if current_role is None and rounds:
         current_role = office_role(rounds[-1].get("role"))
 
+    quality_gaps = sorted(
+        quality_gaps_by_requirement.values(),
+        key=lambda item: item.get("delivery_sequence", 0),
+        reverse=True,
+    )
+
+    def normalized_history(item: dict[str, Any], role_id: str) -> dict[str, Any]:
+        requirement_id = item.get("requirement_id") or item.get("task_id")
+        history = {
+            "round_id": item.get("round_id"),
+            "requirement_id": requirement_id,
+            "status": item.get("status"),
+            "objective": item.get("objective"),
+            "summary": item.get("summary"),
+            "artifacts": list(dict.fromkeys(item.get("artifact_refs") or [])),
+            "verification_refs": list(dict.fromkeys(item.get("verification_refs") or [])),
+            "sequence": item.get("derived_from_sequence"),
+            "updated_at": item.get("updated_at"),
+        }
+        if role_id == "Reviewer":
+            related = [
+                candidate
+                for candidate in rounds
+                if (candidate.get("requirement_id") or candidate.get("task_id")) == requirement_id
+                and candidate.get("derived_from_sequence", 0) <= item.get("derived_from_sequence", 0)
+                and office_role(candidate.get("role")) in {"Designer", "Executor", "QA"}
+            ]
+            artifacts = list(
+                dict.fromkeys(
+                    artifact
+                    for candidate in related
+                    for artifact in (candidate.get("artifact_refs") or [])
+                )
+            )
+            verification_refs = list(
+                dict.fromkeys(
+                    reference
+                    for candidate in related
+                    for reference in (candidate.get("verification_refs") or [])
+                )
+            )
+            history["review_scope"] = {
+                "requirement_id": requirement_id,
+                "artifacts": artifacts,
+                "verification_refs": verification_refs,
+                "recorded": bool(requirement_id and (artifacts or verification_refs)),
+            }
+        return history
+
     roles: list[dict[str, Any]] = []
     for definition in OFFICE_ROLES:
         role_id = definition["role_id"]
@@ -1989,7 +2112,8 @@ def organization_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
         role_active = [item for item in role_rounds if item.get("status") == "active"]
         latest = role_rounds[-1] if role_rounds else None
         waiting = bool(current_transition and current_transition["to_role"] == role_id and not role_active)
-        status = "active" if role_active else "waiting" if waiting else "completed" if latest else "idle"
+        missing_qa = role_id == "QA" and not role_rounds and bool(quality_gaps)
+        status = "active" if role_active else "waiting" if waiting else "completed" if latest else "missing" if missing_qa else "idle"
         roles.append(
             {
                 "role_id": role_id,
@@ -1999,6 +2123,14 @@ def organization_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
                 "latest_summary": (latest.get("summary") or latest.get("objective")) if latest else None,
                 "latest_requirement_id": (latest.get("requirement_id") or latest.get("task_id")) if latest else None,
                 "last_sequence": latest.get("derived_from_sequence") if latest else None,
+                "participation": (
+                    "recorded"
+                    if role_rounds
+                    else "missing_independent_validation"
+                    if missing_qa
+                    else "not_recorded"
+                ),
+                "history": [normalized_history(item, role_id) for item in reversed(role_rounds)],
                 "work_rounds": role_rounds,
             }
         )
@@ -2007,6 +2139,7 @@ def organization_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
         "transitions": transitions,
         "current_transition": current_transition,
         "current_role": current_role,
+        "quality_gaps": quality_gaps,
     }
 
 
@@ -2559,6 +2692,255 @@ def version_plan_snapshot(project: Path, snapshot: dict[str, Any], git: dict[str
     }
 
 
+def evidence_reference_label(value: Any) -> str:
+    if isinstance(value, dict):
+        return str(value.get("label") or value.get("ref") or value.get("kind") or "未命名证据")
+    return str(value)
+
+
+def current_version_snapshot(snapshot: dict[str, Any], versions: dict[str, Any]) -> dict[str, Any] | None:
+    """Project the active version requirement-by-requirement from matching runtime evidence."""
+    version_items = versions.get("items", [])
+    current = next((item for item in version_items if item.get("status") == "in_progress"), None)
+    if current is None:
+        current = next((item for item in version_items if item.get("status") == "planned"), None)
+    if current is None and version_items:
+        current = version_items[0]
+    if current is None:
+        return None
+
+    all_rounds = list(snapshot.get("work_rounds", {}).values())
+    all_handoffs = list(snapshot.get("handoffs", {}).values())
+    all_verifications = list(snapshot.get("verifications", []))
+    all_blocks = list(snapshot.get("blocks", {}).values())
+    projected: list[dict[str, Any]] = []
+
+    for planned in current.get("requirements", []):
+        requirement_id = planned.get("requirement_id")
+        rounds = sorted(
+            (
+                item
+                for item in all_rounds
+                if (item.get("requirement_id") or item.get("task_id")) == requirement_id
+            ),
+            key=lambda item: item.get("derived_from_sequence", 0),
+        )
+        handoffs = sorted(
+            (
+                item
+                for item in all_handoffs
+                if (item.get("requirement_id") or item.get("task_id")) == requirement_id
+            ),
+            key=lambda item: item.get("derived_from_sequence", 0),
+        )
+        candidate_verifications = sorted(
+            (item for item in all_verifications if item.get("task_id") == requirement_id),
+            key=lambda item: item.get("derived_from_sequence", 0),
+        )
+        blocks = sorted(
+            (item for item in all_blocks if item.get("task_id") == requirement_id and item.get("active") is True),
+            key=lambda item: item.get("derived_from_sequence", 0),
+        )
+        active_rounds = [item for item in rounds if item.get("status") == "active"]
+        latest_round = active_rounds[-1] if active_rounds else rounds[-1] if rounds else None
+        latest_handoff = handoffs[-1] if handoffs else None
+        waiting_role = office_role(latest_handoff.get("to_role")) if latest_handoff else None
+        current_role = (
+            office_role(active_rounds[-1].get("role"))
+            if active_rounds
+            else waiting_role
+            if waiting_role
+            else office_role(latest_round.get("role"))
+            if latest_round
+            else None
+        )
+        observed_status = planned.get("observed_status") or snapshot.get("tasks", {}).get(requirement_id, {}).get("status")
+
+        if blocks:
+            effective_status = "blocked"
+        elif planned.get("status") == "completed":
+            effective_status = "completed"
+        elif active_rounds or rounds or observed_status in {"active", "in_progress", "verification_pending"}:
+            effective_status = "in_progress"
+        else:
+            effective_status = "planned"
+        if effective_status == "completed":
+            current_role = None
+
+        role_entries: dict[str, dict[str, Any]] = {}
+        role_order: list[str] = []
+        for item in rounds:
+            role_id = office_role(item.get("role"))
+            if not role_id:
+                continue
+            if role_id not in role_entries:
+                role_order.append(role_id)
+            role_entries[role_id] = {
+                "role": role_id,
+                "status": item.get("status") or "completed",
+                "objective": item.get("objective"),
+                "summary": item.get("summary"),
+                "round_id": item.get("round_id"),
+                "sequence": item.get("derived_from_sequence"),
+            }
+        for handoff in handoffs:
+            for field, status in (("from_role", "completed"), ("to_role", "waiting")):
+                role_id = office_role(handoff.get(field))
+                if not role_id or role_id in role_entries:
+                    continue
+                role_order.append(role_id)
+                role_entries[role_id] = {
+                    "role": role_id,
+                    "status": status,
+                    "objective": None,
+                    "summary": handoff.get("summary"),
+                    "round_id": handoff.get("round_id"),
+                    "sequence": handoff.get("derived_from_sequence"),
+                }
+        role_path = [role_entries[role_id] for role_id in role_order]
+
+        qa_rounds = [item for item in rounds if office_role(item.get("role")) == "QA"]
+        qa_latest = qa_rounds[-1] if qa_rounds else None
+        qa_references = list(
+            dict.fromkeys(
+                evidence_reference_label(reference)
+                for item in qa_rounds
+                for reference in (item.get("verification_refs") or [])
+            )
+        )
+        verifications = [
+            item
+            for item in candidate_verifications
+            if any(
+                reference in {
+                    str(item.get("verification_id") or ""),
+                    str(item.get("check") or ""),
+                    str(item.get("summary") or ""),
+                }
+                for reference in qa_references
+            )
+        ]
+        verification_evidence = list(
+            dict.fromkeys(
+                evidence_reference_label(reference)
+                for item in verifications
+                for reference in (item.get("evidence_refs") or [])
+            )
+        )
+        fallback_qa_evidence = []
+        if (
+            qa_latest
+            and qa_latest.get("status") == "completed"
+            and qa_latest.get("summary")
+            and not qa_references
+            and not verifications
+            and not verification_evidence
+        ):
+            fallback_qa_evidence = [f"QA 回写：{str(qa_latest['summary'])[:300]}"]
+        if qa_latest:
+            scope = qa_latest.get("objective") or qa_latest.get("summary") or "测试范围未记录"
+            test_status = "active" if qa_latest.get("status") == "active" else "completed"
+            test_message = "正在独立测试" if test_status == "active" else "独立测试已回写"
+            if scope == "测试范围未记录":
+                test_message = scope
+        else:
+            scope = None
+            test_status = "not_started"
+            test_message = "尚未进入独立测试"
+        test_snapshot = {
+            "status": test_status,
+            "scope": scope,
+            "summary": qa_latest.get("summary") if qa_latest else None,
+            "message": test_message,
+            "verification_refs": qa_references,
+            "verifications": [
+                {
+                    "verification_id": item.get("verification_id"),
+                    "result": item.get("result"),
+                    "check": item.get("check"),
+                    "summary": item.get("summary"),
+                    "evidence_refs": [evidence_reference_label(value) for value in (item.get("evidence_refs") or [])],
+                }
+                for item in verifications
+            ],
+            "evidence_refs": [*verification_evidence, *fallback_qa_evidence],
+            "evidence_count": (
+                len(qa_references) + len(verifications) + len(verification_evidence) + len(fallback_qa_evidence)
+            ),
+        }
+
+        if blocks:
+            next_step = f"先处理阻塞：{blocks[-1].get('summary') or blocks[-1].get('reason') or '未记录阻塞说明'}"
+        elif effective_status == "completed":
+            next_step = "需求已完成"
+        elif active_rounds:
+            next_step = active_rounds[-1].get("objective") or active_rounds[-1].get("summary") or "继续当前工作"
+        elif latest_handoff and office_role(latest_handoff.get("to_role")):
+            next_step = f"等待 {office_role(latest_handoff.get('to_role'))} 接手"
+        elif rounds:
+            next_step = "等待下一角色或完成确认"
+        else:
+            next_step = "等待开始"
+
+        artifacts = list(
+            dict.fromkeys(
+                artifact
+                for item in rounds
+                for artifact in (item.get("artifact_refs") or [])
+            )
+        )
+        projected.append(
+            {
+                **planned,
+                "planned_status": planned.get("status"),
+                "observed_status": observed_status,
+                "effective_status": effective_status,
+                "current_role": current_role,
+                "current_work": (
+                    {
+                        "role": current_role,
+                        "status": active_rounds[-1].get("status"),
+                        "objective": active_rounds[-1].get("objective"),
+                        "summary": active_rounds[-1].get("summary"),
+                        "updated_at": active_rounds[-1].get("updated_at"),
+                    }
+                    if active_rounds
+                    else None
+                ),
+                "role_path": role_path,
+                "test": test_snapshot,
+                "blocks": blocks,
+                "artifacts": artifacts,
+                "next_step": next_step,
+                "history": [
+                    {
+                        "round_id": item.get("round_id"),
+                        "role": office_role(item.get("role")),
+                        "status": item.get("status"),
+                        "objective": item.get("objective"),
+                        "summary": item.get("summary"),
+                        "sequence": item.get("derived_from_sequence"),
+                    }
+                    for item in reversed(rounds)
+                ],
+            }
+        )
+
+    counts = {
+        status: sum(item["effective_status"] == status for item in projected)
+        for status in ("completed", "in_progress", "planned", "blocked")
+    }
+    return {
+        "version": current.get("version"),
+        "status": current.get("status"),
+        "goal": current.get("goal"),
+        "branch": current.get("branch"),
+        "total": len(projected),
+        "counts": counts,
+        "requirements": projected,
+    }
+
+
 def project_workspace_snapshot(project: Path, snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
     if snapshot is None:
         snapshot = status_runtime(project)["snapshot"]
@@ -2572,6 +2954,7 @@ def project_workspace_snapshot(project: Path, snapshot: dict[str, Any] | None = 
         "artifacts": artifact_metadata(project, snapshot, versions),
         "git": git,
         "versions": versions,
+        "current_version": current_version_snapshot(snapshot, versions),
     }
 
 
@@ -2645,6 +3028,21 @@ def portfolio_snapshot(registry_path: Path | None = None, *, sync: bool = True) 
             "active_harness_commands": sum(item["summary"].get("active_harness_commands", 0) for item in projects),
         },
     }
+
+
+def skill_status_snapshot(registry_path: Path | None = None) -> dict[str, Any]:
+    """Return a read-only Skill inventory without exposing file contents or arbitrary paths."""
+    projects = [
+        {"project_id": item["project_id"], "name": item["name"], "path": item["path"]}
+        for item in load_registered_projects(registry_path)
+        if item["validation"] == "valid"
+    ]
+    harness_root = Path(os.environ.get("MICK_HARNESS_ROOT") or Path(__file__).resolve().parents[1])
+    return load_skill_manager().skill_snapshot(
+        harness_root=harness_root,
+        home=Path.home(),
+        projects=projects,
+    )
 
 
 def _agent_manager_report(home: Path | None = None) -> dict[str, Any]:
@@ -2845,6 +3243,346 @@ def codex_hook_config(platform: str = "codex") -> dict[str, Any]:
     }
 
 
+OPERATION_DEFINITIONS: tuple[dict[str, Any], ...] = (
+    {
+        "action": "harness-update",
+        "label": "更新 Harness",
+        "description": "拉取已发布版本，刷新所有已登记项目，并恢复唯一的 6425 工作服务。",
+        "parameter": None,
+        "confirmation": "更新本机 Harness",
+    },
+    {
+        "action": "project-init",
+        "label": "注入或升级项目",
+        "description": "为一个本机项目挂载当前 Harness 规则并加入全局项目登记。",
+        "parameter": "project_path",
+        "confirmation": "写入项目规则入口",
+    },
+    {
+        "action": "agent-sync",
+        "label": "修复 Agent 接入",
+        "description": "重新生成并同步受支持 Code Agent 的全局加载器与 Hook 配置。",
+        "parameter": None,
+        "confirmation": "同步 Agent 接入配置",
+    },
+)
+OPERATION_BY_ACTION = {item["action"]: item for item in OPERATION_DEFINITIONS}
+
+
+def operation_catalog() -> list[dict[str, Any]]:
+    return [dict(item) for item in OPERATION_DEFINITIONS]
+
+
+def operations_root(state_root: Path | None = None) -> Path:
+    return (state_root or default_state_root()) / "operations"
+
+
+def operation_path(operation_id: str, state_root: Path | None = None) -> Path:
+    if not re.fullmatch(r"op_[A-Za-z0-9]{16,40}", operation_id):
+        raise ObserveError("Invalid operation id", 400)
+    return operations_root(state_root) / f"{operation_id}.json"
+
+
+def load_operation(operation_id: str, state_root: Path | None = None) -> dict[str, Any]:
+    value = load_json(operation_path(operation_id, state_root))
+    if not isinstance(value, dict):
+        raise ObserveError("Operation not found", 404)
+    return value
+
+
+def public_operation(value: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: item
+        for key, item in value.items()
+        if key not in {"confirmation_token", "fingerprint"}
+    }
+
+
+def operation_snapshot(*, state_root: Path | None = None) -> dict[str, Any]:
+    root = operations_root(state_root)
+    items: list[dict[str, Any]] = []
+    if root.is_dir():
+        for path in sorted(root.glob("op_*.json"), reverse=True):
+            try:
+                value = load_json(path)
+            except ObserveError:
+                continue
+            if isinstance(value, dict):
+                items.append(public_operation(value))
+    active = next((item for item in items if item.get("status") in {"queued", "running"}), None)
+    return {
+        "schema_version": "1",
+        "generated_at": now_iso(),
+        "catalog": operation_catalog(),
+        "active": active,
+        "items": items[:20],
+    }
+
+
+def normalized_operation_parameters(action: str, parameters: dict[str, Any] | None) -> dict[str, Any]:
+    if action not in OPERATION_BY_ACTION:
+        raise ObserveError(f"Unsupported operation: {action}", 400)
+    if parameters is None:
+        parameters = {}
+    if not isinstance(parameters, dict):
+        raise ObserveError("Operation parameters must be an object", 400)
+    allowed = {"project_path", "full"} if action == "project-init" else set()
+    unknown = set(parameters) - allowed
+    if unknown:
+        raise ObserveError(f"Unsupported operation parameters: {', '.join(sorted(unknown))}", 400)
+    if action != "project-init":
+        return {}
+
+    raw_path = parameters.get("project_path")
+    if not isinstance(raw_path, str) or not raw_path.strip():
+        raise ObserveError("Project path is required", 400)
+    candidate = Path(raw_path).expanduser()
+    if not candidate.is_absolute():
+        raise ObserveError("Project path must be absolute", 400)
+    try:
+        resolved = candidate.resolve(strict=True)
+    except OSError as error:
+        raise ObserveError(f"Project path does not exist: {candidate}", 400) from error
+    if not resolved.is_dir():
+        raise ObserveError(f"Project path is not a directory: {resolved}", 400)
+    full = parameters.get("full", False)
+    if not isinstance(full, bool):
+        raise ObserveError("Project full mode must be true or false", 400)
+    return {"project_path": str(resolved), "full": full}
+
+
+def operation_preflight(
+    action: str,
+    parameters: dict[str, Any],
+    *,
+    harness_root: Path | None = None,
+) -> dict[str, Any]:
+    configured_root = os.environ.get("MICK_HARNESS_ROOT")
+    selected_root = (harness_root or (Path(configured_root) if configured_root else Path(__file__).resolve().parents[1])).resolve()
+    definition = OPERATION_BY_ACTION[action]
+    can_execute = True
+    blockers: list[str] = []
+    effects: list[str]
+    target: str
+    mode: str | None = None
+    if action == "harness-update":
+        target = str(selected_root)
+        effects = ["拉取 main 的最新已发布代码", "刷新已登记项目的规则入口", "重启并确认 6425 服务健康"]
+        if not (selected_root / ".git").is_dir():
+            can_execute = False
+            blockers.append("当前 Harness 不是 Git 安装，不能在线更新")
+    elif action == "project-init":
+        target_path = Path(parameters["project_path"])
+        target = str(target_path)
+        already_injected = (target_path / ".harness").exists() or (target_path / "AGENTS.md").is_file()
+        mode = "upgrade" if already_injected else "init"
+        effects = [
+            "刷新项目的 Harness 规则入口" if already_injected else "创建项目的 Harness 规则入口",
+            "把项目加入本机全局工作台",
+            "保留项目现有业务文件与 Git 历史",
+        ]
+        if parameters.get("full"):
+            effects.append("同时检查 Brain 与扩展配置")
+    else:
+        target = "本机受支持的 Code Agent"
+        effects = ["重新生成 Agent 加载器", "同步受支持的 Hook 配置", "刷新工作台的 Agent 接入诊断"]
+        if not (selected_root / "scripts" / "harness-agent-manager.py").is_file():
+            can_execute = False
+            blockers.append("Agent 管理器不存在")
+    return {
+        "label": definition["label"],
+        "description": definition["description"],
+        "confirmation": definition["confirmation"],
+        "target": target,
+        "mode": mode,
+        "effects": effects,
+        "blockers": blockers,
+        "can_execute": can_execute,
+        "recovery": "失败会保留可重试记录；服务更新复用幂等安装与旧配置恢复。",
+    }
+
+
+def prepare_operation(
+    action: str,
+    parameters: dict[str, Any] | None,
+    *,
+    state_root: Path | None = None,
+    harness_root: Path | None = None,
+) -> dict[str, Any]:
+    normalized = normalized_operation_parameters(action, parameters)
+    fingerprint = sha256_text(json.dumps({"action": action, "parameters": normalized}, sort_keys=True))
+    root = operations_root(state_root)
+    root.mkdir(parents=True, exist_ok=True)
+    for path in sorted(root.glob("op_*.json"), reverse=True):
+        value = load_json(path)
+        if not isinstance(value, dict) or value.get("fingerprint") != fingerprint:
+            continue
+        if value.get("status") in {"prepared", "queued", "running"}:
+            return {**value, "reused": True}
+
+    preflight = operation_preflight(action, normalized, harness_root=harness_root)
+    operation_id = new_id("op")
+    value = {
+        "operation_id": operation_id,
+        "action": action,
+        "status": "prepared",
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+        "parameters": normalized,
+        "fingerprint": fingerprint,
+        "confirmation_token": secrets.token_urlsafe(24),
+        "reused": False,
+        **preflight,
+    }
+    atomic_write(operation_path(operation_id, state_root), json_bytes(value))
+    append_operation_audit(value, "prepared", state_root=state_root)
+    return value
+
+
+def append_operation_audit(value: dict[str, Any], event: str, *, state_root: Path | None = None) -> None:
+    path = operations_root(state_root) / "audit.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    entry = {
+        "at": now_iso(),
+        "event": event,
+        "operation_id": value.get("operation_id"),
+        "action": value.get("action"),
+        "status": value.get("status"),
+        "target": value.get("target"),
+        "exit_code": value.get("exit_code"),
+    }
+    with path.open("ab") as handle:
+        handle.write(json_bytes(entry).replace(b"\n", b"") + b"\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def confirm_operation(
+    operation_id: str,
+    confirmation_token: str,
+    *,
+    state_root: Path | None = None,
+    spawn_worker: bool = True,
+) -> dict[str, Any]:
+    value = load_operation(operation_id, state_root)
+    if value.get("status") != "prepared":
+        raise ObserveError("Operation was already confirmed", 409)
+    expected = str(value.get("confirmation_token") or "")
+    if not expected or not hmac.compare_digest(str(confirmation_token), expected):
+        raise ObserveError("Invalid operation confirmation", 403)
+    if not value.get("can_execute"):
+        raise ObserveError("Operation preflight is blocked", 409)
+    value.pop("confirmation_token", None)
+    value["status"] = "queued"
+    value["confirmed_at"] = now_iso()
+    value["updated_at"] = now_iso()
+    atomic_write(operation_path(operation_id, state_root), json_bytes(value))
+    append_operation_audit(value, "confirmed", state_root=state_root)
+    if spawn_worker:
+        environment = os.environ.copy()
+        environment["MICK_HARNESS_STATE_DIR"] = str(state_root or default_state_root())
+        environment["MICK_HARNESS_STATE_ROOT"] = str(state_root or default_state_root())
+        environment["MICK_HARNESS_ACTIVITY"] = "0"
+        subprocess.Popen(
+            [sys.executable, str(Path(__file__).resolve()), "operation-worker", operation_id],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+            close_fds=True,
+            env=environment,
+        )
+    return public_operation(value)
+
+
+@contextlib.contextmanager
+def operation_mutex(*, state_root: Path | None = None) -> Iterable[None]:
+    path = operations_root(state_root) / "mutation.lock"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists() and time.time() - path.stat().st_mtime > OPERATION_LOCK_STALE_SECONDS:
+        with contextlib.suppress(FileNotFoundError):
+            path.unlink()
+    try:
+        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError as error:
+        raise ObserveError("Another Harness operation is already running", 409) from error
+    try:
+        os.write(fd, f"{os.getpid()} {now_iso()}\n".encode("utf-8"))
+        os.close(fd)
+        yield
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            path.unlink()
+
+
+def operation_commands(value: dict[str, Any], *, harness_root: Path | None = None) -> list[list[str]]:
+    configured_root = os.environ.get("MICK_HARNESS_ROOT")
+    selected_root = (harness_root or (Path(configured_root) if configured_root else Path(__file__).resolve().parents[1])).resolve()
+    harness = str(selected_root / "bin" / "harness")
+    action = value.get("action")
+    if action == "harness-update":
+        return [[harness, "update"], [harness, "observe", "service", "restart"]]
+    if action == "project-init":
+        command = [harness, "init", str(value.get("parameters", {}).get("project_path"))]
+        if value.get("parameters", {}).get("full"):
+            command.append("--full")
+        return [command]
+    if action == "agent-sync":
+        return [[harness, "agents", "sync", "--quiet"]]
+    raise ObserveError(f"Unsupported operation: {action}", 400)
+
+
+def redacted_operation_error(value: str) -> str:
+    compact = " ".join(value.split())[:500]
+    compact = re.sub(r"(?i)(token|password|secret|authorization)[=: ]+[^ ]+", r"\1=[redacted]", compact)
+    return compact or "操作失败，未返回可读错误。"
+
+
+def run_operation_worker(
+    operation_id: str,
+    *,
+    state_root: Path | None = None,
+    harness_root: Path | None = None,
+) -> dict[str, Any]:
+    path = operation_path(operation_id, state_root)
+    value = load_operation(operation_id, state_root)
+    if value.get("status") not in {"queued", "running"}:
+        raise ObserveError("Operation is not queued", 409)
+    try:
+        with operation_mutex(state_root=state_root):
+            value["status"] = "running"
+            value["started_at"] = now_iso()
+            value["updated_at"] = now_iso()
+            atomic_write(path, json_bytes(value))
+            append_operation_audit(value, "started", state_root=state_root)
+            environment = os.environ.copy()
+            environment["MICK_HARNESS_ACTIVITY"] = "0"
+            for command in operation_commands(value, harness_root=harness_root):
+                result = subprocess.run(
+                    command,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=900,
+                    env=environment,
+                )
+                if result.returncode != 0:
+                    detail = redacted_operation_error(result.stderr or result.stdout)
+                    raise ObserveError(detail, result.returncode or 1)
+            value["status"] = "succeeded"
+            value["exit_code"] = 0
+            value["summary"] = f"{value.get('label', 'Harness 操作')}已完成。"
+    except (OSError, ObserveError, subprocess.TimeoutExpired) as error:
+        value["status"] = "failed"
+        value["exit_code"] = getattr(error, "exit_code", 1)
+        value["summary"] = redacted_operation_error(str(error))
+    value["finished_at"] = now_iso()
+    value["updated_at"] = now_iso()
+    atomic_write(path, json_bytes(value))
+    append_operation_audit(value, "finished", state_root=state_root)
+    return public_operation(value)
+
+
 def safe_run_id(value: str) -> bool:
     return bool(re.fullmatch(r"run_[A-Za-z0-9._-]{8,}", value))
 
@@ -2964,6 +3702,32 @@ def wait_for_observer(port: int, *, timeout: float = 8.0) -> dict[str, Any] | No
     return None
 
 
+def restore_previous_service(
+    plist_path: Path,
+    previous_plist: bytes | None,
+    *,
+    previous_loaded: bool,
+    previous_port: int | None,
+    previous_healthy: bool,
+) -> str:
+    run_launchctl(["bootout", launchctl_target()], check=False)
+    if previous_plist is None:
+        with contextlib.suppress(FileNotFoundError):
+            plist_path.unlink()
+        return "removed failed service config; no previous service existed"
+
+    atomic_write(plist_path, previous_plist)
+    if not previous_loaded:
+        return "restored previous service config; previous service was not loaded"
+
+    run_launchctl(["bootstrap", launchctl_domain(), str(plist_path)])
+    run_launchctl(["enable", launchctl_target()], check=False)
+    run_launchctl(["kickstart", "-k", launchctl_target()])
+    if previous_healthy and (previous_port is None or wait_for_observer(previous_port) is None):
+        raise ObserveError("previous service config was restored but did not become healthy")
+    return "restored and restarted previous service"
+
+
 def install_service(*, port: int = DEFAULT_PORT, home: Path | None = None) -> dict[str, Any]:
     if sys.platform != "darwin":
         raise ObserveError("Mick Harness Observer service installation currently requires macOS", 64)
@@ -2974,14 +3738,42 @@ def install_service(*, port: int = DEFAULT_PORT, home: Path | None = None) -> di
     plist_path = launch_agent_path(home)
     plist_path.parent.mkdir(parents=True, exist_ok=True)
     config = build_launch_agent_plist(harness_root, state_root, port=port)
-    atomic_write(plist_path, plistlib.dumps(config, fmt=plistlib.FMT_XML, sort_keys=True))
-    run_launchctl(["bootout", launchctl_target()], check=False)
-    run_launchctl(["bootstrap", launchctl_domain(), str(plist_path)])
-    run_launchctl(["enable", launchctl_target()], check=False)
-    run_launchctl(["kickstart", "-k", launchctl_target()])
-    health = wait_for_observer(port)
-    if health is None:
-        raise ObserveError(f"{SERVICE_NAME} was installed but did not become healthy on 127.0.0.1:{port}")
+    desired_plist = plistlib.dumps(config, fmt=plistlib.FMT_XML, sort_keys=True)
+    previous_plist = plist_path.read_bytes() if plist_path.is_file() else None
+    previous_loaded = launch_agent_loaded()
+    previous_port: int | None = None
+    if previous_plist is not None:
+        with contextlib.suppress(ObserveError):
+            previous_port = installed_service_port(plist_path)
+    previous_healthy = bool(previous_port is not None and observer_health(previous_port) is not None)
+
+    if previous_plist == desired_plist:
+        if previous_loaded and previous_healthy:
+            return service_status(home=home, port=port)
+        return start_service(home=home)
+
+    atomic_write(plist_path, desired_plist)
+    try:
+        if previous_loaded:
+            run_launchctl(["bootout", launchctl_target()], check=False)
+        run_launchctl(["bootstrap", launchctl_domain(), str(plist_path)])
+        run_launchctl(["enable", launchctl_target()], check=False)
+        run_launchctl(["kickstart", "-k", launchctl_target()])
+        health = wait_for_observer(port)
+        if health is None:
+            raise ObserveError(f"{SERVICE_NAME} was installed but did not become healthy on 127.0.0.1:{port}")
+    except (OSError, ObserveError) as error:
+        try:
+            rollback = restore_previous_service(
+                plist_path,
+                previous_plist,
+                previous_loaded=previous_loaded,
+                previous_port=previous_port,
+                previous_healthy=previous_healthy,
+            )
+        except (OSError, ObserveError) as rollback_error:
+            raise ObserveError(f"{error}; rollback failed: {rollback_error}") from error
+        raise ObserveError(f"{error}; rollback succeeded: {rollback}") from error
     return service_status(home=home, port=port)
 
 
@@ -3220,6 +4012,36 @@ def serve_runtime(
                         head_only=head_only,
                     )
                     return
+                if path == SKILLS_STATUS_PATH:
+                    if parsed.query:
+                        self._send_bytes(
+                            400,
+                            "application/json",
+                            json_bytes({"error": "skill-inventory-does-not-accept-paths"}),
+                            head_only=head_only,
+                        )
+                        return
+                    self._send_bytes(
+                        200,
+                        "application/json",
+                        json_bytes(skill_status_snapshot(registry_path)),
+                        head_only=head_only,
+                    )
+                    return
+                if path == OPERATIONS_PATH:
+                    value = operation_snapshot()
+                    value["action_token"] = action_token
+                    self._send_bytes(200, "application/json", json_bytes(value), head_only=head_only)
+                    return
+                operation_status_match = re.fullmatch(r"/api/operations/(op_[A-Za-z0-9]{16,40})\.json", path)
+                if operation_status_match:
+                    self._send_bytes(
+                        200,
+                        "application/json",
+                        json_bytes(public_operation(load_operation(operation_status_match.group(1)))),
+                        head_only=head_only,
+                    )
+                    return
                 if path == BRAIN_STATUS_PATH:
                     value = load_brain_boundary().health_snapshot()
                     value["action_token"] = action_token
@@ -3233,6 +4055,10 @@ def serve_runtime(
                     query = parse_qs(parsed.query)
                     selected = (query.get("project") or [None])[0]
                     value = {"items": load_brain_boundary().list_project_memories(project=selected)}
+                    self._send_bytes(200, "application/json", json_bytes(value), head_only=head_only)
+                    return
+                if path == HARNESS_IMPROVEMENTS_PATH:
+                    value = {"items": load_brain_boundary().list_harness_improvements()}
                     self._send_bytes(200, "application/json", json_bytes(value), head_only=head_only)
                     return
                 if path == "/api/index.json" and project is not None and registry_path is None:
@@ -3329,7 +4155,7 @@ def serve_runtime(
                     return
                 self._send_bytes(404, "application/json", json_bytes({"error": "not-found"}), head_only=head_only)
             except ObserveError as error:
-                status = error.exit_code if error.exit_code in {400, 403, 404, 413, 415} else 500
+                status = error.exit_code if error.exit_code in {400, 403, 404, 409, 413, 415, 422} else 500
                 self._send_bytes(status, "application/json", json_bytes({"error": str(error)}), head_only=head_only)
 
         def do_GET(self) -> None:  # noqa: N802
@@ -3340,15 +4166,40 @@ def serve_runtime(
 
         def do_POST(self) -> None:  # noqa: N802
             parsed = urlparse(self.path)
-            brain_candidate_action = re.fullmatch(
-                r"/api/brain/candidates/(memory_[a-f0-9]{20})/(approve|reject|retry|update|merge|ignore-similar)", parsed.path
+            project_unregister = re.fullmatch(
+                r"/api/projects/([A-Za-z0-9._-]+)/unregister", parsed.path
             )
-            project_memory_action = re.fullmatch(
-                r"/api/brain/project-memory/(project_memory_[a-f0-9]{20})/(correct|undo|promote)", parsed.path
-            )
-            project_memory_merge_action = parsed.path == "/api/brain/project-memory/merge"
-            brain_sync_action = parsed.path == BRAIN_SYNC_PATH
-            if brain_candidate_action or project_memory_action or project_memory_merge_action or brain_sync_action:
+            if project_unregister:
+                supplied_action_token = self.headers.get("X-Harness-Action-Token", "")
+                if not supplied_action_token or not hmac.compare_digest(supplied_action_token, action_token):
+                    self._send_bytes(401, "application/json", json_bytes({"error": "unauthorized-action"}))
+                    return
+                if registry_path is None:
+                    self._send_bytes(409, "application/json", json_bytes({"error": "portfolio-registry-required"}))
+                    return
+                content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+                if content_type != "application/json":
+                    self._send_bytes(415, "application/json", json_bytes({"error": "content-type-must-be-application-json"}))
+                    return
+                try:
+                    content_length = int(self.headers.get("Content-Length", "0"))
+                    body = json.loads(self.rfile.read(content_length).decode("utf-8")) if content_length else {}
+                    if not isinstance(body, dict) or body.get("confirmed") is not True:
+                        raise ObserveError("Project removal requires explicit confirmation", 400)
+                    result = unregister_project(project_unregister.group(1), registry_path)
+                    scan_once()
+                except (ValueError, UnicodeDecodeError, json.JSONDecodeError):
+                    self._send_bytes(400, "application/json", json_bytes({"error": "invalid-json"}))
+                    return
+                except ObserveError as error:
+                    status = error.exit_code if error.exit_code in {400, 403, 404, 409, 413, 415, 422} else 500
+                    self._send_bytes(status, "application/json", json_bytes({"error": str(error)}))
+                    return
+                self._send_bytes(200, "application/json", json_bytes(result))
+                return
+            operation_execute = re.fullmatch(r"/api/operations/(op_[A-Za-z0-9]{16,40})/execute", parsed.path)
+            operation_action = parsed.path == OPERATION_PREVIEW_PATH or operation_execute is not None
+            if operation_action:
                 supplied_action_token = self.headers.get("X-Harness-Action-Token", "")
                 if not supplied_action_token or not hmac.compare_digest(supplied_action_token, action_token):
                     self._send_bytes(401, "application/json", json_bytes({"error": "unauthorized-action"}))
@@ -3359,11 +4210,114 @@ def serve_runtime(
                     return
                 try:
                     content_length = int(self.headers.get("Content-Length", "0"))
+                except ValueError:
+                    self._send_bytes(400, "application/json", json_bytes({"error": "invalid-content-length"}))
+                    return
+                if content_length > MAX_OPERATION_BODY:
+                    self._send_bytes(413, "application/json", json_bytes({"error": "body-too-large"}))
+                    return
+                try:
+                    body = json.loads(self.rfile.read(content_length).decode("utf-8")) if content_length else {}
+                    if not isinstance(body, dict):
+                        raise ObserveError("Operation body must be an object", 400)
+                    if parsed.path == OPERATION_PREVIEW_PATH:
+                        result = prepare_operation(str(body.get("action") or ""), body.get("parameters"))
+                    else:
+                        result = confirm_operation(
+                            operation_execute.group(1),
+                            str(body.get("confirmation_token") or ""),
+                        )
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    self._send_bytes(400, "application/json", json_bytes({"error": "invalid-json"}))
+                    return
+                except ObserveError as error:
+                    status = error.exit_code if error.exit_code in {400, 403, 404, 409, 413, 415, 422} else 500
+                    self._send_bytes(status, "application/json", json_bytes({"error": str(error)}))
+                    return
+                self._send_bytes(200, "application/json", json_bytes(result))
+                return
+            brain_candidate_action = re.fullmatch(
+                r"/api/brain/candidates/(memory_[a-f0-9]{20})/(approve|reject|retry|update|merge|ignore-similar)", parsed.path
+            )
+            project_memory_action = re.fullmatch(
+                r"/api/brain/project-memory/(project_memory_[a-f0-9]{20})/(correct|undo|promote)", parsed.path
+            )
+            project_memory_merge_action = parsed.path == "/api/brain/project-memory/merge"
+            brain_sync_action = parsed.path == BRAIN_SYNC_PATH
+            harness_improvement_create = parsed.path == "/api/harness/improvements"
+            harness_improvement_action = re.fullmatch(
+                r"/api/harness/improvements/(improvement_[a-f0-9]{20})/(update|merge|submit|approve|reject|mark-implemented|verify-effect)",
+                parsed.path,
+            )
+            if (
+                brain_candidate_action or project_memory_action or project_memory_merge_action or brain_sync_action
+                or harness_improvement_create or harness_improvement_action
+            ):
+                supplied_action_token = self.headers.get("X-Harness-Action-Token", "")
+                if not supplied_action_token or not hmac.compare_digest(supplied_action_token, action_token):
+                    self._send_bytes(401, "application/json", json_bytes({"error": "unauthorized-action"}))
+                    return
+                content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+                if content_type != "application/json":
+                    self._send_bytes(415, "application/json", json_bytes({"error": "content-type-must-be-application-json"}))
+                    return
+                try:
+                    content_length = int(self.headers.get("Content-Length", "0"))
+                except ValueError:
+                    self._send_bytes(400, "application/json", json_bytes({"error": "invalid-content-length"}))
+                    return
+                if content_length < 0:
+                    self._send_bytes(400, "application/json", json_bytes({"error": "invalid-content-length"}))
+                    return
+                if content_length > MAX_OPERATION_BODY:
+                    self._send_bytes(413, "application/json", json_bytes({"error": "body-too-large"}))
+                    return
+                try:
                     body = json.loads(self.rfile.read(content_length).decode("utf-8")) if content_length else {}
                     if not isinstance(body, dict):
                         raise ValueError("body-must-be-object")
                     brain = load_brain_boundary()
-                    if brain_sync_action:
+                    if harness_improvement_create:
+                        result = brain.create_harness_improvement(
+                            str(body.get("memory_id") or ""),
+                            target=str(body.get("target") or ""),
+                            summary=body.get("summary"),
+                        )
+                    elif harness_improvement_action:
+                        identifier, action = harness_improvement_action.groups()
+                        if action == "update":
+                            result = brain.update_harness_improvement(
+                                identifier, target=body.get("target"), summary=body.get("summary")
+                            )
+                        elif action == "merge":
+                            duplicate_ids = body.get("improvement_ids")
+                            if not isinstance(duplicate_ids, list) or not all(isinstance(value, str) for value in duplicate_ids):
+                                raise ValueError("improvement_ids-must-be-string-list")
+                            result = brain.merge_harness_improvements(
+                                identifier, duplicate_ids, summary=body.get("summary")
+                            )
+                        elif action == "submit":
+                            result = brain.submit_harness_improvement(
+                                identifier, force=body.get("confirmed") is True
+                            )
+                        elif action == "approve":
+                            result = brain.approve_harness_improvement(identifier)
+                        elif action == "reject":
+                            result = brain.reject_harness_improvement(identifier, reason=body.get("reason"))
+                        elif action == "mark-implemented":
+                            result = brain.mark_harness_improvement_implemented(
+                                identifier,
+                                artifact_path=str(body.get("artifact_path") or ""),
+                                baseline_count=body.get("baseline_count"),
+                            )
+                        else:
+                            result = brain.verify_harness_improvement_effect(
+                                identifier,
+                                result=str(body.get("result") or ""),
+                                current_count=body.get("current_count"),
+                                note=str(body.get("note") or ""),
+                            )
+                    elif brain_sync_action:
                         result = brain.sync_pending(
                             confirmed=body.get("confirmed") is True,
                             dry_run=body.get("dry_run") is True,
@@ -3511,6 +4465,8 @@ def build_parser() -> argparse.ArgumentParser:
     activity.add_argument("--state", required=True, choices=("started", "completed"))
     activity.add_argument("--invocation", required=True)
     activity.add_argument("--exit-code", type=int)
+    operation_worker = subparsers.add_parser("operation-worker", help=argparse.SUPPRESS)
+    operation_worker.add_argument("operation_id")
     emit = subparsers.add_parser("emit", help="Write a structured Agent work event to the local Harness server")
     emit.add_argument("event_type", choices=("work.round_started", "work.round_completed", "decision.recorded", "handoff.created"))
     emit.add_argument("--project", default=os.getcwd(), help="Injected project directory (default: current directory)")
@@ -3554,6 +4510,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
+        if args.command == "operation-worker":
+            value = run_operation_worker(args.operation_id)
+            print(json.dumps(value, ensure_ascii=False, indent=2))
+            return 0 if value.get("status") == "succeeded" else 1
         if args.command == "hook-config":
             print(json.dumps(codex_hook_config(args.platform), ensure_ascii=False, indent=2))
             return 0

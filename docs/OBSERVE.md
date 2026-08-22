@@ -13,6 +13,8 @@ harness observe service install
 harness observe service status
 ```
 
+`service install` 是幂等维护操作：现有配置一致且服务健康时保持当前进程，不先停止服务；确实需要替换配置时会保留旧 plist 和加载状态，新服务启动失败则恢复旧服务并在错误中报告恢复结果。
+
 浏览器打开 `http://127.0.0.1:6425/`。服务只监听本机；读取接口使用 `GET` / `HEAD`，结构化回写只开放带本机令牌的 `POST /api/v1/events`。`6425` 对应电话键盘上的 `MICK`。
 
 开发或排错时可以使用临时前台模式：
@@ -27,6 +29,58 @@ harness observe watch --all
 harness observe init /path/to/project
 harness observe watch /path/to/project --port 6426
 ```
+
+前台端口只用于开发对照，不是第二套工作台。产品状态以 LaunchAgent 管理的 `6425` 为准；前台 `watch --all` 与后台服务读取同一份项目注册表并执行同一套扫描逻辑。
+
+## v0.19.0 · 2026-08-20 · 工作台受控操作
+
+工作台首页提供三项确定性操作：**更新 Harness**、**注入或升级项目**、**修复 Agent 接入**。它们不是交给 AI 临时组织命令，而是后端维护的固定白名单；浏览器不能提交命令名、参数数组、脚本正文或环境变量。
+
+每项操作都经过同一条用户路径：
+
+1. 用户选择动作；项目注入额外填写一个已存在的绝对目录。
+2. 后端重新验证动作和参数，只读生成确认单，列出目标、影响、阻塞和恢复说明。此时不会写入。
+3. 用户明确确认后，一次性确认单进入队列；同一确认单不能重复执行，同时只能有一个本机配置操作。
+4. 独立 worker 调用固定 Harness CLI。刷新或关闭页面不会中断；工作台持续读取等待、执行、成功或失败状态。
+5. 结果写入 `~/.local/state/mick-harness/operations/`，最近结果可在首页展开；审计只保留动作、目标、状态、时间和退出码，不保存密钥、完整命令输出或环境变量。
+
+三项操作的实际边界：
+
+| 操作 | 会做什么 | 不会做什么 |
+|---|---|---|
+| 更新 Harness | 拉取 `main` 已发布代码、刷新登记项目、同步 Agent，并由独立 worker 重启和确认 6425 | 不切换项目分支，不修改项目代码，不吞掉服务恢复错误 |
+| 注入或升级项目 | 复用 `harness init` 挂载规则入口并登记项目；完整模式额外检查 Brain 配置 | 不覆盖不兼容的真实 `.harness/` 目录，不删除已有规则或 Git 历史 |
+| 修复 Agent 接入 | 复用 `harness agents sync --quiet` 重新生成支持范围内的加载器与 Hook | 不安装未知 Agent，不接管外部 Skill，不把“文件存在”冒充“真实会话已生效” |
+
+操作接口复用当前服务启动时生成的本机动作令牌。`GET /api/operations.json` 返回动作目录、当前任务、最近结果和页面会话令牌；`POST /api/operations/preview` 生成一次性确认单；`POST /api/operations/<id>/execute` 只接受该确认单。服务仅监听 `127.0.0.1`，但本机边界不等于无需鉴权：没有动作令牌的写请求仍返回 `401`。
+
+更新期间旧页面可能短暂失去连接，因为产品端口会切换到新进程；worker 不依赖旧请求存活，完成后操作记录仍可读取。若更新或服务启动失败，页面显示脱敏错误并保留重试入口；LaunchAgent 的配置替换继续使用 task-133 的旧配置恢复机制。
+
+## v0.19.0 · 2026-08-20 · 角色办公室与失联项目
+
+角色办公室展示的是真实结构化回合，不是根据测试数量推测角色参与。Executor 运行自验、Reviewer 重跑测试和 QA 独立验收是三件不同的事：只有同需求、且时序上晚于开发交付的 QA 完成回合，才显示“QA 已参与”。UI/交互、外部系统、数据写入、故障恢复、共享契约和 plan 已定义验收的交付，流转顺序是 Executor/Designer → QA → Reviewer。
+
+Reviewer 不是“再跑一次测试”的别名。它审查原始需求、受影响 diff/产物、QA 证据、findings 与剩余风险。角色历史会展示对应需求、审查对象和结论；事件未携带产物或验证引用时，工作台明确显示“未记录”。
+
+左侧导航将可用项目与“连接异常”分开。不存在、不可读或缺少 Harness 入口的项目可以经二次确认“移出工作台”。这个动作只从 `registered-projects` 删除该路径，返回 `files_deleted=false`；它不访问、修改或删除项目目录及 `.harness-runtime/`。以后在该目录重新执行 `harness init` 即可再次登记。
+
+## v0.19.0 · 2026-08-21 · 当前版本需求指挥台
+
+项目主页先展示当前版本需求，不再用一个全局角色阶段解释整个版本。每条需求独立显示计划状态、实际参与角色、当前工作、QA 测试范围、显式验证证据、活动阻塞和下一步；点击需求后，角色办公室只突出该需求的参与和交接。
+
+版本需求来自 `docs/VERSIONS.md`，执行事实来自同 `requirement_id` 的结构化工作回合、验证、阻塞与交接。没有 QA 回合时显示“尚未进入独立测试”；存在 QA 回合但没有目标或摘要时显示“测试范围未记录”。验证证据必须由 QA 回合显式引用，不能仅凭相同的 `task_id` 把旧 Plan 步骤自检混入当前需求。
+
+项目导航使用“项目主页 / 版本记录 / 交付物”。项目主页负责当前版本行动，版本记录负责历史版本、分支、工作区和发布标签关系。
+
+## v0.19.0 · 2026-08-22 · 项目问题回流 Harness
+
+Brain 项目记忆和 Harness 改进是两条不同链路：项目记忆保存某个项目已经确认的事实；Harness 改进只处理“现有 Harness 没有阻止或发现的问题”。工作台不会自动把每条项目记忆都判成 Harness 缺陷，用户必须在项目记忆中明确点击“提交为 Harness 问题”，并选择建议落点：Rule、Skill、Checker 或 Profile。
+
+候选先进入“项目观察中”。单个项目的一次问题默认留在项目层，不会自动送审；跨项目相似候选可以合并来源和频次，同一候选涉及至少两个项目或累计至少三次后才自动满足送审条件。用户也可以对单项目信号明确确认“仍然送审”，但它仍只进入人工审批。
+
+批准候选只会在 `~/.local/state/mick-harness/harness-improvements/proposals/` 生成可审计 Markdown 提案，不会直接修改中央 Harness。后续真实开发完成 Rule、Skill、Checker 或 Profile 后，用户在工作台登记项目相对产物路径和落地前频次；再以 `improved`、`unchanged` 或 `regressed` 记录效果复验。只有同类问题频次下降，才显示“复验有效”。
+
+所有候选写操作都使用当前 localhost action token。`GET /api/harness/improvements.json` 只读；创建、合并、送审、批准、拒绝、登记落地和效果复验使用 `POST /api/harness/improvements...`。原项目记忆、项目文件和中央 Harness 规则均不会因这些动作被删除或自动改写。
 
 ## 命令
 
@@ -81,7 +135,9 @@ Collector 只读扫描这些来源：
 
 `plan.md` 只用于技术执行步骤和验证记录，不再充当项目长期目标。缺少某层事实源时，工作台显示对应空态，不从其他层猜一个替代答案。
 
-全局 Portfolio 的项目名单来自 `~/.local/state/mick-harness/registered-projects`。`harness init` 会自动登记项目；目录不存在、不可读或缺少 Harness 入口时，Dashboard 保留该项目并显示验证失败原因。
+全局 Portfolio 的项目名单来自 `~/.local/state/mick-harness/registered-projects`。`harness init` 会自动登记项目；目录不存在、不可读或缺少 Harness 入口时，Dashboard 保留该项目并显示失败原因，由用户决定是否只移除登记。
+
+项目登记与服务安装彼此独立：`harness init <project>` 只注入规则并登记目录，不重装、不重启全局 Observer。一个已经运行的服务会在下一轮扫描自动发现新项目，因此接入项目不应造成 6425 中断或 PID 变化。
 
 后台服务每 2 秒扫描一次所有 valid 项目，不需要打开 Dashboard 才会同步。导入过程按内容 digest 去重；单个项目失败只会让 `/healthz` 进入 `degraded` 并记录错误，不会终止服务。
 
@@ -132,6 +188,7 @@ checkbox Plan 的完成项只有在自检日志中存在 passing verification �
 ~/.local/state/mick-harness/observer/service.log
 ~/.local/state/mick-harness/observer/service.error.log
 ~/.local/state/mick-harness/observer/ingest-token
+~/.local/state/mick-harness/harness-improvements/
 ```
 
 `ingest-token` 首次启动时随机生成并固定为 mode `0600`，只用于 localhost 事件接收，不出现在健康状态、Dashboard 或日志中。
@@ -142,18 +199,18 @@ checkbox Plan 的完成项只有在自检日志中存在 passing verification �
 
 - 所有登记项目的有效性、阶段、当前角色和需求完成度
 - 从 `docs/PROJECT.md` 读取的项目长期目标，以及单独展示的当前版本目标
-- PM、设计、开发、测试、Review 五角色办公室；Planner / Orchestrator 归入 PM，不制造额外角色
+- PM、设计、开发、测试、Review 五角色的场景化办公室；Planner / Orchestrator 归入 PM，不制造额外角色
 - 当前真实交接或建议接手的高亮流转；历史流转留在办公室轨迹中
-- 点击任一角色后看到该角色的需求上下文、执行摘要、关联决策、历史工作和已登记交付物
+- hover/focus 任一角色查看最近动作，点击后看到该角色的需求上下文、执行摘要、关联决策、历史工作和已登记交付物
 - 集中展示的“需要你处理”：活动阻塞、待验证需求和待审批事项
 - Plan / STATE / 验证证据等已观察到的关键资料名称
 - “产物”页直接阅读已登记的 Markdown、代码和文本报告；Markdown 使用文档阅读样式，代码使用可折叠、带行号的滚动区域
-- “版本规划”页把 PM 维护的版本目标和需求归属，与真实 Git 当前分支、其他本地分支、Tag 和未提交改动并排展示
+- “版本记录”页把 PM 维护的历史版本目标和需求归属，与真实 Git 当前分支、其他本地分支、Tag 和未提交改动并排展示
 - “技术记录”中的 Plan 步骤、阶段、验证、阻塞、Agent、Harness 命令和审计事件
 
 项目默认进入 `overview` 角色办公室。当前选择通过 URL 的 `project`、`run`、`view`、`role`、`task` 参数保存，刷新页面后可恢复；旧 `view=graph` 自动迁移为 `overview`。URL 指向 missing/invalid 项目时会自动回到项目总览并显示原因。
 
-角色状态严格来自结构化事件：正在执行的 work round 为“正在工作”，最新流转的目标为“等待接手”，做过并完成工作为“已交付”，没有事件为“尚未参与”。`handoff.created` 是真实交接；已完成 work round 的 `next_role` 只是建议接手。两者在界面中明确区分。
+角色状态严格来自结构化事件：正在执行的 work round 为“正在工作”，最新流转的目标为“等待接手”，做过并完成工作为“已交付”，没有事件为“尚未参与”。开发交付已存在、但没有后续 QA 完成回合时，QA 显示“未独立验收”。`handoff.created` 是真实交接；已完成 work round 的 `next_role` 只是建议接手；质量门禁是后端根据同需求时序得出的缺口。三者在界面中明确区分。
 
 没有当前需求时也不会统一显示“未确定”：当前版本需求全部完成时显示“本版本已交付，等待 PM 定义下一版本”；尚无版本计划时显示“PM 尚未规划版本”；只有确有未确认需求时才提示需要确认。
 
@@ -240,7 +297,7 @@ harness observe hook-config codex
 
 Observer 默认只保存项目相对路径、结构化目标/摘要、角色、决策、交接、退出码和内容 digest。产物正文按需从项目原文件读取，不复制进事件账本。Harness CLI activity 只增加一级命令名、状态和退出码；启用 Codex Hook 后额外保存 session/turn 标识、平台、状态和时间。它不采集命令参数、命令输出、Prompt、聊天全文、assistant message、transcript、model、密钥、环境变量或完整日志，也不会自动读取 Brain 私有内容。
 
-唯一写接口是 `POST /api/v1/events`：必须携带本机 Bearer token，project id 必须属于 registry 中的 valid 项目，body 上限 64 KiB，字段必须符合白名单和事件契约。其他 `POST` 以及所有 `PUT`、`PATCH`、`DELETE` 均返回 `405`。不要把本地端口通过代理暴露到公网。
+结构化事件写入使用 `POST /api/v1/events` 和本机 Bearer token；工作台受控操作使用页面会话 action token。项目移除只接受 `POST /api/projects/<id>/unregister` + `{ "confirmed": true }`，只处理 registry 中的 invalid 项目。所有 `PUT`、`PATCH`、`DELETE` 均返回 `405`。不要把本地端口通过代理暴露到公网。
 
 ## 恢复与排错
 
@@ -248,6 +305,7 @@ Observer 默认只保存项目相对路径、结构化目标/摘要、角色、�
 - `init` / `sync` 返回 exit `2`：未找到可观察来源；先创建 `plan.md` 或 `docs/STATE*.md`。
 - snapshot 缺失或怀疑不一致：执行 `harness observe replay`，它会从事件账本确定性重建。
 - 服务不可达：先运行 `harness observe service status`，再查看 `harness observe service logs`；可用 `service restart` 恢复。
+- plist 存在但 `loaded=false`：运行 `harness observe service start` 重新挂载现有配置；如果发生在 install/update 后，保留命令错误中的主失败和 rollback 结果用于诊断。
 - Agent 事件显示为 `local-fallback`：表示当时接收服务不可达或仍是旧版；事件已经写入项目账本，服务恢复扫描后会出现在工作台。
 - 端口占用：后台产品端口固定为 `6425`；先释放冲突，或重新执行 `service install --port N` 明确迁移。
 - 从旧版迁移：`4317` 是 OpenTelemetry OTLP/gRPC 的登记端口；新版默认迁移到 `6425`，旧书签请改为 `http://127.0.0.1:6425/`。

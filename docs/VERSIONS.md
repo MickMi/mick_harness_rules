@@ -146,15 +146,20 @@
 
 ## 0.19.0
 
-- Status: draft
-- Branch: unassigned
+- Status: released
+- Branch: main
+- Tag: v0.19.0
+- Work Branches: feat/v0.19-service-reliability
 - Goal: 把工作台从只读观察器升级为受控的 Harness 操作与进化中心，让用户可以安全完成注入、升级、能力适配，并把跨项目反复出现的问题转化为可审批、可验证、可撤销的 Harness 改进。
 
 ### Requirements
 
-- [ ] `task-130` 在首页提供 Harness update、项目注入/升级、Agent 接入修复等白名单操作，并建立幂等、互斥、恢复和审计的任务执行层
-- [ ] `task-131` 提供外部 Skill 安装前兼容诊断，并继续选择性吸收高质量开源 Skill 的方法；禁止整包静默接管角色、Hook、文档或完成定义
-- [ ] `task-132` 建立“项目问题 → Harness 改进候选 → 跨项目合并与频次 → 人工审批 → Rule/Skill/Checker/Profile → 效果复验”的工作台闭环；单次问题默认留在项目层，中央 Harness 规则不得自动改写
+- [x] `task-130` 在首页提供 Harness update、项目注入/升级、Agent 接入修复等白名单操作，并建立幂等、互斥、恢复和审计的任务执行层
+- [x] `task-131` 提供外部 Skill 安装前兼容诊断，并继续选择性吸收高质量开源 Skill 的方法；禁止整包静默接管角色、Hook、文档或完成定义
+- [x] `task-132` 建立“项目问题 → Harness 改进候选 → 跨项目合并与频次 → 人工审批 → Rule/Skill/Checker/Profile → 效果复验”的工作台闭环；单次问题默认留在项目层，中央 Harness 规则不得自动改写
+- [x] `task-133` 保证本机唯一的全局 Observer 在项目接入、Harness 安装与升级期间持续可用：同配置重复安装必须幂等，替换失败必须恢复旧服务，6425 与前台 watch 使用同一项目注册和扫描语义
+- [x] `task-134` 纠正 QA / Reviewer 的真实参与与交接语义，把项目角色办公室改为可交互的场景与历史记录，并让用户安全地将失联项目移出工作台（不删除项目文件）
+- [x] `task-135` 将项目主页重构为当前版本需求指挥台，让每条需求都能看清实际参与角色、当前工作、测试范围、验证证据、阻塞和下一步；版本页改为历史版本记录
 
 ## Backlog
 

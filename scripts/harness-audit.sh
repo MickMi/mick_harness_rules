@@ -58,7 +58,8 @@ done
 HARNESS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROJECT_DIR="$(cd "$HARNESS_ROOT/.." && pwd)"
 PLAN="$PROJECT_DIR/plan.md"
-STEP_ID_RE='[0-9]+([.][0-9]+)*[.)]?'
+STEP_ID_RE='[0-9]+([.][0-9]+)*'
+STEP_CHECKBOX_RE="${STEP_ID_RE}[.)]"
 
 # --- Pre-checks ---
 if [ ! -f "$PLAN" ]; then
@@ -67,8 +68,8 @@ if [ ! -f "$PLAN" ]; then
 fi
 
 # --- Count steps ---
-TOTAL_STEPS=$(grep -cE "^\- \[[ x]\] ${STEP_ID_RE}[[:space:]]" "$PLAN" 2>/dev/null || true)
-COMPLETED_STEPS=$(grep -cE "^\- \[x\] ${STEP_ID_RE}[[:space:]]" "$PLAN" 2>/dev/null || true)
+TOTAL_STEPS=$(grep -cE "^\- \[[ x]\] ${STEP_CHECKBOX_RE}[[:space:]]" "$PLAN" 2>/dev/null || true)
+COMPLETED_STEPS=$(grep -cE "^\- \[x\] ${STEP_CHECKBOX_RE}[[:space:]]" "$PLAN" 2>/dev/null || true)
 TOTAL_STEPS=${TOTAL_STEPS:-0}
 COMPLETED_STEPS=${COMPLETED_STEPS:-0}
 
@@ -235,7 +236,7 @@ if [ -z "$DIFF_FILES" ]; then
     pass "No git diff to check (or invalid --since ref)"
 else
     # Extract file paths mentioned in plan steps (backtick-quoted)
-    PLAN_FILES=$(grep -E "^\- \[[ x]\] ${STEP_ID_RE}[[:space:]]" "$PLAN" | grep -oE '`[^`]+`' | tr -d '`' | sort -u || true)
+    PLAN_FILES=$(grep -E "^\- \[[ x]\] ${STEP_CHECKBOX_RE}[[:space:]]" "$PLAN" | grep -oE '`[^`]+`' | tr -d '`' | sort -u || true)
     # Also extract from self-check files: lines
     SELFCHECK_FILES=$(grep -E '^- files:' "$PLAN" | sed 's/^- files: //' | tr ',' '\n' | sed 's/^ *//;s/ *$//' | sort -u || true)
     ALL_PLAN_FILES=$(echo -e "$PLAN_FILES\n$SELFCHECK_FILES" | sort -u | grep -v '^$' || true)

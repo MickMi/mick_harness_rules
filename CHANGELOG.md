@@ -7,6 +7,50 @@ All notable changes to Mick Agent Harness are documented in this file.
 This project follows Semantic Versioning 2.0. Git tags in the form `vX.Y.Z`
 are the release source of truth.
 
+## [0.19.0] - 2026-08-22
+
+### Controlled Operations, Skill Governance, and Harness Evolution
+
+- **Actionable project workbench**: the home page now exposes only audited
+  Harness update, project injection/upgrade, and Agent repair operations. Every
+  mutation uses preview, explicit confirmation, idempotency, a single-operation
+  mutex, fixed argument lists, recovery state, and redacted audit output.
+- **Reliable machine-wide Observer**: service installation reuses a matching
+  healthy process and restores the previous service when replacement fails.
+  Project registration and foreground/background scanning share one portfolio,
+  while missing projects can be removed without deleting their files.
+- **External Skill governance**: the workbench discovers built-in, personal,
+  Agent, and project Skills without executing their scripts. Compatibility
+  diagnostics surface role, Hook, completion-contract, loader, and unsafe
+  instruction conflicts before users choose what to install or adapt.
+- **Requirement command center**: the project home leads with current-version
+  requirements. Each requirement shows its actual role path, current work,
+  independent QA scope, evidence, blockers, and next step; completed work no
+  longer carries a stale owner or role-transition suggestion.
+- **Interactive role office**: PM, Designer, Developer, QA, and Reviewer use the
+  compact jelly-character scene with real participation history. QA is an
+  explicit quality gate, while Reviewer inspects declared artifacts and
+  verification evidence instead of replacing testing.
+- **Project issue to Harness improvement**: users can turn selected project
+  memories into Rule, Skill, Checker, or Profile proposals. Single-project
+  signals stay observed by default; cross-project/frequent signals or explicit
+  submission enter approval. Approval creates an auditable proposal and never
+  rewrites central Harness rules automatically.
+
+Compatibility: existing projects, loaders, event ledgers, Brain repositories,
+and the `127.0.0.1:6425` endpoint remain compatible. No third-party dependency
+was added. Local mutation endpoints remain action-token protected, now reject
+oversized operation bodies, and serialize Harness-improvement state changes.
+
+Migration: run `harness update` after installing this release. It refreshes the
+global Harness, registered project mounts, Agent loaders, and the single 6425
+Observer service; project source files and Brain records are not deleted.
+
+Verification: 129 unittests, generated-rule consistency, Python and JavaScript
+syntax, `git diff --check`, independent QA for all six v0.19 requirements, and
+real-browser verification on the 6246 development service with v0.19 shown as
+6/6 and no stale completed-work flow.
+
 ## [0.18.0] - 2026-08-19
 
 ### Brain Memory Workbench and Controlled Synchronization

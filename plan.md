@@ -1,4 +1,4 @@
-> 🧭 状态：发布候选已通过 | 进度 126/126 | 当前归属：Reviewer（v0.18 Release Gate）| 最近卡点：无
+> 🧭 状态：发布执行中 | 进度 174/177 | 当前归属：Executor（v0.19 发布）| 最近决策：v0.19.0 发布事实与 Release Gate 已完成；继续提交、合并、本机部署和远端发布
 
 # Plan: Company Runtime V0 → Portfolio V0.2
 
@@ -1268,9 +1268,9 @@ Planner 回复：采用建议方案；这修复的是本轮真实执行触发的
 - [x] 94. [真实健康] 展示 Brain 仓库、本地写入、远端同步、Agent 事件覆盖、最近尝试/成功/错误、定时补漏与候选积压，状态必须来自真实文件、进程与 Git 结果。
 - [x] 95. [统一入口] 让 Claude、Codex 与通用 Harness 的结构化事件进入同一识别、脱敏、去重链；移除主链对 SessionEnd transcript 的依赖，并把旧转录提炼降级为默认关闭的补漏来源。
 - [x] 96. [项目自动记忆] 已确认的项目需求、版本阶段、决策、验证经验、完成结果、评审结论、交接和关键产物自动写入项目 Brain；推断、原始日志、重复进度与敏感信息必须被拒绝。
-- [ ] 97. [全局审批箱] 全局偏好和 Profile 变更进入 6425 审批箱，支持批准、编辑后批准、换层、合并、拒绝、忽略同类和重试；项目自动记忆另有可撤销活动流。
-- [ ] 98. [工程预算] 采用 `fast / subsystem / release` 三档验证，同一代码和环境下不重复发布 Gate；预算是 0.18 的工程约束，不扩展为独立产品功能。
-- [ ] 101. [首个 Profile 消费者] 保留已经实现的 `prd-for-humans` 与 PRD Profile，作为版本化 Profile 审批、元数据展示和差异预览的首个真实用例，不在本版本继续扩张 PRD 功能范围。
+- [x] 97. [全局审批箱] 全局偏好和 Profile 变更进入 6425 审批箱，支持批准、编辑后批准、换层、合并、拒绝、忽略同类和重试；项目自动记忆另有可撤销活动流。
+- [x] 98. [工程预算] 采用 `fast / subsystem / release` 三档验证，同一代码和环境下不重复发布 Gate；预算是 0.18 的工程约束，不扩展为独立产品功能。
+- [x] 101. [首个 Profile 消费者] 保留已经实现的 `prd-for-humans` 与 PRD Profile，作为版本化 Profile 审批、元数据展示和差异预览的首个真实用例，不在本版本继续扩张 PRD 功能范围。
 - [x] 102. [工作台层级] 将 Brain 降为项目总览中的记忆服务入口；版本规划按语义版本从新到旧排列；Git 用“工作区—分支—版本—标签”关系图替代重复状态文字。
 - [x] 103. [Brain 可视化同步] 展示实际 Brain 本地仓库、配置/实际远端、当前分支和写入来源/目标；为待同步状态提供受控、可确认、可审计的同步动作与成功/失败反馈。
 - [x] 104. [自动化优先与信息精简] 将 Brain 工作台的待同步与全局/Profile 待审批明确分开，仓库只突出配置目标和生效状态；确立“服务端自动化主链、Hook 仅采集、Prompt 仅语义辅助”的实现边界。
@@ -1563,3 +1563,543 @@ Planner 回复：采用建议方案；这修复的是本轮真实执行触发的
 
 ### Step 126 — 2026-08-19
 - verify: passed — 全仓测试、生成一致性、diff 检查与 6246 真实路径均通过，未执行 Brain push 或 6425 部署。
+
+## v0.19.0 · 2026-08-19 · 全局工作服务与项目接入可靠性
+
+### 用户裁决
+
+- 新项目接入后，前台 6246 能读取项目而产品端口 6425 消失；这不是可接受的预览差异，而是 v0.19 发布前必须消除的主服务可靠性缺口。
+- 本机只能有一个全局 Harness 后端服务。项目、worktree、分支和 Agent 都接入同一服务，不能依赖用户手动维持另一套预览进程。
+- 本问题以独立 `task-133` 进入 v0.19，作为 `task-130` 可视化注入/升级操作中心的前置 Gate。
+
+### 已验证事实
+
+- `main`、`~/.mick-harness` 与 6246 预览使用的 `scripts/harness-observe.py`、`bin/harness` 哈希一致；差异不在扫描代码版本，而在前台 `watch` 与 LaunchAgent 服务生命周期。
+- 2026-08-19 18:24:41 新项目登记，18:24:45 服务最后正常响应，18:24:47 LaunchAgent 配置被重写；随后配置仍存在，但 `loaded=false`、`healthy=false`、6425 无监听。
+- `install_service()` 当前总是先 `bootout`，再写入/启动新服务；重复安装没有健康短路，启动失败没有恢复旧配置和旧服务。
+
+### 产品与工程边界
+
+- 本阶段只修全局服务的幂等安装、失败恢复、项目接入保持在线和可复现验证；不提前实现 `task-131` Skill 兼容或 `task-132` Harness 改进审批闭环。
+- 复用现有 Python 标准库、LaunchAgent 和 Observer 状态接口，不新增依赖，不新建第二套后台服务。
+- 单元测试不得操作用户真实 LaunchAgent；真实 6425 验收放在代码测试通过之后，执行前保留现有 plist，并验证恢复路径。
+- 不把 6246 可访问当作产品完成证据；发布声明必须来自 6425 LaunchAgent、项目组合 API 和重启后的真实状态。
+
+### 实施步骤
+
+- [x] 127. [测试基线] `tests/test_harness_observe.py` — 固定两条失败合同：健康且配置相同的服务重复安装不得 `bootout`；配置替换后的启动失败必须恢复旧 plist 并重新挂回旧服务。
+- [x] 128. [生命周期修复] `scripts/harness-observe.py` — 将服务安装改为幂等事务：健康同配置直接复用；需要替换时保留旧配置和加载状态；任一步失败都尝试恢复并返回可诊断错误。
+- [x] 129. [接入契约] `tests/test_harness_observe.py` — 固定新项目进入注册表后，已运行的全局服务不需要重装即可在下一轮扫描发现项目；前台 watch 与 LaunchAgent 使用同一注册表语义。
+- [x] 130. [版本与使用说明] `docs/VERSIONS.md`、`docs/OBSERVE.md` — 将 `task-133` 标为 v0.19 阻断项，说明 init 只登记项目、install/update 如何安全维护全局服务及失败反馈。
+- [x] 131. [真实验收] 运行聚焦与全量回归，再用临时注册项目验证 6425 在接入前后保持同一服务、项目可见、重启后仍健康；不发布、不推送。
+
+### 完成判定
+
+- [x] 对健康且配置相同的服务调用 install/update，不发生 `bootout`，PID 不变化，6425 持续可访问。
+- [x] 模拟新配置 bootstrap 或健康检查失败时，旧 plist 被恢复；此前已运行的旧服务重新加载，错误中同时区分主失败与恢复结果。
+- [x] `harness init <new-project>` 只登记项目；全局 Observer 下一轮自动发现它，不要求重装或另启端口。
+- [x] 聚焦测试、全仓测试、生成一致性与 diff 检查通过；真实 6425 在接入、刷新和重启路径上健康。
+
+### Step 127 — 2026-08-19
+- files: `tests/test_harness_observe.py`, `plan.md`
+- verify: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_harness_observe.ObserveRuntimeTests.test_install_service_reuses_matching_healthy_service tests.test_harness_observe.ObserveRuntimeTests.test_install_service_restores_previous_service_when_bootstrap_fails` 得到预期 2 failures；旧实现重复安装调用 4 次 launchctl，bootstrap 失败后未恢复旧 plist
+- notes: 基线只使用临时 HOME 与 mock launchctl，没有操作用户真实 LaunchAgent。
+
+### Step 128 — 2026-08-19
+- files: `scripts/harness-observe.py`, `plan.md`
+- verify: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_harness_observe.ObserveRuntimeTests.test_install_service_reuses_matching_healthy_service tests.test_harness_observe.ObserveRuntimeTests.test_install_service_restores_previous_service_when_bootstrap_fails tests.test_harness_observe.ObserveRuntimeTests.test_launch_agent_plist_keeps_observer_alive` passed，3 tests / 0 failures
+- notes: `start_service()` 不能恢复旧 plist 或旧加载状态，因此新增窄职责 `restore_previous_service()`；失败错误同时保留主错误与 rollback 结果。
+
+### Step 129 — 2026-08-19
+- files: `tests/test_harness_observe.py`, `plan.md`
+- verify: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_harness_observe.ObserveRuntimeTests.test_portfolio_monitor_syncs_without_dashboard_request` passed，1 test / 0 failures
+- notes: 测试在 Observer 已运行后才写入新项目，随后确认同一进程仍存活、组合 API 出现新项目且后续 plan 变化继续同步；没有调用 service install。
+
+### Step 130 — 2026-08-19
+- files: `docs/VERSIONS.md`, `docs/OBSERVE.md`, `plan.md`
+- verify: `parse_versions_markdown()` 读取真实 `docs/VERSIONS.md` 后确认 v0.19 为 `in_progress`、分支为 `feat/v0.19-service-reliability` 且包含 `task-133`；`git diff --check` passed
+- notes: 文档明确 6246/6426 等前台端口只作开发对照，产品 Gate 始终是唯一的 6425 LaunchAgent。
+
+### Step 131 — 2026-08-19
+- files: `scripts/harness-observe.py`, `tests/test_harness_observe.py`, `docs/VERSIONS.md`, `docs/OBSERVE.md`, `plan.md`
+- verify: 全仓 `100 tests / 0 failures`；`./generate.sh --check`、Python syntax、`git diff --check` passed；真实 6425 首次启动与重复 install 的 PID 均为 `80473`，Portfolio 识别 `narc_for_mac` 为 valid；恢复原 plist 后 6425 PID `81270` 健康且新项目仍为 valid
+- notes: 真实验收临时让 LaunchAgent 指向功能分支，结束后已恢复 `/Users/mickmi/.mick-harness`；未发布、未推送、未保留第二套后台服务。
+
+## v0.19.0 · 2026-08-20 · 工作台受控操作中心
+
+### 用户目标
+
+- 用户不再需要回到终端完成 Harness 更新、项目注入或 Agent 修复；工作台先解释将修改什么，再由用户确认执行。
+- 这些确定性工作由固定脚本完成，不依赖 Agent 是否记得 Prompt，也不允许前台拼接或提交任意命令。
+- 操作必须有明确的等待、执行、成功和失败状态；重复点击不能重复改写，多个操作不能并发破坏同一份本机配置。
+
+### 产品与安全边界
+
+- v0.19 首批白名单仅包含 Harness 更新、项目注入/升级和 Agent 接入同步；不开放任意命令、删除项目、卸载服务或修改 Git 历史。
+- 项目路径必须是本机已存在的绝对目录；服务端重新验证参数，不能信任前台传值。
+- 所有写操作先生成一次性确认单，确认后由独立 worker 执行；结果只保留脱敏摘要、退出码和时间，不保存密钥、环境变量或完整命令行。
+- Harness 更新完成后由 worker 恢复唯一的 6425 服务；复用 task-133 的幂等安装与失败恢复能力。
+
+### 实施步骤
+
+- [x] 132. [测试基线] `tests/test_harness_observe.py` — 固定操作目录、参数校验、一次性确认、幂等复用、互斥执行、动作令牌与前台入口合同，并在旧实现上得到预期失败。
+- [x] 133. [任务执行层] `scripts/harness-observe.py` — 增加操作记录、预检、确认、独立 worker、互斥锁、审计与固定动作映射；更新后安全恢复 6425。
+- [x] 134. [HTTP 闭环] `tests/test_harness_observe.py` — 覆盖操作列表、预检、未授权拒绝、确认执行和状态查询；测试只调用受控假执行器，不改真实 Harness。
+- [x] 135. [工作台交互] `web/observe-dashboard.html` — 首页增加 Harness 操作区、项目路径输入、影响说明、二次确认、运行进度与最近结果；不用原生 prompt/confirm。
+- [x] 136. [使用说明] `docs/OBSERVE.md` — 说明三类操作的输入、影响、确认、恢复、审计和失败处理。
+- [x] 137. [版本验收] `docs/VERSIONS.md` — 对照 task-130 更新真实完成状态与剩余边界，不提前关闭 task-131/132。
+- [x] 138. [真实验收] 聚焦测试、全仓测试、生成与 diff 检查，再在 6246 完成预检、取消、刷新和状态读取；不执行真实更新/注入，不部署、不合并 main。
+
+### 完成判定
+
+- [x] 工作台可以为三类白名单动作生成用户可读确认单，并在确认前不产生项目或全局配置写入。
+- [x] 同一确认单只能执行一次；执行中的第二个任务被明确拒绝，不发生并发写入。
+- [x] 后端不接受任意 action、相对路径、缺失目录或无令牌请求；审计结果不包含密钥和完整环境信息。
+- [x] 更新任务由独立 worker 执行并恢复唯一 6425；失败状态可读且保留安全重试入口。
+- [x] 6246 真实用户路径与全仓 Gate 通过；不以按钮存在代替交互闭环证据。
+
+### Step 132 — 2026-08-20
+- files: `tests/test_harness_observe.py`, `plan.md`
+- verify: 4 个聚焦合同在旧实现上得到预期 `4 errors`：`operation_catalog`、`prepare_operation`、`operation_mutex` 均不存在
+- notes: 基线只在临时状态目录运行，没有触发真实 Harness 更新、项目注入、Agent 同步或服务重启。
+
+### Step 133 — 2026-08-20
+- files: `scripts/harness-observe.py`, `tests/test_harness_observe.py`, `plan.md`
+- verify: 操作目录、校验、确认、幂等、互斥、固定参数 worker 与错误脱敏共 `6 tests / 0 failures`
+- notes: 更新动作固定为 `harness update` 后由独立 worker 执行 service restart；请求进程即使被 6425 重启终止，操作记录和 worker 仍保留。
+
+### Step 134 — 2026-08-20
+- files: `scripts/harness-observe.py`, `tests/test_harness_observe.py`, `plan.md`
+- verify: 隔离 HOME、状态目录和项目目录的 HTTP 集成测试 `1 test / 0 failures`；覆盖列表、401、预检、确认、worker、状态查询、产物与审计
+- notes: 集成确认执行的是临时项目注入，并显式关闭 Observer 自动安装；没有写入真实 HOME、注册表或 LaunchAgent。
+
+### Step 135 — 2026-08-20
+- files: `web/observe-dashboard.html`, `tests/test_harness_observe.py`, `plan.md`
+- verify: 操作区与既有工作台合同共 `8 tests / 0 failures`；包含三类入口、内嵌表单、影响确认、当前任务轮询与最近结果
+- notes: 操作区位于待关注摘要和项目进度之间；移动端降为单列，长路径与确认说明可换行，不使用原生 prompt/confirm。
+
+### Step 136 — 2026-08-20
+- files: `docs/OBSERVE.md`, `plan.md`
+- verify: 文档明确三类白名单动作、五步用户路径、一次性确认、单任务互斥、状态与审计目录、401 鉴权和更新时服务恢复边界；`git diff --check` 待最终 Gate 一并验证
+- notes: 文档不把工作台描述为任意命令面板，也不把 Agent 配置文件存在等同于真实 Agent 已生效。
+
+### Step 137 — 2026-08-20
+- files: `docs/VERSIONS.md`, `plan.md`
+- verify: v0.19 仅将 `task-130` 与既有 `task-133` 标为完成；`task-131` 外部 Skill 兼容和 `task-132` Harness 改进候选闭环保持未完成
+- notes: 本轮完成的是操作中心，不等同于 v0.19 整体可发布。
+
+### Step 138 — 2026-08-20
+- files: `scripts/harness-observe.py`, `web/observe-dashboard.html`, `tests/test_harness_observe.py`, `docs/OBSERVE.md`, `docs/VERSIONS.md`, `plan.md`
+- verify: 全仓 `108 tests / 0 failures`；`./generate.sh --check`、CLI import/help、`git diff --check` 均 exit 0；6246 完成项目路径输入、预检确认单、取消、刷新与状态读取，console `0 warning / 0 error`；390px 视口 `scrollWidth = innerWidth = 390`
+- notes: 浏览器只生成并取消确认单，没有点击确认执行；未运行真实 update、项目注入或 Agent 修复，未部署 6425、未合并 main、未发布版本。
+
+## v0.19.0 · 2026-08-20 · 外部 Skill 可视化治理
+
+### 用户目标
+
+- 外部 Skill 在工作台中可发现、可理解、可追踪来源；用户能看见它属于哪个角色、可能改动什么、与 Harness 哪些边界冲突。
+- “文件存在”“已安装”“已分配给角色”“已由 Agent 在真实任务中加载”必须是四种不同状态，工作台不得合并或误报。
+- 第三方 Skill 接入前先由确定性代码完成静态诊断；不能依赖 Agent 阅读 Prompt 后自行判断是否安全。
+
+### 产品与安全边界
+
+- 本阶段只读取 Harness 内置 Skill、Codex 全局 Skill、通用 Agent Skill 与项目级 `.harness/skills`；不联网、不下载、不运行第三方脚本、不修改用户 Skill 目录。
+- 外部 Skill 只能作为角色的方法附件，不能接管角色路由、Hook、全局 Loader、Brain 写入、权限或完成定义。
+- 静态诊断输出 `compatible / review_required / blocked`，并列出可定位证据；静态通过不等于真实 Agent 已加载。
+- 工作台首页只展示 Skill 健康摘要和需关注数量；完整清单、来源、范围、角色和冲突进入“设置 → 能力与 Skill”。
+
+### 实施步骤
+
+- [x] 139. [测试基线] `tests/test_harness_skills.py` — 固定内置/外部/项目 Skill 发现、四态语义、正常/需审查/阻断样例和不执行脚本合同，并在旧实现上记录预期失败。
+- [x] 140. [诊断器] `scripts/harness-skill-manager.py` — 用标准库实现受限目录发现、Frontmatter/资源解析、来源与角色映射、冲突证据和兼容结论；只读且有数量/大小上限。
+- [x] 141. [服务 API] `scripts/harness-observe.py`、`tests/test_harness_observe.py` — 提供只读 `/api/skills.json`，返回清单、状态摘要和诊断结果，不开放任意路径读取或安装端点。
+- [x] 142. [工作台交互] `web/observe-dashboard.html`、`tests/test_harness_observe.py` — 设置页增加“记忆与同步 / 能力与 Skill”切换，展示筛选、来源、角色、兼容状态和冲突详情；首页只保留紧凑摘要。
+- [x] 143. [治理说明] `docs/AGENT-SUPPORT.md`、`rules/skills/SOURCES.md` — 说明发现、安装、分配、验证生效的区别，以及外部 Skill 的审计、固定版本、更新和移除机制。
+- [x] 144. [版本状态] `docs/VERSIONS.md` — 对照真实能力更新 `task-131`，不提前关闭 `task-132`。
+- [x] 145. [真实验收] 运行聚焦与全量回归、生成与 diff 检查，并在 6246 验证设置切换、筛选、展开冲突、重新扫描和页面边界；不安装或执行任何外部 Skill。
+
+### 完成判定
+
+- [x] 工作台能列出本机受支持目录中的 Skill，并明确来源、作用域、角色、文件状态、是否已分配以及是否有真实加载证据。
+- [x] 含 Hook/全局 Loader/角色接管/完成定义/危险命令的样例被定位并标为需审查或阻断；检查过程不执行样例脚本。
+- [x] API 不接受用户路径参数，不泄露 Skill 正文、凭据或任意本机文件；页面只展示摘要和冲突证据。
+- [x] 全仓测试、生成一致性、diff 检查与 6246 真实路径通过；未写用户 Skill 目录、未部署 6425、未合并 main、未发布版本。
+
+### Step 139 — 2026-08-20
+- files: `tests/test_harness_skills.py`, `plan.md`
+- verify: 旧实现因缺少 `scripts/harness-skill-manager.py` 得到预期 `FileNotFoundError`，证明新增合同不是既有功能误通过
+- notes: 样例覆盖 Harness 内置、本机外部、项目级、角色/Hook/完成定义冲突、危险命令、脚本资源和逃逸 symlink。
+
+### Step 140 — 2026-08-20
+- files: `scripts/harness-skill-manager.py`, `tests/test_harness_skills.py`, `plan.md`
+- verify: `5 tests / 0 failures`；真实本机只读扫描得到 `45` 个 Skill、`30` 个可兼容、`15` 个需审查、`0` 个阻断、`2` 个已分配角色、`0` 个已验证加载
+- notes: 扫描器限制目录、数量和文件大小，跳过逃逸 symlink；多行 Frontmatter 描述已通过回归测试。
+
+### Step 141 — 2026-08-20
+- files: `scripts/harness-observe.py`, `tests/test_harness_observe.py`, `plan.md`
+- verify: 隔离 Observer HTTP 测试通过；`GET /api/skills.json` 返回只读边界，携带任意 query/path 得到 `400`
+- notes: API 只输出摘要、显示路径、资源文件名和诊断代码，不返回 `SKILL.md` 正文或任意绝对路径读取能力。
+
+### Step 142 — 2026-08-20
+- files: `web/observe-dashboard.html`, `tests/test_harness_observe.py`, `plan.md`
+- verify: 页面聚焦合同与 JavaScript syntax 通过；6246 显示 45/2/15/0 摘要，可切换兼容筛选、展开冲突、重新扫描并在记忆与 Skill 设置间往返
+- notes: 首页只新增一行 Skill 健康摘要；完整治理在设置页，默认先展示需关注项目，不把 45 个 Skill 堆到首页。
+
+### Step 143 — 2026-08-20
+- files: `docs/AGENT-SUPPORT.md`, `rules/skills/SOURCES.md`, `plan.md`
+- verify: 文档固定已发现、已安装、已分配、已验证加载四态，以及固定来源、静态诊断、人工审计、真实会话验证边界
+- notes: 首版不开放任意 GitHub URL 安装；未来安装必须进入受控操作中心，不由前台或 Prompt 直接执行。
+
+### Step 144 — 2026-08-20
+- files: `docs/VERSIONS.md`, `plan.md`
+- verify: v0.19 `task-131` 标记完成，`task-132` 项目问题到 Harness 改进审批闭环仍保持未完成
+- notes: Skill 治理完成不等于 v0.19 整体可发布。
+
+### Step 145 — 2026-08-20
+- files: `scripts/harness-skill-manager.py`, `scripts/harness-observe.py`, `web/observe-dashboard.html`, `tests/test_harness_skills.py`, `tests/test_harness_observe.py`, `docs/AGENT-SUPPORT.md`, `rules/skills/SOURCES.md`, `docs/VERSIONS.md`, `plan.md`
+- verify: 全仓 `114 tests / 0 failures`；`./generate.sh --check`、dashboard JavaScript syntax、`git diff --check` 均 exit 0；6246 设置切换、筛选、冲突展开、刷新通过，页面日志 0 条，1280px 视口 `scrollWidth = innerWidth = 1280`
+- notes: 未联网、未运行第三方脚本、未写用户 Skill 目录、未执行 Skill 安装、未部署 6425、未合并 main、未发布版本。
+
+## v0.19.0 · 2026-08-20 · 角色协作真相与场景化办公室
+
+### 用户目标
+
+- 让用户看懂 QA 是否真正做了独立验收，不再把开发自验或 Reviewer 跑测试当成 QA 参与。
+- 让 Reviewer 的审查对象、证据、发现和结论可追溯，而不只显示一句泛化摘要。
+- 用一张可交互的公司场景替代五角色表格；hover 看近期动作，点击查看该角色的历史任务、交付物与结论。
+- 让用户能将不存在、不可读或未注入 Harness 的项目移出工作台，同时绝不删除任何项目文件。
+
+### 产品与安全边界
+
+- 角色参与只来自结构化 `work.round_*` / `handoff.created` 事件；没有 QA 回合就显示“未独立验收”，不根据测试数量脑补。
+- UI、高风险或已定义 QA 用例的开发交付，建议流转必须先到 QA；QA 有同需求的后续完成回合后，才建议到 Reviewer。
+- “移出工作台”只原子改写 Harness registry；不访问、删除或修改目标项目目录及 `.harness-runtime/`。
+- 不新增第三方前端依赖或图片服务；角色形象用可访问、可缩放的原生 HTML/CSS 场景实现。
+- 本阶段只在当前 v0.19 分支与 6246 验收；不合并 main、不部署 6425、不发布。
+
+### 实施步骤
+
+- [x] 146. [测试基线] `tests/test_harness_observe.py` — 固定角色历史、QA 缺口、Reviewer 审查对象、registry 移除和新导航/办公室的失败合同。
+- [x] 147. [角色投影] `scripts/harness-observe.py` — 输出角色时间线、审查范围和 QA 缺口，使用同需求的时序证据给出下一角色建议。
+- [x] 148. [安全移除] `scripts/harness-observe.py` — 增加受 action token 保护的项目移除 API，原子更新 registry 并返回 `files_deleted=false` 证据。
+- [x] 149. [导航重构] `web/observe-dashboard.html` — 将全局、有效项目、连接异常和项目内导航重新分层；为失联项目提供内嵌确认与真实反馈。
+- [x] 150. [场景化办公室] `web/observe-dashboard.html` — 用五个角色工位、状态光和流转高亮替换表格，hover 预览，点击打开可追溯历史。
+- [x] 151. [角色契约] `rules/roles/executor.md`、`rules/roles/qa.md`、`rules/roles/reviewer.md`、`rules/roles/orchestration.md` — 明确 UI/高风险交付的 Executor → QA → Reviewer 门禁，并区分自验、独立验收与审查。
+- [x] 152. [版本与文档] `docs/VERSIONS.md`、`docs/OBSERVE.md` — 记录 `task-134` 真实完成状态、角色语义和项目移除边界。
+- [x] 153. [视觉验收反馈] 用户在 6246 提供真实截图，确认角色形象同质化，角色名/状态/徽标发生重叠，底部流转装饰抢占空间；QA 判定不通过并退回 Executor。
+- [x] 154. [参考与设计约束] 研究 Marvis Office 的公开界面，提取角色个性、状态动作和日志降级原则；不复制品牌素材，不引入外部资源。
+- [x] 155. [办公室重构] `web/observe-dashboard.html` — 用五种独立轮廓、姿势和职业道具替换同脸方块人，分离场景层与文字层，并压缩顶部流转信息。
+- [x] 156. [布局防线] `tests/test_harness_observe.py` — 增加角色结构、字号层级、禁止重叠样式和响应式边界合同，并复跑全仓回归。
+- [x] 157. [方向确认] 用户确认采用 A「软糖精灵」：更 Q、更抽象，当前执行角色需要具有类似 GIF 的持续工作动作。
+- [x] 158. [软糖角色系统] `web/observe-dashboard.html` — 将五种人形角色替换为统一世界观下的五种软糖轮廓、表情和职业道具。
+- [x] 159. [状态动画] `web/observe-dashboard.html`、`tests/test_harness_observe.py` — 将 active / waiting / completed / missing 映射为工作、等待、庆祝和异常动作，只有真实 active 角色持续工作，并支持 reduced-motion。
+- [x] 160. [真实验收] 用户确认极简软糖方向并继续进入项目主页评审；保留真实状态驱动、hover 和点击历史，不真实移除用户项目。
+
+### 完成判定
+
+- [ ] 没有 QA 回合时，办公室明确显示“未独立验收”；UI/高风险交付不会跳过 QA 直接建议 Reviewer。
+- [ ] Reviewer 历史至少显示对应需求、审查对象/证据和结论；缺少对象时坦率显示未记录。
+- [ ] 办公室不再以五行表格呈现；五个工位支持 hover/focus 预览和点击历史，当前流转在场景中可见。
+- [ ] 失联项目可通过二次确认移出 registry，刷新后消失；测试证明目标路径未被删除或修改。
+- [ ] 全仓测试、生成一致性、diff 检查和 6246 真实路径通过；未部署 6425、未合并 main、未发布。
+
+### Step 146 — 2026-08-20
+- files: `tests/test_harness_observe.py`, `plan.md`
+- verify: 新合同在旧实现上得到 `2 errors + 2 failures`：缺角色参与/审查范围、缺 registry 移除、缺场景化办公室与前台删除闭环。
+
+### Step 147 — 2026-08-20
+- files: `scripts/harness-observe.py`, `tests/test_harness_observe.py`, `plan.md`
+- verify: 角色投影聚焦测试通过；6246 真实 API 返回当前 `Executor → QA`、QA `missing_independent_validation`、Reviewer 7 条历史和 22 条历史 QA 缺口。
+
+### Step 148 — 2026-08-20
+- files: `scripts/harness-observe.py`, `tests/test_harness_observe.py`, `plan.md`
+- verify: 直接函数测试证明 registry 记录移除但项目哨兵文件保留；HTTP 集成测试证明无 token 为 401、确认后刷新消失且 `files_deleted=false`。
+
+### Step 149 — 2026-08-20
+- files: `web/observe-dashboard.html`, `tests/test_harness_observe.py`, `plan.md`
+- verify: 导航合同通过；全局仅保留工作台/设置，项目内为项目主页/版本与需求/交付物，失联项目独立分组并使用非原生二次确认。
+
+### Step 150 — 2026-08-20
+- files: `web/observe-dashboard.html`, `tests/test_harness_observe.py`, `plan.md`
+- verify: HTML parse、JavaScript syntax 和场景合同通过；五工位、CSS 角色形象、hover/focus 预览、流转高亮和点击历史已落地。
+
+### Step 151 — 2026-08-20
+- files: `rules/roles/executor.md`, `rules/roles/qa.md`, `rules/roles/reviewer.md`, `rules/roles/orchestration.md`, `plan.md`
+- verify: 角色契约明确 UI/高风险门禁、QA 独立回合与 Reviewer 审查对象要求；`./generate.sh --check` passed。
+
+### Step 152 — 2026-08-20
+- files: `docs/VERSIONS.md`, `docs/OBSERVE.md`, `plan.md`
+- verify: 版本仍将 `task-134` 保持为未完成；文档记录 QA/Reviewer 语义、导航和“只移除登记”边界。
+
+## 历史阻塞 #2（原步骤 153）
+发现：6246 服务已健康并返回新 API，但应用内浏览器的 URL 安全策略拒绝自动控制 localhost，无法在本轮获取 hover/点击视觉证据。
+证据：
+- 全仓回归 `118 tests / 0 failures`；新增回归确保 active QA 不会提前建议交接 Reviewer。
+- 6246 `/healthz` 返回 `status=ok`、PID `67965`、`project_count=7`；真实工作区显示当前角色 `QA`、当前门禁 `Executor → QA`，而不是尚未发生的 `QA → Reviewer`。
+- 应用内浏览器拒绝该 localhost 页面的自动控制；按安全契约不使用其他浏览器或间接手段绕过。
+建议方案（请 QA/用户验收）：
+A. 用户在已打开的 6246 页面刷新，hover 五个角色并点击 QA/Reviewer，再打开失联项目的“移出工作台”后点“取消”。
+B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153 并将 `task-134` 标记完成。
+
+### QA 结论 — 2026-08-20
+
+- 结果：不通过，已回 Executor。
+- 用户证据：6246 截图中五个角色共用同一面孔和站姿；角色名、状态、徽标与人物/桌面发生覆盖；流转高亮以大面积底部弧线出现，信息层级失衡。
+- 修正边界：重做角色办公室内部结构与样式，不改变角色数据模型、历史抽屉、项目导航、main、6425 或发布状态。
+
+### Step 154 — 2026-08-20
+- evidence: Marvis 公开界面与体验资料将 Agent 呈现为有动作的同事，空闲/工作状态直接映射到办公室活动，详细过程折叠为日志；本项目只吸收这些原则，不复制形象或素材。
+
+### Step 155 — 2026-08-20
+- files: `web/observe-dashboard.html`, `plan.md`
+- verify: 五个角色分别使用 lead / creative / builder / detective / auditor 原型，具有不同发型、肤色、姿势和职业道具；文字进入独立 `role-card-meta`，人物与工位固定在 `role-visual`。
+- notes: 删除人物胸前缩写徽标与大面积底部流转弧线；顶部流转去掉重复 DEV/QA 徽章，只保留角色名和方向。
+
+### Step 156 — 2026-08-20
+- files: `tests/test_harness_observe.py`, `web/observe-dashboard.html`, `plan.md`
+- verify: 新结构在旧实现上预期失败；实现后办公室/导航/信息层级 `3 tests / 0 failures`，dashboard JavaScript syntax exit 0，全仓 `119 tests / 0 failures`。
+- notes: 结构测试锁定视觉层与文字层分离、五种角色原型、无胸前徽标、无 station 底部 box-shadow 高亮和响应式文本换行。
+
+### Step 157 — 2026-08-20
+- decision: 用户从软糖精灵、像素小队、模块机器人、工作精灵四个方向中选择 A「软糖精灵」。
+- boundary: 使用可由真实角色状态驱动的原生矢量/CSS 动画，不引入 GIF、外部图片、动画库或新的运行时依赖。
+
+### Step 158 — 2026-08-20
+- files: `web/observe-dashboard.html`, `tests/test_harness_observe.py`, `plan.md`
+- verify: 旧人形结构已删除；PM / Designer / Executor / QA / Reviewer 分别映射 planner / creative / builder / inspector / reviewer 五种软糖形态，结构契约 `2 tests / 0 failures`。
+- notes: 角色名、职责和状态继续放在独立信息层；软糖只承担角色识别与状态反馈，不重新堆叠文字。
+
+### Step 159 — 2026-08-20
+- files: `web/observe-dashboard.html`, `tests/test_harness_observe.py`, `plan.md`
+- verify: 仅 `active` 角色循环动画，开发打字、测试巡检、Review 翻阅、设计绘制、PM 规划均由真实角色状态驱动；全仓 `119 tests / 0 failures`，JavaScript syntax exit 0，`generate.sh --check` 与 `git diff --check` passed。
+- service: 仅重启 6246 设计服务；`/healthz` 返回 `status=ok`、PID `88383`、7 个项目，实际页面已包含 `role-jelly` / `jelly-active` / `renderRoleJelly`。
+- pending: Step 160 需要在真实页面确认五种形象、动画节奏、窄屏边界与角色历史点击体验；main、6425 与发布状态均未改变。
+
+### QA 视觉纠正 — 2026-08-21
+- evidence: 用户提供设计稿与 6246 实现截图；当前实现增加了桌子、显示器、职业道具、渐变描边与三层状态卡，明显偏离设计稿的单色软糖、需求卡和单行角色名。
+- classification: 🟡纠正；保留真实角色状态、点击历史和流转数据，只重做角色办公室的表现层。
+- target: 五个角色按蓝 / 橙 / 绿 / 粉 / 紫固定识别；仅 active 角色显示“角色 · 工作中”并执行挤压、弹跳与搬卡动作，其他角色静止。
+- implementation: 移除桌面、显示器、嘴、职业道具、渐变描边、光泽、状态灯和三层状态卡；角色历史继续通过 hover 与点击进入，不占用主画面。
+- verify: 新视觉契约先在旧实现上失败，修正后聚焦 `2 tests / 0 failures`，全仓 `119 tests / 0 failures`，JavaScript syntax、`generate.sh --check` 与 `git diff --check` passed；6246 `/healthz` 为 `status=ok`，页面已加载五个指定色值与 `jelly-carry` 动画。
+- pending: 应用内浏览器的本地 URL 安全策略阻止自动截图对照，Step 160 仍需用户在 6246 刷新后做最终视觉确认。
+
+### Step 160 — 2026-08-21
+- evidence: 用户认可极简软糖办公室并开始评审项目主页，视为本轮视觉方向通过；`task-134` 已在版本计划中完成。
+- boundary: 本次确认只接受角色办公室的方向与交互入口，不代表 main、6425、v0.19 发布或其他页面完成。
+
+## v0.19.0 · 2026-08-21 · 当前版本需求指挥台
+
+### 用户目标
+
+- 项目主页首先回答“当前版本正在做哪些需求”，而不是只显示一个无法解释的总进度和全局角色状态。
+- 每条需求独立呈现实际执行路径；用户能看清当前由谁负责、正在做什么、QA 测试什么、有哪些证据、是否阻塞以及下一步是什么。
+- 角色是查看需求执行事实的视角，不是与需求并列的另一套进度；没有角色事件、测试范围或证据时明确显示未记录。
+- “版本与需求”改为“版本记录”，承担历史版本与 Git 关系阅读；当前版本的行动信息前置到项目主页。
+
+### 产品与数据边界
+
+- 版本需求清单以 `docs/VERSIONS.md` 为计划真相；需求执行事实只来自同 `requirement_id` 的结构化工作回合、验证、阻塞与交接事件。
+- 不把版本总完成比例等同于当前角色阶段；`3/5` 只表示三个版本需求已确认完成，不能推出剩余需求都处于测试。
+- 不为每条需求强制补齐 PM、设计、开发、QA、Reviewer；执行路径只显示真实参与或被明确交接的角色。
+- QA 范围优先读取同需求 QA 回合的目标、摘要和验证引用；缺少结构化信息时显示“测试范围未记录”或“尚未进入独立测试”。
+- 本阶段不增加需求删除、后移或改写版本文件的操作；只完成真实数据投影、阅读路径和需求选择联动。
+- 仅在 `feat/v0.19-service-reliability` 与 6246 验收；不修改 main、6425 或发布状态。
+
+### 实施步骤
+
+- [x] 161. [失败契约] `tests/test_harness_observe.py` — 固定当前版本逐需求状态、真实角色路径、QA 范围/证据缺失语义以及首页/版本导航结构。
+- [x] 162. [需求投影] `scripts/harness-observe.py` — 将版本计划与同需求工作回合、验证、阻塞、交接合成为 `current_version`，不混入无关需求或全局角色状态。
+- [x] 163. [主页重构] `web/observe-dashboard.html` — 首页改为逐需求指挥台，支持选择需求并联动角色办公室；“版本与需求”改为“版本记录”。
+- [x] 164. [真实验收] 聚焦测试、全仓回归、生成一致性、JavaScript/diff 检查和 6246 真实 API；完成桌面与窄屏真实视觉路径确认。
+
+### 完成判定
+
+- [x] 当前版本总览分别显示需求总数、已完成、进行中和待开始，且计数可追溯到需求卡。
+- [x] 每条需求卡显示标题、有效状态、实际角色路径、当前工作、测试范围/证据、阻塞和下一步；未知内容不脑补。
+- [x] 选择某条需求后，角色办公室只突出该需求的实际角色状态与历史；未参与角色保持静默，不伪造交接。
+- [x] 项目内导航使用“项目主页 / 版本记录 / 交付物”，历史版本仍按新到旧展示。
+- [x] 全仓验证与 6246 真实 API 通过；未部署 6425、未合并 main、未发布。
+
+### Step 161 — 2026-08-21
+- files: `tests/test_harness_observe.py`, `plan.md`
+- verify: 新合同在旧实现上得到 `1 error + 1 failure`：缺 `current_version` 逐需求投影，页面缺需求指挥台与“版本记录”导航；实现后聚焦 `4 tests / 0 failures`。
+
+### Step 162 — 2026-08-21
+- files: `scripts/harness-observe.py`, `tests/test_harness_observe.py`, `plan.md`
+- verify: 人工快照证明 `Executor → QA` 只属于同一需求，其他需求的 Reviewer 不会串入；真实项目暴露并修复结构化 evidence ref 的兼容问题。
+- evidence boundary: 只有 QA 回合显式引用的验证才进入该需求的测试证据；旧 Plan 步骤产生的同号验证不会因 `task_id` 碰撞被误认。
+
+### Step 163 — 2026-08-21
+- files: `web/observe-dashboard.html`, `docs/VERSIONS.md`, `docs/OBSERVE.md`, `plan.md`
+- verify: 首页加载“当前版本需求”、逐需求角色路径/测试范围/证据/下一步和选择联动；项目导航改为“项目主页 / 版本记录 / 交付物”。
+- runtime: 6246 真实 API 返回 v0.19 `4 completed / 1 in_progress / 1 planned / 0 blocked`；`task-134` QA 已完成，`task-135` 为 `Executor completed → QA waiting`，未测试需求明确显示“尚未进入独立测试”。
+
+### Step 164 — 2026-08-22（真实视觉验收完成）
+- defect: 点击 `task-134` 的 QA 历史时发现同编号旧 Plan Step 抢占需求标题；新增失败契约后修正为优先读取当前版本需求标题，避免角色历史串线。
+- verify: 全仓 `122 tests / 0 failures`；`generate.sh --check`、Python/JavaScript syntax 均 exit 0；6246 桌面端完成需求切换、角色办公室联动和 QA 历史抽屉路径，console `0 warning / 0 error`。
+- responsive: 390×844 下 6 张需求卡均为单列，长标题 `white-space: normal`、`overflow-wrap: anywhere`，页面 `scrollWidth = innerWidth = 390`；恢复默认视口后结束验收。
+- boundary: 未修改 main、6425 或发布状态；v0.19 仍有 `task-132` 未实现。
+
+## v0.19.0 · 2026-08-22 · 项目问题回流 Harness
+
+### 用户目标
+
+- 用户能把任一项目里的真实问题明确提交为 Harness 改进信号，而不是只能写入 Brain 记忆或依赖 Agent 猜测。
+- 工作台能按问题类型、来源项目、重复频次和相似候选聚合，并让用户决定它最终应进入 Rule、Skill、Checker 或 Profile。
+- 单个项目的一次性问题默认保留在项目观察层；只有跨项目重复、同类高频或用户明确送审后才进入中央 Harness 审批。
+- 审批不会直接改写中央规则；先生成可审计提案，落地后登记实际产物，再以同类问题频次是否下降完成效果复验。
+
+### 产品与安全边界
+
+- 复用现有项目记忆作为可选择的证据来源，不把所有项目记忆自动判定为 Harness 缺陷。
+- Harness 改进候选独立于 Brain 全局偏好/Profile 审批箱，避免“个人偏好”和“工具规则缺陷”混为一谈。
+- 所有写操作使用 localhost action token；候选、合并、审批、落地和复验均保留来源与状态，不删除原项目记录。
+- 批准只生成本地提案，不自动修改 `rules/`、Skill、Checker 或 Profile；实际产物必须由后续受控开发落地并登记。
+- 仍只在 `feat/v0.19-service-reliability` 与 6246 验收；不修改 main、6425，不发布，不执行远端同步。
+
+### 实施步骤
+
+- [x] 165. [失败契约] `tests/test_harness_agents.py`、`tests/test_harness_observe.py` — 固定项目问题候选、跨项目相似项/频次、人工送审、目标类型、提案、落地与复验状态，以及鉴权 HTTP/UI 入口。
+- [x] 166. [候选模型] `scripts/harness-brain-boundary.py` — 在独立本地目录维护 Harness 改进生命周期，复用项目记忆证据但不进入 Brain 候选审批。
+- [x] 167. [服务 API] `scripts/harness-observe.py` — 提供只读清单与受 action token 保护的创建、合并、送审、批准/拒绝、登记落地和效果复验接口。
+- [x] 168. [工作台交互] `web/observe-dashboard.html` — 设置新增“Harness 改进”入口；项目记忆可提交问题，改进页显示来源、频次、相似项、目标、审批、落地和复验动作。
+- [x] 169. [说明与版本状态] `docs/OBSERVE.md`、`docs/VERSIONS.md` — 写清 Brain 记忆与 Harness 改进的区别、用户路径和不自动改规则边界。
+- [x] 170. [真实验收] 聚焦与全仓回归、生成/语法/diff 检查，并在 6246 走完“项目问题 → 改进候选 → 审批预览”的安全路径；不批准真实中央规则改动。
+- [x] 171. [Review 修正] `scripts/harness-observe.py`、`tests/test_harness_observe.py` — 已完成 QA 回合没有专门 verification 事件时，以 QA 回写摘要作为可见的兜底证据；没有 QA 的旧需求继续如实显示无证据。
+- [x] 172. [证据补齐] 对 task-130、task-131、task-133 分别执行独立 QA 并回写范围与结论；`web/observe-dashboard.html` 不再给已完成需求显示陈旧的“建议下一步”流转。
+
+### 完成判定
+
+- [x] 项目记忆卡可明确提交为 Harness 问题并选择 Rule / Skill / Checker / Profile；原项目记忆仍保留。
+- [x] 改进页能解释候选来自哪些项目、出现多少次、有哪些相似项，以及为何尚未进入审批。
+- [x] 单项目一次信号默认不自动送审；跨项目合并或用户明确确认后才进入审批箱。
+- [x] 批准生成可审计提案但不直接修改中央 Harness；可登记实际产物并记录 improved / unchanged / regressed 复验结果。
+- [x] HTTP 写操作均鉴权，错误路径可达；全仓验证与 6246 真实路径通过。
+
+### Step 165 — 2026-08-22
+- files: `tests/test_harness_agents.py`, `tests/test_harness_observe.py`, `plan.md`
+- verify: 旧实现得到候选模型 `2 errors` 与工作台合同 `1 failure`，证明项目问题回流、独立审批域和 UI/API 均尚不存在。
+
+### Step 166 — 2026-08-22
+- files: `scripts/harness-brain-boundary.py`, `tests/test_harness_agents.py`
+- verify: `2 tests / 0 failures`；单项目信号保持 `observed`，跨项目合并后进入 `pending_approval`，批准只生成本地提案，登记产物后可记录效果复验。
+
+### Step 167 — 2026-08-22
+- files: `scripts/harness-observe.py`, `tests/test_harness_observe.py`
+- verify: localhost 集成测试证明未授权创建返回 `401`；授权后可创建、明确送审、批准并从只读清单读取提案路径。
+
+### Step 168 — 2026-08-22
+- files: `web/observe-dashboard.html`, `tests/test_harness_observe.py`
+- verify: 设置新增独立“Harness 改进”页；项目记忆的提交表单展示 Rule / Skill / Checker / Profile，候选页按状态提供合并、送审、审批、登记已落地与效果复验动作。
+
+### Step 169 — 2026-08-22
+- files: `docs/OBSERVE.md`, `docs/VERSIONS.md`, `plan.md`
+- verify: 文档明确 Brain 项目事实与 Harness 改进的边界、频次门槛、提案目录及“不自动改中央 Harness”。
+
+### Step 170 — 2026-08-22
+- verify: 全仓 `128 tests / 0 failures`；Python/JavaScript syntax、`generate.sh --check`、`git diff --check` 均 exit 0。
+- release hardening: Harness 改进的 8 个状态变更入口使用同一写锁；并发回归证明两个 Agent 同时提交同一问题只实际落盘一次。Brain/Harness 操作接口统一限制 `16 KiB` 请求体，超限集成测试返回 `413 body-too-large`。
+- interaction: 6246 完成“设置 → Harness 改进空态 → 记忆与同步 → 展开项目记忆 → 打开提交表单 → 检查四类目标 → 取消 → 返回改进页”；真实候选仍为 0，未污染用户数据，console `0 warning / 0 error`。
+- responsive: 390×844 下页面 `scrollWidth = innerWidth = 390`，三个设置标签与四项摘要无横向溢出；验收后已恢复默认视口。
+- service note: 旧 6246 进程收到正常终止后由现有守护链自动以新 PID 拉起并加载当前代码；未继续强杀，也未触碰 6425。
+
+### Step 171 — 2026-08-22
+- failure evidence: 真实 6246 页面中 task-132 已有 QA 与 Review 回合，但“验证证据”仍显示空；新增回归在旧逻辑稳定复现 `evidence_count 0 != 1`。
+- verify: 修复后聚焦 `2 tests / 0 failures`，全仓 `128 tests / 0 failures`；现有显式 verification 证据计数不变。
+- interaction: 6246 重新加载当前分支后，task-132 显示 `1 条 · QA 回写：126项测试、桌面与390px页面路径通过…`；task-134、task-135 同样展示各自真实 QA 摘要，未参与 QA 的旧需求仍显示“尚无验证证据”。
+
+### Step 172 — 2026-08-22
+- QA: task-130 `7 tests / 0 failures`（白名单、路径安全、幂等确认、互斥、固定参数、脱敏、鉴权 HTTP）；task-131 `5 tests / 0 failures`（发现、冲突、危险指令、脚本隔离、元数据）；task-133 `4 tests / 0 failures`（断连、保活、幂等复用、失败恢复）。
+- verify: 全仓 `129 tests / 0 failures`；JavaScript syntax、`generate.sh --check`、`git diff --check` 均 exit 0。
+- interaction: 6246 当前版本保持 `6/6`；六条需求均显示实际测试角色、测试范围与 QA 回写证据；已完成 task-130 显示“当前负责人：未分配”“当前没有角色流转”，历史开发→测试路径仍保留。
+
+### Step 83 — 2026-08-13
+- files: `scripts/harness-observe-hook.py`, `scripts/harness-observe.py`, `tests/test_harness_agents.py`, `tests/test_harness_observe.py`
+- verify: 对应联合记录 `Step 82/83/90`；真实 Loader/Hook 部署后 4/4 生命周期配置、离线 outbox 重放与 68 tests / 0 failures 均有记录。
+
+### Step 94 — 2026-08-19
+- files: `scripts/harness-brain-boundary.py`, `scripts/harness-observe.py`, `web/observe-dashboard.html`
+- verify: v0.18 发布 Gate 的 98 tests / 0 failures 与真实 6425 页面验证覆盖 Brain 分层健康状态。
+
+### Step 95 — 2026-08-19
+- files: `scripts/harness-observe-hook.py`, `scripts/harness-brain-boundary.py`, `tests/test_harness_agents.py`
+- verify: 结构化事件统一入口、脱敏去重和 SessionEnd 非主链合同纳入 v0.18 全量 98 tests / 0 failures。
+
+### Step 96 — 2026-08-19
+- files: `scripts/harness-brain-boundary.py`, `tests/test_harness_agents.py`, `docs/BRAIN-INTEGRATION.md`
+- verify: 项目事实自动写入、噪音拒绝、纠正与撤销路径纳入 v0.18 全量 98 tests / 0 failures。
+
+### Step 97 — 2026-08-19
+- files: `scripts/harness-brain-boundary.py`, `scripts/harness-observe.py`, `web/observe-dashboard.html`
+- verify: 全局/Profile 候选的编辑、换层、合并、忽略、批准、拒绝与重试在 6246 真实路径和 98 tests / 0 failures 中验收。
+
+### Step 98 — 2026-08-19
+- files: `scripts/harness-verify.py`, `tests/test_harness_verify.py`, `docs/VERIFY-CONTRACT.md`
+- verify: fast/subsystem/release 三档与同指纹 Gate 复用合同通过，v0.18 全量为 98 tests / 0 failures。
+
+### Step 102 — 2026-08-19
+- files: `scripts/harness-observe.py`, `web/observe-dashboard.html`, `tests/test_harness_observe.py`
+- verify: 工作台导航、语义版本倒序和工作区—分支—版本—标签图通过真实 6246 路径及 v0.18 Release Gate。
+
+### Step 103 — 2026-08-19
+- files: `scripts/harness-brain-boundary.py`, `scripts/harness-observe.py`, `web/observe-dashboard.html`
+- verify: 同步清单展示真实仓库、分支、写入来源和目标；真实页面只完成预览与取消，未越过最终确认边界。
+
+### Step 104 — 2026-08-19
+- files: `scripts/harness-brain-boundary.py`, `scripts/harness-observe.py`, `web/observe-dashboard.html`
+- verify: 项目待同步与全局/Profile 待审批已分离，确定性服务主链合同纳入 98 tests / 0 failures。
+
+### Step 113 — 2026-08-18
+- files: `docs/VERSIONS.md`, `scripts/harness-observe.py`, `tests/test_harness_observe.py`
+- verify: 对应联合记录 `Step 112–113`；临时双 worktree 的 3 tests / 0 failures 证明 main 集成目标与两条工作分支归属正确。
+
+### Step 115 — 2026-08-18
+- files: `web/observe-dashboard.html`, `tests/test_harness_observe.py`
+- verify: 对应联合记录 `Step 114–115`；全仓 93 tests / 0 failures，6246 展示同仓库工作区且 console 0 warning / 0 error。
+
+### Step 116 — 2026-08-18
+- files: `tests/test_harness_agents.py`, `tests/test_harness_observe.py`, `tests/test_harness_verify.py`
+- verify: 契约基线稳定暴露同步预览与页面层级缺口，随后由 Step 117–120 的聚焦合同闭环。
+
+### Step 117 — 2026-08-18
+- files: `scripts/harness-brain-boundary.py`, `tests/test_harness_agents.py`
+- verify: 同步预览返回真实仓库/上游、项目分组、涉及文件、领先提交和排除项；聚焦合同 2 tests / 0 failures。
+
+### Step 118 — 2026-08-18
+- files: `web/observe-dashboard.html`, `tests/test_harness_observe.py`
+- verify: 页面按待同步、全局审批、项目记忆、连接设置排序，项目记忆与高级详情刷新后默认收起。
+
+### Step 119 — 2026-08-18
+- files: `docs/BRAIN-INTEGRATION.md`, `tests/test_harness_agents.py`
+- verify: 用户文档与后端合同对齐收集范围、审批、同步目标、Git push 边界、排除项和仅本地模式。
+
+### Step 120 — 2026-08-18
+- files: `web/observe-dashboard.html`, `tests/test_harness_observe.py`, `plan.md`
+- verify: 全仓 93 tests / 0 failures；6246 完成同步清单、记录/文件/提交展开、取消与刷新，console 0 error，未执行最终同步。
+
+### Step 153 — 2026-08-20
+- files: `web/observe-dashboard.html`, `plan.md`
+- verify: 用户提供的 6246 截图明确记录角色同质化、文字重叠和装饰抢占空间，QA 据此退回 Executor 并进入 Step 154–160 修正链。
+
+## v0.19.0 · 2026-08-22 · 正式发布
+
+### 发布步骤
+
+- [x] 173. [发布事实] `VERSION`、`CHANGELOG.md`、`CHANGELOG.zh-CN.md`、`docs/VERSIONS.md` — 版本、日期、兼容性、迁移说明和标签统一为 v0.19.0。
+- [x] 174. [Release Gate] 全量测试、生成规则、Python/JavaScript/Shell/JSON 语法、安装 smoke、Harness audit、敏感信息和 diff 检查全部通过。
+- [ ] 175. [提交与合并] 将 `feat/v0.19-service-reliability` 的完整范围提交，fast-forward 合并到本地 main，并确认工作树干净。
+- [ ] 176. [本机部署] 更新 `~/.mick-harness`，同步 Agent loader，重启并验证唯一的 6425 服务；不覆盖用户未受管配置。
+- [ ] 177. [远端发布] 推送 main 与 annotated `v0.19.0` 标签，核对 GitHub 远端分支、标签和本地安装版本一致。
+
+### Step 173 — 2026-08-22
+- files: `VERSION`, `CHANGELOG.md`, `CHANGELOG.zh-CN.md`, `docs/VERSIONS.md`, `plan.md`
+- verify: `VERSION=0.19.0`；中英文 Changelog 均包含 `0.19.0 / 2026-08-22`；版本记录为 `released / main / v0.19.0`，并明确 `harness update` 迁移方式。
+
+### Step 174 — 2026-08-22
+- files: `generate.sh`, `setup.sh`, `scripts/*.sh`, `scripts/*.py`, `web/observe-dashboard.html`, `tests/`, `plan.md`
+- verify: 全仓 `130 tests / 0 failures`；`generate.sh --check`、Shell/Python/JavaScript/JSON 语法、临时项目 `setup.sh --non-interactive`、版本一致性、敏感信息扫描和 `git diff --check` 全部 exit 0；Harness Audit `8 PASS / 0 WARN / 0 FAIL`。
+
+### 发布停止条件
+
+- 任一 Release Gate 失败，或发现无法解释的文件、私有 Brain 数据、密钥、版本不一致时，停止在打标签之前。
+- 合并后本机部署失败时不推送标签；远端推送失败时保留本地提交和标签并明确报告真实状态。

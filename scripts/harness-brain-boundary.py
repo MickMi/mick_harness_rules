@@ -35,6 +35,7 @@ KINDS = {
 }
 LAYERS = {"session", "project", "global", "profile"}
 PENDING_STATUSES = {"pending_confirmation", "write_failed", "sync_failed"}
+HARNESS_IMPROVEMENT_TARGETS = {"rule", "skill", "checker", "profile"}
 CONFIRMED_EVENT_TYPES = {
     "work.round_completed", "decision.recorded", "handoff.created",
     "artifact.observed", "verification.observed", "task.discovered",
@@ -70,6 +71,10 @@ def suppression_root() -> Path:
 
 def project_memory_root() -> Path:
     return state_root() / "brain-project-memory"
+
+
+def harness_improvement_root() -> Path:
+    return state_root() / "harness-improvements"
 
 
 def safe_slug(value: str) -> str:
@@ -705,6 +710,283 @@ def merge_project_memories(identifiers: list[str], *, summary: str) -> dict[str,
         record["updated_at"] = timestamp
         atomic_json(path, record)
     return project_memory_view(merged)
+
+
+def project_memory_record(identifier: str) -> dict[str, Any]:
+    if not re.fullmatch(r"project_memory_[a-f0-9]{20}", identifier):
+        raise BrainBoundaryError("Invalid project memory identifier.")
+    matches = list(project_memory_root().glob(f"*/{identifier}.json"))
+    if len(matches) != 1:
+        raise BrainBoundaryError(f"Unknown project memory: {identifier}")
+    record = json.loads(matches[0].read_text(encoding="utf-8"))
+    if record.get("status") in {"reverted", "merged"}:
+        raise BrainBoundaryError("Reverted or merged project memory cannot become a Harness improvement.")
+    return record
+
+
+def harness_improvement_path(identifier: str) -> Path:
+    if not re.fullmatch(r"improvement_[a-f0-9]{20}", identifier):
+        raise BrainBoundaryError("Invalid Harness improvement identifier.")
+    return harness_improvement_root() / f"{identifier}.json"
+
+
+def get_harness_improvement(identifier: str) -> dict[str, Any]:
+    path = harness_improvement_path(identifier)
+    if not path.is_file():
+        raise BrainBoundaryError(f"Unknown Harness improvement: {identifier}")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def save_harness_improvement(record: dict[str, Any]) -> dict[str, Any]:
+    record["updated_at"] = now_iso()
+    atomic_json(harness_improvement_path(str(record["improvement_id"])), record)
+    return record
+
+
+def raw_harness_improvements() -> list[dict[str, Any]]:
+    root = harness_improvement_root()
+    if not root.exists():
+        return []
+    records: list[dict[str, Any]] = []
+    for path in root.glob("improvement_*.json"):
+        with contextlib.suppress(OSError, json.JSONDecodeError):
+            records.append(json.loads(path.read_text(encoding="utf-8")))
+    return records
+
+
+def harness_improvement_view(record: dict[str, Any], records: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    records = records if records is not None else raw_harness_improvements()
+    sources = list(record.get("sources") or [])
+    projects = sorted({str(item.get("project")) for item in sources if item.get("project")})
+    occurrence_count = max(int(record.get("occurrence_count") or 0), len(sources), 1)
+    eligible = len(projects) >= 2 or occurrence_count >= 3
+    active_statuses = {"observed", "pending_approval"}
+    similar = [
+        item["improvement_id"]
+        for item in records
+        if item.get("improvement_id") != record.get("improvement_id")
+        and item.get("target") == record.get("target")
+        and item.get("status") in active_statuses
+        and record.get("status") in active_statuses
+        and summaries_are_similar(str(item.get("summary") or ""), str(record.get("summary") or ""))
+    ]
+    return {
+        **record,
+        "sources": sources,
+        "source_projects": projects,
+        "project_count": len(projects),
+        "occurrence_count": occurrence_count,
+        "eligible_for_approval": eligible,
+        "similar_improvement_ids": similar,
+    }
+
+
+def list_harness_improvements() -> list[dict[str, Any]]:
+    records = raw_harness_improvements()
+    visible = [record for record in records if record.get("status") != "merged"]
+    return sorted(
+        (harness_improvement_view(record, records) for record in visible),
+        key=lambda item: item.get("updated_at") or "",
+        reverse=True,
+    )
+
+
+def create_harness_improvement(
+    memory_id: str, *, target: str, summary: str | None = None,
+) -> dict[str, Any]:
+    if target not in HARNESS_IMPROVEMENT_TARGETS:
+        raise BrainBoundaryError("Harness improvement target must be rule, skill, checker, or profile.")
+    with simple_lock(harness_improvement_root() / ".write.lock"):
+        memory = project_memory_record(memory_id)
+        cleaned = validate_summary(summary or str(memory.get("summary") or ""))
+        material = json.dumps([memory_id, target, cleaned], ensure_ascii=False, separators=(",", ":"))
+        identifier = f"improvement_{hashlib.sha256(material.encode('utf-8')).hexdigest()[:20]}"
+        path = harness_improvement_path(identifier)
+        if path.is_file():
+            return harness_improvement_view(json.loads(path.read_text(encoding="utf-8")))
+        timestamp = now_iso()
+        record = {
+            "schema_version": "1",
+            "improvement_id": identifier,
+            "target": target,
+            "summary": cleaned,
+            "status": "observed",
+            "sources": [{
+                "memory_id": memory_id,
+                "project": memory.get("project"),
+                "kind": memory.get("kind"),
+                "source_agent": memory.get("source_agent"),
+                "summary_digest": memory.get("summary_digest"),
+            }],
+            "occurrence_count": max(int(memory.get("occurrence_count") or 1), 1),
+            "created_at": timestamp,
+            "updated_at": timestamp,
+        }
+        atomic_json(path, record)
+        return harness_improvement_view(record)
+
+
+def update_harness_improvement(
+    identifier: str, *, target: str | None = None, summary: str | None = None,
+) -> dict[str, Any]:
+    with simple_lock(harness_improvement_root() / ".write.lock"):
+        record = get_harness_improvement(identifier)
+        if record.get("status") not in {"observed", "pending_approval", "rejected"}:
+            raise BrainBoundaryError("Only observed, pending, or rejected improvements can be edited.")
+        if target is not None:
+            if target not in HARNESS_IMPROVEMENT_TARGETS:
+                raise BrainBoundaryError("Harness improvement target must be rule, skill, checker, or profile.")
+            record["target"] = target
+        if summary is not None:
+            record["summary"] = validate_summary(summary)
+        if record.get("status") == "rejected":
+            record["status"] = "observed"
+        return harness_improvement_view(save_harness_improvement(record))
+
+
+def merge_harness_improvements(
+    identifier: str, duplicate_ids: list[str], *, summary: str | None = None,
+) -> dict[str, Any]:
+    with simple_lock(harness_improvement_root() / ".write.lock"):
+        primary = get_harness_improvement(identifier)
+        identifiers = list(dict.fromkeys(value for value in duplicate_ids if value != identifier))
+        if not identifiers:
+            raise BrainBoundaryError("Merging Harness improvements requires at least one other candidate.")
+        if len(identifiers) > 20:
+            raise BrainBoundaryError("A single merge may include at most 20 Harness improvements.")
+        duplicates = [get_harness_improvement(value) for value in identifiers]
+        for record in [primary, *duplicates]:
+            if record.get("status") not in {"observed", "pending_approval", "rejected"}:
+                raise BrainBoundaryError("Approved or implemented improvements cannot be merged.")
+            if record.get("target") != primary.get("target"):
+                raise BrainBoundaryError("Only Harness improvements with the same target can be merged.")
+        sources = []
+        seen_memories: set[str] = set()
+        for record in [primary, *duplicates]:
+            for source in record.get("sources") or []:
+                memory_id = str(source.get("memory_id") or "")
+                if memory_id and memory_id not in seen_memories:
+                    sources.append(source)
+                    seen_memories.add(memory_id)
+        primary["sources"] = sources
+        primary["merged_from"] = list(dict.fromkeys([*primary.get("merged_from", []), *identifiers]))
+        primary["occurrence_count"] = sum(max(int(item.get("occurrence_count") or 1), 1) for item in [primary, *duplicates])
+        if summary is not None:
+            primary["summary"] = validate_summary(summary)
+        projects = {item.get("project") for item in sources if item.get("project")}
+        primary["status"] = "pending_approval" if len(projects) >= 2 or primary["occurrence_count"] >= 3 else "observed"
+        save_harness_improvement(primary)
+        for record in duplicates:
+            record["status"] = "merged"
+            record["merged_into"] = identifier
+            save_harness_improvement(record)
+        return harness_improvement_view(primary)
+
+
+def submit_harness_improvement(identifier: str, *, force: bool = False) -> dict[str, Any]:
+    with simple_lock(harness_improvement_root() / ".write.lock"):
+        record = get_harness_improvement(identifier)
+        view = harness_improvement_view(record)
+        if record.get("status") == "pending_approval":
+            return view
+        if record.get("status") not in {"observed", "rejected"}:
+            raise BrainBoundaryError("Only observed or rejected improvements can enter approval.")
+        if not view["eligible_for_approval"] and not force:
+            raise BrainBoundaryError("Single-project signal stays in observation unless the user explicitly confirms submission.")
+        record["status"] = "pending_approval"
+        record["submitted_by_override"] = bool(force and not view["eligible_for_approval"])
+        return harness_improvement_view(save_harness_improvement(record))
+
+
+def harness_improvement_proposal(record: dict[str, Any]) -> tuple[Path, str]:
+    target_labels = {"rule": "Rule", "skill": "Skill", "checker": "Checker", "profile": "Profile"}
+    view = harness_improvement_view(record)
+    relative = Path("harness-improvements") / "proposals" / f"{record['improvement_id']}.md"
+    projects = "、".join(view["source_projects"]) or "未记录"
+    content = (
+        f"# Harness 改进提案 · {record['improvement_id']}\n\n"
+        f"> 本提案由用户审批生成，不会自动修改中央 Harness。\n\n"
+        f"- 目标类型：{target_labels[record['target']]}\n"
+        f"- 问题摘要：{record['summary']}\n"
+        f"- 来源项目：{projects}\n"
+        f"- 项目数：{view['project_count']}\n"
+        f"- 出现次数：{view['occurrence_count']}\n"
+        f"- 审批时间：{now_iso()}\n\n"
+        "## 后续落地\n\n"
+        "由受控开发回合确定具体文件、验证方式和回滚边界；落地前不得把本提案视为已生效。\n"
+    )
+    return relative, content
+
+
+def approve_harness_improvement(identifier: str) -> dict[str, Any]:
+    with simple_lock(harness_improvement_root() / ".write.lock"):
+        record = get_harness_improvement(identifier)
+        if record.get("status") == "approved":
+            return harness_improvement_view(record)
+        if record.get("status") != "pending_approval":
+            raise BrainBoundaryError("Harness improvement must enter approval before it can be approved.")
+        relative, content = harness_improvement_proposal(record)
+        atomic_text(state_root() / relative, content)
+        record["status"] = "approved"
+        record["approved_at"] = now_iso()
+        record["proposal_path"] = relative.as_posix()
+        return harness_improvement_view(save_harness_improvement(record))
+
+
+def reject_harness_improvement(identifier: str, *, reason: str | None = None) -> dict[str, Any]:
+    with simple_lock(harness_improvement_root() / ".write.lock"):
+        record = get_harness_improvement(identifier)
+        if record.get("status") not in {"observed", "pending_approval"}:
+            raise BrainBoundaryError("Only observed or pending improvements can be rejected.")
+        record["status"] = "rejected"
+        record["rejection_reason"] = redact(reason or "")[:500] or None
+        return harness_improvement_view(save_harness_improvement(record))
+
+
+def validate_artifact_path(value: str) -> str:
+    path = Path(value.strip())
+    if not value.strip() or path.is_absolute() or ".." in path.parts:
+        raise BrainBoundaryError("Implemented artifact must be a project-relative path.")
+    return path.as_posix()
+
+
+def mark_harness_improvement_implemented(
+    identifier: str, *, artifact_path: str, baseline_count: int,
+) -> dict[str, Any]:
+    with simple_lock(harness_improvement_root() / ".write.lock"):
+        record = get_harness_improvement(identifier)
+        if record.get("status") != "approved":
+            raise BrainBoundaryError("Only approved Harness improvements can be marked implemented.")
+        if not isinstance(baseline_count, int) or baseline_count < 0:
+            raise BrainBoundaryError("Baseline count must be a non-negative integer.")
+        record["status"] = "implemented"
+        record["implementation"] = {
+            "artifact_path": validate_artifact_path(artifact_path),
+            "baseline_count": baseline_count,
+            "implemented_at": now_iso(),
+        }
+        return harness_improvement_view(save_harness_improvement(record))
+
+
+def verify_harness_improvement_effect(
+    identifier: str, *, result: str, current_count: int, note: str = "",
+) -> dict[str, Any]:
+    with simple_lock(harness_improvement_root() / ".write.lock"):
+        record = get_harness_improvement(identifier)
+        if record.get("status") not in {"implemented", "needs_followup"}:
+            raise BrainBoundaryError("Only implemented Harness improvements can be effect-verified.")
+        if result not in {"improved", "unchanged", "regressed"}:
+            raise BrainBoundaryError("Effect result must be improved, unchanged, or regressed.")
+        if not isinstance(current_count, int) or current_count < 0:
+            raise BrainBoundaryError("Current count must be a non-negative integer.")
+        record["status"] = "verified" if result == "improved" else "needs_followup"
+        record["effect"] = {
+            "result": result,
+            "current_count": current_count,
+            "note": redact(note)[:1000],
+            "verified_at": now_iso(),
+        }
+        return harness_improvement_view(save_harness_improvement(record))
 
 
 def profile_metadata(*, brain: Path | None = None) -> list[dict[str, Any]]:

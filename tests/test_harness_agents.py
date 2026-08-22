@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import importlib.util
 import json
 import os
 from pathlib import Path
 import subprocess
 import tempfile
+import time
 import unittest
 from unittest import mock
 
@@ -15,6 +17,7 @@ PRODUCT_VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 SCRIPT = ROOT / "scripts" / "harness-agent-manager.py"
 REGISTRY = ROOT / "config" / "agent-registry.json"
 BRAIN_SCRIPT = ROOT / "scripts" / "harness-brain-boundary.py"
+AUDIT_SCRIPT = ROOT / "scripts" / "harness-audit.sh"
 
 
 def load_manager():
@@ -44,6 +47,37 @@ class AgentRegistryTests(unittest.TestCase):
             self.assertIn("limitations", agent)
         tier_one = {agent["id"] for agent in agents if agent["tier"] == 1}
         self.assertEqual(tier_one, {"claude-code", "codex"})
+
+
+class HarnessAuditTests(unittest.TestCase):
+    def test_plain_checked_evidence_is_not_counted_as_a_numbered_plan_step(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory) / "project"
+            script = project / ".harness" / "scripts" / "harness-audit.sh"
+            script.parent.mkdir(parents=True)
+            script.write_bytes(AUDIT_SCRIPT.read_bytes())
+            script.chmod(0o755)
+            (project / "plan.md").write_text(
+                "# Plan\n\n## 目标\n\n验证步骤识别。\n\n## 步骤\n\n"
+                "- [x] 1. 真正步骤\n"
+                "- [x] 6246 真实浏览器路径通过\n\n"
+                "## 自检日志\n\n### Step 1 — 2026-08-22\n"
+                "- files: `plan.md`\n"
+                "- verify: 真实步骤已记录。\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "init", "-q"], cwd=project, check=True)
+            subprocess.run(["git", "config", "user.name", "Audit Test"], cwd=project, check=True)
+            subprocess.run(["git", "config", "user.email", "audit@example.invalid"], cwd=project, check=True)
+            subprocess.run(["git", "add", "plan.md"], cwd=project, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "fixture"], cwd=project, check=True)
+
+            result = subprocess.run(
+                [str(script), "--since", "HEAD"], cwd=project, capture_output=True, text=True, check=False
+            )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("plan.md (1/1 steps completed)", result.stdout)
 
 
 class AgentManagerTests(unittest.TestCase):
@@ -384,6 +418,119 @@ class BrainBoundaryTests(unittest.TestCase):
             kind="gotcha", layer="global", project="app-d", summary="移动端布局必须再次验证横向溢出"
         )
         self.assertEqual(future["status"], "ignored_similar")
+
+    def test_harness_improvements_require_cross_project_signal_or_explicit_submit(self) -> None:
+        brain = Path(self.tempdir.name) / "brain"
+        with mock.patch.dict(os.environ, {"MICK_BRAIN_ROOT": str(brain)}):
+            first_memory = self.module.process_observer_event(
+                "app-a",
+                {
+                    "project_id": "app-a",
+                    "idempotency_key": "ui-overflow-a",
+                    "type": "work.round_completed",
+                    "source": {"producer": "codex-hook"},
+                    "payload": {"status": "completed", "summary": "移动端页面出现横向溢出"},
+                },
+            )
+            second_memory = self.module.process_observer_event(
+                "app-b",
+                {
+                    "project_id": "app-b",
+                    "idempotency_key": "ui-overflow-b",
+                    "type": "work.round_completed",
+                    "source": {"producer": "claude-hook"},
+                    "payload": {"status": "completed", "summary": "移动端布局再次出现横向溢出问题"},
+                },
+            )
+
+        first = self.module.create_harness_improvement(
+            first_memory["memory_id"], target="checker", summary="移动端布局必须检查横向溢出"
+        )
+        self.assertEqual(first["status"], "observed")
+        self.assertFalse(first["eligible_for_approval"])
+        with self.assertRaises(self.module.BrainBoundaryError):
+            self.module.submit_harness_improvement(first["improvement_id"], force=False)
+
+        second = self.module.create_harness_improvement(
+            second_memory["memory_id"], target="checker", summary="移动端布局必须验证横向溢出"
+        )
+        listed = {item["improvement_id"]: item for item in self.module.list_harness_improvements()}
+        self.assertIn(second["improvement_id"], listed[first["improvement_id"]]["similar_improvement_ids"])
+
+        merged = self.module.merge_harness_improvements(
+            first["improvement_id"], [second["improvement_id"]], summary="移动端布局必须验证横向溢出"
+        )
+        self.assertEqual(merged["status"], "pending_approval")
+        self.assertEqual(merged["project_count"], 2)
+        self.assertEqual(merged["occurrence_count"], 2)
+
+    def test_approved_harness_improvement_is_a_proposal_until_effect_is_verified(self) -> None:
+        brain = Path(self.tempdir.name) / "brain"
+        with mock.patch.dict(os.environ, {"MICK_BRAIN_ROOT": str(brain)}):
+            memory = self.module.process_observer_event(
+                "app-a",
+                {
+                    "project_id": "app-a",
+                    "idempotency_key": "button-wrap-a",
+                    "type": "work.round_completed",
+                    "source": {"producer": "codex-hook"},
+                    "payload": {"status": "completed", "summary": "按钮文字不换行并挤出容器"},
+                },
+            )
+
+        candidate = self.module.create_harness_improvement(
+            memory["memory_id"], target="rule", summary="按钮必须验证文字换行与容器边界"
+        )
+        submitted = self.module.submit_harness_improvement(candidate["improvement_id"], force=True)
+        approved = self.module.approve_harness_improvement(submitted["improvement_id"])
+
+        self.assertEqual(approved["status"], "approved")
+        self.assertTrue((self.state / approved["proposal_path"]).is_file())
+        self.assertFalse((ROOT / "rules" / "auto-generated.md").exists())
+
+        implemented = self.module.mark_harness_improvement_implemented(
+            approved["improvement_id"], artifact_path="verify.d/ui-layout.py", baseline_count=3
+        )
+        verified = self.module.verify_harness_improvement_effect(
+            implemented["improvement_id"], result="improved", current_count=0,
+            note="三个项目的同类问题在复验窗口内降为零",
+        )
+        self.assertEqual(implemented["status"], "implemented")
+        self.assertEqual(verified["status"], "verified")
+        self.assertEqual(verified["effect"]["result"], "improved")
+
+    def test_duplicate_harness_improvements_are_serialized_to_one_write(self) -> None:
+        brain = Path(self.tempdir.name) / "brain"
+        with mock.patch.dict(os.environ, {"MICK_BRAIN_ROOT": str(brain)}):
+            memory = self.module.process_observer_event(
+                "app-a",
+                {
+                    "project_id": "app-a",
+                    "idempotency_key": "concurrent-ui-overflow",
+                    "type": "work.round_completed",
+                    "source": {"producer": "codex-hook"},
+                    "payload": {"status": "completed", "summary": "窄屏布局出现横向溢出"},
+                },
+            )
+
+        real_atomic_json = self.module.atomic_json
+
+        def slow_atomic_json(path, value):
+            time.sleep(0.05)
+            return real_atomic_json(path, value)
+
+        with mock.patch.object(self.module, "atomic_json", side_effect=slow_atomic_json) as atomic_json:
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                results = list(pool.map(
+                    lambda _: self.module.create_harness_improvement(
+                        memory["memory_id"], target="checker", summary="窄屏布局必须检查横向溢出"
+                    ),
+                    range(2),
+                ))
+
+        self.assertEqual(results[0]["improvement_id"], results[1]["improvement_id"])
+        self.assertEqual(atomic_json.call_count, 1)
+        self.assertEqual(len(self.module.list_harness_improvements()), 1)
 
     def test_project_memories_can_be_explicitly_merged(self) -> None:
         brain = Path(self.tempdir.name) / "brain"

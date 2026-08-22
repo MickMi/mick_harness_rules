@@ -176,6 +176,143 @@ class ObserveRuntimeTests(unittest.TestCase):
         self.assertEqual(OBSERVE.DEFAULT_PORT, 6425)
         self.assertEqual(OBSERVE.COLLECTOR_VERSION, "0.4.0")
 
+    def test_operation_catalog_exposes_only_product_whitelist(self) -> None:
+        catalog = OBSERVE.operation_catalog()
+
+        self.assertEqual(
+            [item["action"] for item in catalog],
+            ["harness-update", "project-init", "agent-sync"],
+        )
+        self.assertEqual([item["label"] for item in catalog], ["更新 Harness", "注入或升级项目", "修复 Agent 接入"])
+        self.assertNotIn("command", json.dumps(catalog, ensure_ascii=False))
+
+    def test_operation_preview_rejects_unknown_actions_and_unsafe_project_paths(self) -> None:
+        state_dir = self.project / "state"
+        target = self.project / "target"
+        target.mkdir()
+
+        with self.assertRaisesRegex(OBSERVE.ObserveError, "Unsupported operation"):
+            OBSERVE.prepare_operation("run-command", {"command": "echo unsafe"}, state_root=state_dir)
+        with self.assertRaisesRegex(OBSERVE.ObserveError, "absolute"):
+            OBSERVE.prepare_operation("project-init", {"project_path": "relative/project"}, state_root=state_dir)
+        with self.assertRaisesRegex(OBSERVE.ObserveError, "does not exist"):
+            OBSERVE.prepare_operation(
+                "project-init",
+                {"project_path": str(self.project / "missing")},
+                state_root=state_dir,
+            )
+
+        preview = OBSERVE.prepare_operation(
+            "project-init",
+            {"project_path": str(target)},
+            state_root=state_dir,
+        )
+        snapshot = OBSERVE.operation_snapshot(state_root=state_dir)
+        self.assertEqual(preview["status"], "prepared")
+        self.assertTrue(preview["confirmation_token"])
+        self.assertEqual(preview["target"], str(target.resolve()))
+        self.assertNotIn("confirmation_token", json.dumps(snapshot, ensure_ascii=False))
+
+    def test_operation_preview_and_confirmation_are_idempotent_and_single_use(self) -> None:
+        state_dir = self.project / "state"
+        first = OBSERVE.prepare_operation("agent-sync", {}, state_root=state_dir)
+        second = OBSERVE.prepare_operation("agent-sync", {}, state_root=state_dir)
+
+        self.assertEqual(first["operation_id"], second["operation_id"])
+        self.assertTrue(second["reused"])
+        with self.assertRaisesRegex(OBSERVE.ObserveError, "confirmation"):
+            OBSERVE.confirm_operation(
+                first["operation_id"],
+                "wrong-token",
+                state_root=state_dir,
+                spawn_worker=False,
+            )
+
+        queued = OBSERVE.confirm_operation(
+            first["operation_id"],
+            first["confirmation_token"],
+            state_root=state_dir,
+            spawn_worker=False,
+        )
+        self.assertEqual(queued["status"], "queued")
+        with self.assertRaisesRegex(OBSERVE.ObserveError, "already confirmed"):
+            OBSERVE.confirm_operation(
+                first["operation_id"],
+                first["confirmation_token"],
+                state_root=state_dir,
+                spawn_worker=False,
+            )
+
+    def test_operation_mutex_rejects_parallel_mutation(self) -> None:
+        state_dir = self.project / "state"
+
+        with OBSERVE.operation_mutex(state_root=state_dir):
+            with self.assertRaisesRegex(OBSERVE.ObserveError, "already running"):
+                with OBSERVE.operation_mutex(state_root=state_dir):
+                    self.fail("parallel operation should not enter the critical section")
+
+    def test_operation_worker_uses_fixed_argument_lists_and_records_success(self) -> None:
+        state_dir = self.project / "state"
+        target = self.project / "project;not-a-shell-command"
+        target.mkdir()
+        preview = OBSERVE.prepare_operation(
+            "project-init",
+            {"project_path": str(target), "full": True},
+            state_root=state_dir,
+            harness_root=ROOT,
+        )
+        OBSERVE.confirm_operation(
+            preview["operation_id"],
+            preview["confirmation_token"],
+            state_root=state_dir,
+            spawn_worker=False,
+        )
+
+        with mock.patch.object(
+            OBSERVE.subprocess,
+            "run",
+            return_value=subprocess.CompletedProcess([], 0, "ok", ""),
+        ) as run:
+            result = OBSERVE.run_operation_worker(
+                preview["operation_id"],
+                state_root=state_dir,
+                harness_root=ROOT,
+            )
+
+        command = run.call_args.args[0]
+        self.assertEqual(command[:2], [str(ROOT / "bin" / "harness"), "init"])
+        self.assertEqual(command[2], str(target.resolve()))
+        self.assertEqual(command[3], "--full")
+        self.assertNotIn("shell", run.call_args.kwargs)
+        self.assertEqual(result["status"], "succeeded")
+        self.assertEqual(result["exit_code"], 0)
+
+    def test_operation_worker_redacts_failure_details(self) -> None:
+        state_dir = self.project / "state"
+        preview = OBSERVE.prepare_operation("agent-sync", {}, state_root=state_dir, harness_root=ROOT)
+        OBSERVE.confirm_operation(
+            preview["operation_id"],
+            preview["confirmation_token"],
+            state_root=state_dir,
+            spawn_worker=False,
+        )
+
+        with mock.patch.object(
+            OBSERVE.subprocess,
+            "run",
+            return_value=subprocess.CompletedProcess([], 9, "", "token=top-secret failure"),
+        ):
+            result = OBSERVE.run_operation_worker(
+                preview["operation_id"],
+                state_root=state_dir,
+                harness_root=ROOT,
+            )
+
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["exit_code"], 9)
+        self.assertIn("token=[redacted]", result["summary"])
+        self.assertNotIn("top-secret", json.dumps(OBSERVE.operation_snapshot(state_root=state_dir)))
+
     def test_launch_agent_plist_keeps_observer_alive(self) -> None:
         state_dir = self.project / "state"
         config = OBSERVE.build_launch_agent_plist(ROOT, state_dir, port=6425)
@@ -187,6 +324,69 @@ class ObserveRuntimeTests(unittest.TestCase):
         self.assertIn("watch", config["ProgramArguments"])
         self.assertIn("--all", config["ProgramArguments"])
         self.assertTrue(config["StandardOutPath"].endswith("observer/service.log"))
+
+    def test_install_service_reuses_matching_healthy_service(self) -> None:
+        state_dir = self.project / "state"
+        plist_path = OBSERVE.launch_agent_path(self.project)
+        plist_path.parent.mkdir(parents=True)
+        config = OBSERVE.build_launch_agent_plist(ROOT, state_dir, port=6425)
+        original = OBSERVE.plistlib.dumps(config, fmt=OBSERVE.plistlib.FMT_XML, sort_keys=True)
+        plist_path.write_bytes(original)
+        health = {"service_name": OBSERVE.SERVICE_NAME, "port": 6425}
+
+        with (
+            mock.patch.object(OBSERVE.sys, "platform", "darwin"),
+            mock.patch.object(OBSERVE, "default_state_root", return_value=state_dir),
+            mock.patch.object(OBSERVE, "launch_agent_loaded", return_value=True),
+            mock.patch.object(OBSERVE, "observer_health", return_value=health),
+            mock.patch.object(OBSERVE, "wait_for_observer", return_value=health),
+            mock.patch.object(OBSERVE, "run_launchctl") as launchctl,
+        ):
+            result = OBSERVE.install_service(home=self.project)
+
+        launchctl.assert_not_called()
+        self.assertEqual(plist_path.read_bytes(), original)
+        self.assertTrue(result["loaded"])
+        self.assertTrue(result["healthy"])
+
+    def test_install_service_restores_previous_service_when_bootstrap_fails(self) -> None:
+        state_dir = self.project / "state"
+        plist_path = OBSERVE.launch_agent_path(self.project)
+        plist_path.parent.mkdir(parents=True)
+        previous_config = OBSERVE.build_launch_agent_plist(
+            self.project / "previous-harness",
+            self.project / "previous-state",
+            port=6411,
+        )
+        previous = OBSERVE.plistlib.dumps(
+            previous_config,
+            fmt=OBSERVE.plistlib.FMT_XML,
+            sort_keys=True,
+        )
+        plist_path.write_bytes(previous)
+        bootstrap_attempts = 0
+
+        def launchctl_result(arguments: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
+            nonlocal bootstrap_attempts
+            if arguments[0] == "bootstrap":
+                bootstrap_attempts += 1
+                if bootstrap_attempts == 1:
+                    raise OBSERVE.ObserveError("new bootstrap failed")
+            return subprocess.CompletedProcess(["launchctl", *arguments], 0, "", "")
+
+        old_health = {"service_name": OBSERVE.SERVICE_NAME, "port": 6411}
+        with (
+            mock.patch.object(OBSERVE.sys, "platform", "darwin"),
+            mock.patch.object(OBSERVE, "default_state_root", return_value=state_dir),
+            mock.patch.object(OBSERVE, "launch_agent_loaded", return_value=True),
+            mock.patch.object(OBSERVE, "run_launchctl", side_effect=launchctl_result),
+            mock.patch.object(OBSERVE, "wait_for_observer", return_value=old_health),
+        ):
+            with self.assertRaisesRegex(OBSERVE.ObserveError, "new bootstrap failed"):
+                OBSERVE.install_service(home=self.project)
+
+        self.assertEqual(plist_path.read_bytes(), previous)
+        self.assertEqual(bootstrap_attempts, 2)
 
     def test_harness_command_activity_is_redacted_and_projected(self) -> None:
         (self.project / "AGENTS.md").write_text("# Harness\n", encoding="utf-8")
@@ -1091,14 +1291,65 @@ class ObserveRuntimeTests(unittest.TestCase):
 
         self.assertIn("nav-tree", dashboard)
         self.assertIn("renderNavTree", dashboard)
-        self.assertIn("所有项目", dashboard)
-        for label in ("工作台", "设置", "概览", "工作流", "版本", "产物", "更多", "诊断", "Agent 接入", "技术记录", "事件日志", "原始运行"):
+        self.assertIn("连接异常", dashboard)
+        for label in ("工作台", "设置", "项目主页", "版本记录", "交付物", "更多", "诊断", "Agent 接入", "技术记录", "事件日志", "原始运行"):
             self.assertIn(label, dashboard)
+        self.assertNotIn('["workflow", "工作流"]', dashboard)
         for removed in ("进展记录", "run-list", "renderRunList", "run-button", "project-button", "renderTabs"):
             self.assertNotIn(removed, dashboard)
-        self.assertIn("role-light", dashboard)
+        for marker in ("role-office-scene", "role-jelly", "role-hover-card", "role-history-timeline"):
+            self.assertIn(marker, dashboard)
+        self.assertNotIn("office-role-row", dashboard)
+        self.assertIn("jelly-task", dashboard)
         self.assertIn("flow-line", dashboard)
         self.assertIn("@keyframes", dashboard)
+
+    def test_role_office_matches_minimal_jelly_reference_and_keeps_state_driven_motion(self) -> None:
+        dashboard = DASHBOARD.read_text(encoding="utf-8")
+
+        for marker in (
+            "role-visual",
+            "role-jelly",
+            "jelly-face",
+            "jelly-arm",
+            "jelly-task",
+            "role-card-meta",
+            "role-name",
+        ):
+            self.assertIn(marker, dashboard)
+        for role_id, flavor in (
+            ("PM", "planner"),
+            ("Designer", "creative"),
+            ("Executor", "builder"),
+            ("QA", "inspector"),
+            ("Reviewer", "reviewer"),
+        ):
+            self.assertIn(f'{role_id}: "{flavor}"', dashboard)
+        for removed_detail in (
+            "character-head",
+            "character-body",
+            "character-accessory",
+            "character-legs",
+            "character-badge",
+            "jelly-mouth",
+            "jelly-prop",
+            "jelly-spark",
+            "role-workbench",
+            "role-monitor",
+            "role-mug",
+            "role-specialty",
+            "role-light",
+        ):
+            self.assertNotIn(removed_detail, dashboard)
+        for color in ("#58a7f7", "#ffa266", "#7bd08c", "#eb84b9", "#9e83e8"):
+            self.assertIn(color, dashboard.lower())
+        self.assertNotIn('.role-station[data-flow="source"] { box-shadow:', dashboard)
+        self.assertIn('.role-station[data-status="active"] .role-jelly', dashboard)
+        for animation_name in ("jelly-active", "jelly-carry"):
+            self.assertIn(f"@keyframes {animation_name}", dashboard)
+        self.assertIn('role.status === "active" ? `${role.label} · 工作中` : role.label', dashboard)
+        self.assertIn("grid-template-rows: 128px minmax(48px, auto)", dashboard)
+        self.assertIn("overflow-wrap: anywhere", dashboard)
 
     def test_dashboard_workbench_and_overview_prioritize_human_decisions(self) -> None:
         dashboard = DASHBOARD.read_text(encoding="utf-8")
@@ -1114,7 +1365,7 @@ class ObserveRuntimeTests(unittest.TestCase):
             "overview-status-strip",
             "project-purpose",
             "office-flow-rail",
-            "role-brief",
+            "role-hover-card",
         ):
             self.assertIn(marker, dashboard)
         for legacy_layout in ("project-table", "question-grid", "question-item", "six-questions"):
@@ -1156,6 +1407,30 @@ class ObserveRuntimeTests(unittest.TestCase):
         ):
             self.assertIn(label, dashboard)
 
+    def test_dashboard_closes_harness_operation_user_paths(self) -> None:
+        dashboard = DASHBOARD.read_text(encoding="utf-8")
+
+        for marker in (
+            "/api/operations.json",
+            "/api/operations/preview",
+            "startHarnessOperation",
+            "refreshOperations",
+            "operation-active",
+            "operation-history",
+        ):
+            self.assertIn(marker, dashboard)
+        for label in (
+            "Harness 操作",
+            "更新 Harness",
+            "注入或升级项目",
+            "修复 Agent 接入",
+            "确认执行",
+            "最近操作",
+        ):
+            self.assertIn(label, dashboard)
+        self.assertNotIn("window.prompt", dashboard)
+        self.assertNotIn("window.confirm", dashboard)
+
     def test_dashboard_shows_agent_five_layer_evidence_without_false_loaded_claims(self) -> None:
         dashboard = DASHBOARD.read_text(encoding="utf-8")
         self.assertIn("/api/agents.json", dashboard)
@@ -1164,6 +1439,33 @@ class ObserveRuntimeTests(unittest.TestCase):
             self.assertIn(f'{label}\"', dashboard)
         self.assertIn("待真实会话", dashboard)
         self.assertIn("尚无真实会话证据", dashboard)
+
+    def test_dashboard_visualizes_skill_governance_without_false_load_claims(self) -> None:
+        dashboard = DASHBOARD.read_text(encoding="utf-8")
+
+        for marker in (
+            "/api/skills.json",
+            "renderSkills",
+            "renderSettingsTabs",
+            "skill-summary",
+            "skill-list",
+            "skill-finding",
+            "openSettingsSection",
+        ):
+            self.assertIn(marker, dashboard)
+        for label in (
+            "能力与 Skill",
+            "已发现",
+            "已分配角色",
+            "需人工审查",
+            "已验证加载",
+            "尚无运行证据",
+            "重新扫描",
+            "检查冲突",
+        ):
+            self.assertIn(label, dashboard)
+        self.assertIn("不会联网下载、执行第三方脚本或修改现有 Agent 配置", dashboard)
+        self.assertNotIn("Skill 已生效", dashboard)
 
     def test_phase7_project_goal_and_role_office_projection(self) -> None:
         profile = OBSERVE.parse_project_profile(project_profile_text())
@@ -1225,6 +1527,115 @@ class ObserveRuntimeTests(unittest.TestCase):
         self.assertEqual(organization["current_transition"]["to_role"], "PM")
         self.assertEqual(organization["current_transition"]["kind"], "suggested")
         self.assertTrue(any(edge["kind"] == "handoff" for edge in organization["transitions"]))
+
+    def test_role_projection_exposes_qa_gap_and_reviewer_scope(self) -> None:
+        snapshot = {
+            "work_rounds": {
+                "delivery": {
+                    "round_id": "delivery",
+                    "role": "Executor",
+                    "status": "completed",
+                    "objective": "重构工作台布局",
+                    "summary": "新页面已交付",
+                    "next_role": "Reviewer",
+                    "requirement_id": "task-ui",
+                    "artifact_refs": ["web/observe-dashboard.html"],
+                    "verification_refs": ["test:dashboard-layout"],
+                    "derived_from_sequence": 10,
+                },
+                "review": {
+                    "round_id": "review",
+                    "role": "Reviewer",
+                    "status": "completed",
+                    "objective": "审查工作台交付",
+                    "summary": "没有 blocking finding",
+                    "requirement_id": "task-ui",
+                    "derived_from_sequence": 20,
+                },
+            },
+            "handoffs": {},
+        }
+
+        organization = OBSERVE.organization_snapshot(snapshot)
+        qa = next(role for role in organization["roles"] if role["role_id"] == "QA")
+        reviewer = next(role for role in organization["roles"] if role["role_id"] == "Reviewer")
+
+        self.assertEqual(qa["participation"], "missing_independent_validation")
+        self.assertEqual(organization["quality_gaps"][0]["requirement_id"], "task-ui")
+        self.assertTrue(
+            any(
+                edge["kind"] == "quality_gate"
+                and edge["from_role"] == "Executor"
+                and edge["to_role"] == "QA"
+                for edge in organization["transitions"]
+            )
+        )
+        scope = reviewer["history"][0]["review_scope"]
+        self.assertEqual(scope["requirement_id"], "task-ui")
+        self.assertEqual(scope["artifacts"], ["web/observe-dashboard.html"])
+        self.assertEqual(scope["verification_refs"], ["test:dashboard-layout"])
+
+    def test_active_qa_round_does_not_suggest_reviewer_handoff_early(self) -> None:
+        snapshot = {
+            "work_rounds": {
+                "delivery": {
+                    "round_id": "delivery",
+                    "role": "Executor",
+                    "status": "completed",
+                    "summary": "交付工作台交互",
+                    "next_role": "QA",
+                    "requirement_id": "task-ui",
+                    "derived_from_sequence": 10,
+                },
+                "qa-active": {
+                    "round_id": "qa-active",
+                    "role": "QA",
+                    "status": "active",
+                    "summary": "正在进行人工视觉验收",
+                    "next_role": "Reviewer",
+                    "requirement_id": "task-ui",
+                    "derived_from_sequence": 20,
+                },
+            },
+            "handoffs": {},
+        }
+
+        organization = OBSERVE.organization_snapshot(snapshot)
+
+        self.assertEqual(organization["current_role"], "QA")
+        self.assertEqual(organization["current_transition"]["from_role"], "Executor")
+        self.assertEqual(organization["current_transition"]["to_role"], "QA")
+        self.assertFalse(
+            any(
+                edge["from_role"] == "QA" and edge["to_role"] == "Reviewer"
+                for edge in organization["transitions"]
+            )
+        )
+
+    def test_unregister_project_only_removes_invalid_registry_entry(self) -> None:
+        invalid = self.project / "not-injected"
+        invalid.mkdir()
+        sentinel = invalid / "keep.txt"
+        sentinel.write_text("must stay", encoding="utf-8")
+        registry = self.project / "registered-projects"
+        registry.write_text(f"{invalid}\n", encoding="utf-8")
+        descriptor = OBSERVE.load_registered_projects(registry)[0]
+
+        result = OBSERVE.unregister_project(descriptor["project_id"], registry)
+
+        self.assertTrue(result["removed"])
+        self.assertFalse(result["files_deleted"])
+        self.assertEqual(registry.read_text(encoding="utf-8"), "")
+        self.assertEqual(sentinel.read_text(encoding="utf-8"), "must stay")
+
+    def test_dashboard_can_unregister_disconnected_projects_without_native_dialogs(self) -> None:
+        dashboard = DASHBOARD.read_text(encoding="utf-8")
+
+        for marker in ("project-unregister", "unregisterProject", "project-remove-confirm", "X-Harness-Action-Token"):
+            self.assertIn(marker, dashboard)
+        for label in ("移出工作台", "不会删除项目文件", "取消"):
+            self.assertIn(label, dashboard)
+        self.assertNotIn("window.confirm", dashboard)
 
     def test_phase6_workspace_projects_artifacts_versions_and_real_git(self) -> None:
         (self.project / "AGENTS.md").write_text("# Harness\n", encoding="utf-8")
@@ -1349,6 +1760,300 @@ class ObserveRuntimeTests(unittest.TestCase):
             [item["version"] for item in result["items"]],
             ["0.10.0", "0.10.0-beta.1", "0.9.0", "0.2.0"],
         )
+
+    def test_current_version_projects_each_requirement_from_its_own_runtime_evidence(self) -> None:
+        versions = {
+            "items": [
+                {
+                    "version": "0.19.0",
+                    "status": "in_progress",
+                    "goal": "让每条需求的真实进度可读。",
+                    "requirements": [
+                        {"requirement_id": "task-done", "title": "已完成需求", "status": "completed"},
+                        {"requirement_id": "task-qa", "title": "断线恢复", "status": "planned"},
+                        {"requirement_id": "task-waiting", "title": "待开始需求", "status": "planned"},
+                    ],
+                }
+            ]
+        }
+        snapshot = {
+            "tasks": {"task-qa": {"status": "active"}},
+            "work_rounds": {
+                "round-dev": {
+                    "round_id": "round-dev",
+                    "requirement_id": "task-qa",
+                    "role": "Executor",
+                    "status": "completed",
+                    "objective": "实现断线恢复",
+                    "summary": "恢复逻辑已交付",
+                    "artifact_refs": ["src/retry.py"],
+                    "verification_refs": ["unit:retry"],
+                    "derived_from_sequence": 10,
+                },
+                "round-qa": {
+                    "round_id": "round-qa",
+                    "requirement_id": "task-qa",
+                    "role": "QA",
+                    "status": "active",
+                    "objective": "验证断线重试和状态恢复",
+                    "summary": "正在覆盖断线、重启和重复请求",
+                    "verification_refs": ["verify-retry"],
+                    "derived_from_sequence": 20,
+                },
+                "round-unrelated": {
+                    "round_id": "round-unrelated",
+                    "requirement_id": "task-other",
+                    "role": "Reviewer",
+                    "status": "active",
+                    "objective": "审查其他需求",
+                    "summary": "不应混入当前版本需求",
+                    "derived_from_sequence": 30,
+                },
+            },
+            "verifications": [
+                {
+                    "verification_id": "verify-retry",
+                    "task_id": "task-qa",
+                    "result": "passed",
+                    "check": "断线重试端到端",
+                    "summary": "3 个场景通过",
+                    "evidence_refs": [{"kind": "report", "label": "断线重试报告", "ref": "report:retry"}],
+                    "derived_from_sequence": 21,
+                }
+            ],
+            "blocks": {},
+            "handoffs": {},
+        }
+
+        current = OBSERVE.current_version_snapshot(snapshot, versions)
+
+        self.assertEqual(current["version"], "0.19.0")
+        self.assertEqual(current["counts"], {"completed": 1, "in_progress": 1, "planned": 1, "blocked": 0})
+        qa_requirement = next(item for item in current["requirements"] if item["requirement_id"] == "task-qa")
+        self.assertEqual(qa_requirement["effective_status"], "in_progress")
+        self.assertEqual(qa_requirement["current_role"], "QA")
+        self.assertEqual([item["role"] for item in qa_requirement["role_path"]], ["Executor", "QA"])
+        self.assertEqual(qa_requirement["role_path"][0]["status"], "completed")
+        self.assertEqual(qa_requirement["role_path"][1]["status"], "active")
+        self.assertEqual(qa_requirement["test"]["status"], "active")
+        self.assertEqual(qa_requirement["test"]["scope"], "验证断线重试和状态恢复")
+        self.assertEqual(qa_requirement["test"]["evidence_count"], 3)
+        self.assertEqual(qa_requirement["test"]["evidence_refs"], ["断线重试报告"])
+        self.assertNotIn("Reviewer", [item["role"] for item in qa_requirement["role_path"]])
+        waiting = next(item for item in current["requirements"] if item["requirement_id"] == "task-waiting")
+        self.assertEqual(waiting["test"]["message"], "尚未进入独立测试")
+        self.assertEqual(waiting["role_path"], [])
+
+        handoff = OBSERVE.current_version_snapshot(
+            {
+                "tasks": {},
+                "work_rounds": {
+                    "round-delivered": {
+                        "round_id": "round-delivered",
+                        "requirement_id": "task-handoff",
+                        "role": "Executor",
+                        "status": "completed",
+                        "objective": "交付实现",
+                        "derived_from_sequence": 1,
+                    }
+                },
+                "handoffs": {
+                    "handoff-qa": {
+                        "handoff_id": "handoff-qa",
+                        "requirement_id": "task-handoff",
+                        "from_role": "Executor",
+                        "to_role": "QA",
+                        "summary": "等待独立验收",
+                        "derived_from_sequence": 2,
+                    }
+                },
+                "verifications": [],
+                "blocks": {},
+            },
+            {
+                "items": [
+                    {
+                        "version": "0.19.0",
+                        "status": "in_progress",
+                        "requirements": [
+                            {"requirement_id": "task-handoff", "title": "等待 QA", "status": "planned"}
+                        ],
+                    }
+                ]
+            },
+        )["requirements"][0]
+        self.assertEqual(handoff["current_role"], "QA")
+        self.assertEqual([item["role"] for item in handoff["role_path"]], ["Executor", "QA"])
+        self.assertEqual(handoff["role_path"][-1]["status"], "waiting")
+        self.assertIsNone(handoff["current_work"])
+        self.assertEqual(handoff["next_step"], "等待 QA 接手")
+
+    def test_dashboard_uses_current_version_requirement_command_center(self) -> None:
+        dashboard = DASHBOARD.read_text(encoding="utf-8")
+
+        for marker in (
+            "current-version-requirements",
+            "current-requirement-card",
+            "requirement-role-path",
+            "requirement-test-scope",
+            "requirement-evidence",
+            "state.workspace?.current_version",
+        ):
+            self.assertIn(marker, dashboard)
+        for label in ("当前版本需求", "测试范围未记录", "尚未进入独立测试", "版本记录"):
+            self.assertIn(label, dashboard)
+        self.assertNotIn('["versions", "版本与需求"]', dashboard)
+
+    def test_completed_qa_round_is_visible_as_fallback_evidence(self) -> None:
+        current = OBSERVE.current_version_snapshot(
+            {
+                "tasks": {},
+                "work_rounds": {
+                    "round-qa": {
+                        "round_id": "round-qa",
+                        "requirement_id": "task-qa-summary",
+                        "role": "QA",
+                        "status": "completed",
+                        "objective": "验收工作台真实路径",
+                        "summary": "桌面、窄屏与刷新路径均通过",
+                        "derived_from_sequence": 10,
+                    }
+                },
+                "handoffs": {},
+                "verifications": [],
+                "blocks": {},
+            },
+            {
+                "items": [{
+                    "version": "0.19.0",
+                    "status": "in_progress",
+                    "requirements": [{
+                        "requirement_id": "task-qa-summary",
+                        "title": "展示 QA 验收结论",
+                        "status": "completed",
+                    }],
+                }]
+            },
+        )["requirements"][0]
+
+        self.assertEqual(current["test"]["status"], "completed")
+        self.assertEqual(current["test"]["evidence_count"], 1)
+        self.assertEqual(current["test"]["evidence_refs"], ["QA 回写：桌面、窄屏与刷新路径均通过"])
+        self.assertIsNone(current["current_role"])
+
+    def test_completed_requirement_suppresses_stale_role_flow(self) -> None:
+        dashboard = DASHBOARD.read_text(encoding="utf-8")
+        self.assertIn(
+            'selectedRequirement?.effective_status === "completed" ? []',
+            dashboard,
+        )
+
+    def test_role_detail_prefers_version_requirement_title_over_colliding_plan_step(self) -> None:
+        dashboard = DASHBOARD.read_text(encoding="utf-8")
+        start = dashboard.index("function requirementTitle")
+        end = dashboard.index("function decisionsForRole", start)
+        requirement_title = dashboard[start:end]
+
+        self.assertIn("state.workspace?.current_version?.requirements", requirement_title)
+        self.assertIn("versionRequirement?.title", requirement_title)
+        self.assertLess(
+            requirement_title.index("versionRequirement?.title"),
+            requirement_title.index("state.snapshot.tasks?.[requirementId]?.title"),
+        )
+
+    def test_harness_improvement_workbench_has_separate_authenticated_lifecycle(self) -> None:
+        dashboard = DASHBOARD.read_text(encoding="utf-8")
+        observe = SCRIPT.read_text(encoding="utf-8")
+
+        for marker in (
+            "Harness 改进", "提交为 Harness 问题", "跨项目", "Rule", "Skill", "Checker", "Profile",
+            "登记已落地", "记录效果复验",
+        ):
+            self.assertIn(marker, dashboard)
+        for marker in (
+            "HARNESS_IMPROVEMENTS_PATH", "/api/harness/improvements", "submit", "approve",
+            "mark-implemented", "verify-effect", "unauthorized-action",
+        ):
+            self.assertIn(marker, observe)
+
+    def test_harness_improvement_http_create_submit_and_approve_are_authenticated(self) -> None:
+        (self.project / "AGENTS.md").write_text("# Harness\n", encoding="utf-8")
+        self.write_plan(plan_text())
+        state_dir = self.project / "private-state"
+        state_dir.mkdir()
+        (state_dir / "registered-projects").write_text(f"{self.project}\n", encoding="utf-8")
+        brain = OBSERVE.load_brain_boundary()
+        memory = brain.process_observer_event(
+            "fixture-ui",
+            {
+                "project_id": "fixture-ui",
+                "idempotency_key": "fixture-overflow",
+                "type": "work.round_completed",
+                "source": {"producer": "test"},
+                "payload": {"status": "completed", "summary": "窄屏按钮出现横向溢出"},
+            },
+        )
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+        process = subprocess.Popen(
+            [sys.executable, str(SCRIPT), "watch", "--all", "--port", str(port), "--scan-interval", "0.1"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=os.environ.copy(),
+        )
+        try:
+            base = f"http://127.0.0.1:{port}"
+            for _ in range(60):
+                try:
+                    with urlopen(f"{base}/healthz", timeout=0.2) as response:
+                        if response.status == 200:
+                            break
+                except (URLError, TimeoutError):
+                    time.sleep(0.05)
+            else:
+                stdout, stderr = process.communicate(timeout=1)
+                self.fail(f"server did not start\nstdout={stdout}\nstderr={stderr}")
+
+            with urlopen(f"{base}/api/brain/status.json", timeout=1) as response:
+                action_token = json.loads(response.read())["action_token"]
+            create_url = f"{base}/api/harness/improvements"
+            create_body = json.dumps({
+                "memory_id": memory["memory_id"],
+                "target": "checker",
+                "summary": "窄屏按钮必须检查横向溢出",
+            }).encode("utf-8")
+            with self.assertRaises(HTTPError) as unauthenticated:
+                urlopen(Request(create_url, data=create_body, headers={"Content-Type": "application/json"}), timeout=1)
+            self.assertEqual(unauthenticated.exception.code, 401)
+            headers = {"Content-Type": "application/json", "X-Harness-Action-Token": action_token}
+            oversized_body = b"{" + (b" " * (OBSERVE.MAX_OPERATION_BODY + 1)) + b"}"
+            with self.assertRaises(HTTPError) as oversized:
+                urlopen(Request(create_url, data=oversized_body, headers=headers), timeout=1)
+            self.assertEqual(oversized.exception.code, 413)
+            with urlopen(Request(create_url, data=create_body, headers=headers), timeout=1) as response:
+                candidate = json.loads(response.read())
+            self.assertEqual(candidate["status"], "observed")
+
+            submit_url = f"{create_url}/{candidate['improvement_id']}/submit"
+            with urlopen(Request(submit_url, data=b'{"confirmed": true}', headers=headers), timeout=1) as response:
+                submitted = json.loads(response.read())
+            self.assertEqual(submitted["status"], "pending_approval")
+            approve_url = f"{create_url}/{candidate['improvement_id']}/approve"
+            with urlopen(Request(approve_url, data=b"{}", headers=headers), timeout=1) as response:
+                approved = json.loads(response.read())
+            self.assertEqual(approved["status"], "approved")
+            with urlopen(f"{base}/api/harness/improvements.json", timeout=1) as response:
+                listed = json.loads(response.read())["items"]
+            self.assertEqual(listed[0]["proposal_path"], approved["proposal_path"])
+        finally:
+            process.terminate()
+            try:
+                process.communicate(timeout=2)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.communicate(timeout=2)
 
     def test_phase8_artifacts_keep_version_and_date_records(self) -> None:
         docs = self.project / "docs"
@@ -1601,6 +2306,174 @@ class ObserveRuntimeTests(unittest.TestCase):
             with self.assertRaises(HTTPError) as context:
                 urlopen(f"{base}/api/projects/not-registered/index.json", timeout=1)
             self.assertEqual(context.exception.code, 404)
+
+            invalid_id = portfolio["projects"][1]["project_id"]
+            removal_body = json.dumps({"confirmed": True}).encode("utf-8")
+            with self.assertRaises(HTTPError) as unauthorized_removal:
+                urlopen(
+                    Request(
+                        f"{base}/api/projects/{invalid_id}/unregister",
+                        data=removal_body,
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    ),
+                    timeout=1,
+                )
+            self.assertEqual(unauthorized_removal.exception.code, 401)
+            with urlopen(f"{base}/api/operations.json", timeout=1) as response:
+                action_token = json.loads(response.read())["action_token"]
+            with urlopen(
+                Request(
+                    f"{base}/api/projects/{invalid_id}/unregister",
+                    data=removal_body,
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-Harness-Action-Token": action_token,
+                    },
+                    method="POST",
+                ),
+                timeout=1,
+            ) as response:
+                removal = json.loads(response.read())
+            self.assertTrue(removal["removed"])
+            self.assertFalse(removal["files_deleted"])
+            with urlopen(f"{base}/api/portfolio.json", timeout=1) as response:
+                refreshed_portfolio = json.loads(response.read())
+            self.assertEqual([item["project_id"] for item in refreshed_portfolio["projects"]], [valid_id])
+        finally:
+            process.terminate()
+            try:
+                process.communicate(timeout=2)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.communicate(timeout=2)
+
+    def test_operation_http_preview_confirmation_and_status_are_authenticated(self) -> None:
+        state_dir = self.project / "state"
+        state_dir.mkdir()
+        (state_dir / "registered-projects").write_text("", encoding="utf-8")
+        target = self.project / "new-project"
+        target.mkdir()
+        fake_harness = self.project / "fake-harness"
+        fake_bin = fake_harness / "bin"
+        fake_bin.mkdir(parents=True)
+        fake_cli = fake_bin / "harness"
+        fake_cli.write_text(
+            "#!/bin/sh\n"
+            "if [ \"$1\" = init ]; then\n"
+            "  printf '# Injected by isolated test\\n' > \"$2/AGENTS.md\"\n"
+            "  exit 0\n"
+            "fi\n"
+            "exit 64\n",
+            encoding="utf-8",
+        )
+        fake_cli.chmod(0o755)
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+        environment = os.environ.copy()
+        environment.update(
+            {
+                "HOME": str(self.project / "home"),
+                "MICK_HARNESS_ROOT": str(fake_harness),
+                "MICK_HARNESS_STATE_DIR": str(state_dir),
+                "MICK_HARNESS_STATE_ROOT": str(state_dir),
+                "MICK_HARNESS_OBSERVER_AUTO_INSTALL": "0",
+                "MICK_HARNESS_ACTIVITY": "0",
+                "PYTHONDONTWRITEBYTECODE": "1",
+            }
+        )
+        process = subprocess.Popen(
+            [sys.executable, str(SCRIPT), "watch", "--all", "--port", str(port)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=environment,
+        )
+        try:
+            base = f"http://127.0.0.1:{port}"
+            for _ in range(60):
+                try:
+                    with urlopen(f"{base}/healthz", timeout=0.2) as response:
+                        if response.status == 200:
+                            break
+                except (URLError, TimeoutError):
+                    time.sleep(0.05)
+            else:
+                process.terminate()
+                stdout, stderr = process.communicate(timeout=1)
+                self.fail(f"operation server did not start\nstdout={stdout}\nstderr={stderr}")
+
+            with urlopen(f"{base}/api/skills.json", timeout=1) as response:
+                skills = json.loads(response.read())
+            self.assertEqual(skills["boundaries"]["read_only"], True)
+            self.assertEqual(skills["boundaries"]["scripts_executed"], False)
+            self.assertIn("discovered", skills["summary"])
+            with self.assertRaises(HTTPError) as arbitrary_path:
+                urlopen(f"{base}/api/skills.json?path={quote('/etc')}", timeout=1)
+            self.assertEqual(arbitrary_path.exception.code, 400)
+
+            with urlopen(f"{base}/api/operations.json", timeout=1) as response:
+                operations = json.loads(response.read())
+            self.assertEqual(len(operations["catalog"]), 3)
+            action_token = operations["action_token"]
+            preview_body = json.dumps(
+                {"action": "project-init", "parameters": {"project_path": str(target)}}
+            ).encode("utf-8")
+            with self.assertRaises(HTTPError) as unauthorized:
+                urlopen(
+                    Request(
+                        f"{base}/api/operations/preview",
+                        data=preview_body,
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    ),
+                    timeout=1,
+                )
+            self.assertEqual(unauthorized.exception.code, 401)
+
+            with urlopen(
+                Request(
+                    f"{base}/api/operations/preview",
+                    data=preview_body,
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-Harness-Action-Token": action_token,
+                    },
+                    method="POST",
+                ),
+                timeout=1,
+            ) as response:
+                preview = json.loads(response.read())
+            self.assertEqual(preview["status"], "prepared")
+            operation_id = preview["operation_id"]
+
+            execute_body = json.dumps({"confirmation_token": preview["confirmation_token"]}).encode("utf-8")
+            with urlopen(
+                Request(
+                    f"{base}/api/operations/{operation_id}/execute",
+                    data=execute_body,
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-Harness-Action-Token": action_token,
+                    },
+                    method="POST",
+                ),
+                timeout=1,
+            ) as response:
+                queued = json.loads(response.read())
+            self.assertIn(queued["status"], {"queued", "running", "succeeded"})
+
+            for _ in range(100):
+                with urlopen(f"{base}/api/operations/{operation_id}.json", timeout=1) as response:
+                    current = json.loads(response.read())
+                if current["status"] in {"succeeded", "failed"}:
+                    break
+                time.sleep(0.05)
+            self.assertEqual(current["status"], "succeeded", current)
+            self.assertTrue((target / "AGENTS.md").is_file())
+            self.assertTrue((state_dir / "operations" / "audit.jsonl").is_file())
+            self.assertNotIn("confirmation_token", json.dumps(current))
         finally:
             process.terminate()
             try:
@@ -1660,6 +2533,14 @@ class ObserveRuntimeTests(unittest.TestCase):
                 time.sleep(0.05)
             else:
                 self.fail("background monitor did not discover the newly registered project")
+
+            self.assertIsNone(process.poll(), "global observer stopped after project registration")
+            with urlopen(f"{base}/api/portfolio.json", timeout=1) as response:
+                portfolio = json.loads(response.read())
+            self.assertEqual(
+                [item["project_id"] for item in portfolio["projects"]],
+                [OBSERVE.project_id(self.project)],
+            )
 
             self.write_plan(plan_text(marker="x", verify="passed; exit 0"))
             for _ in range(60):
