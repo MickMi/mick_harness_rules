@@ -4054,7 +4054,16 @@ def serve_runtime(
                 if path == BRAIN_PROJECT_MEMORY_PATH:
                     query = parse_qs(parsed.query)
                     selected = (query.get("project") or [None])[0]
-                    value = {"items": load_brain_boundary().list_project_memories(project=selected)}
+                    try:
+                        limit = int((query.get("limit") or ["100"])[0])
+                    except ValueError as error:
+                        raise ObserveError("Project memory limit must be an integer", 400) from error
+                    if limit < 1 or limit > 500:
+                        raise ObserveError("Project memory limit must be between 1 and 500", 400)
+                    value = {
+                        "items": load_brain_boundary().list_project_memories(project=selected, limit=limit),
+                        "limit": limit,
+                    }
                     self._send_bytes(200, "application/json", json_bytes(value), head_only=head_only)
                     return
                 if path == HARNESS_IMPROVEMENTS_PATH:

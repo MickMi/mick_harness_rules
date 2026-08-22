@@ -3180,7 +3180,7 @@
             fetchJson("/api/operations.json"),
             fetchJson("/api/brain/status.json"),
             fetchJson("/api/brain/candidates.json"),
-            fetchJson("/api/brain/project-memory.json"),
+            fetchJson("/api/brain/project-memory.json?limit=100"),
             fetchJson("/api/harness/improvements.json")
           ]);
           state.portfolio = portfolio;

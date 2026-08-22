@@ -569,6 +569,54 @@ class BrainBoundaryTests(unittest.TestCase):
         self.assertIn("remote_sync", health)
         self.assertNotEqual(health["local_write"]["status"], health["remote_sync"]["status"])
 
+    def test_project_memory_listing_applies_limit_before_similarity_scan(self) -> None:
+        root = self.state / "brain-project-memory" / "demo-ui"
+        root.mkdir(parents=True)
+        for index in range(240):
+            identifier = f"project_memory_{index:020x}"
+            (root / f"{identifier}.json").write_text(
+                json.dumps(
+                    {
+                        "memory_id": identifier,
+                        "project": "demo-ui",
+                        "kind": "result",
+                        "summary": f"UI observation {index}",
+                        "status": "written_local",
+                        "created_at": f"2026-08-22T12:{index // 60:02d}:{index % 60:02d}+00:00",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+        with mock.patch.object(self.module, "summaries_are_similar", return_value=False) as similarity:
+            memories = self.module.list_project_memories(limit=25)
+
+        self.assertEqual(len(memories), 25)
+        self.assertLessEqual(similarity.call_count, 25 * 24)
+        self.assertEqual(memories[0]["summary"], "UI observation 239")
+
+    def test_health_snapshot_does_not_run_pairwise_memory_listing(self) -> None:
+        root = self.state / "brain-project-memory" / "demo-ui"
+        root.mkdir(parents=True)
+        record = {
+            "memory_id": "project_memory_aaaaaaaaaaaaaaaaaaaa",
+            "project": "demo-ui",
+            "kind": "result",
+            "summary": "A stable project fact",
+            "status": "written_local",
+            "source_agent": "codex-hook",
+            "created_at": "2026-08-22T12:00:00+00:00",
+        }
+        (root / f"{record['memory_id']}.json").write_text(json.dumps(record), encoding="utf-8")
+
+        with mock.patch.object(
+            self.module, "list_project_memories", side_effect=AssertionError("pairwise listing must stay off health path")
+        ):
+            health = self.module.health_snapshot(brain=Path(self.tempdir.name) / "brain")
+
+        self.assertEqual(health["local_write"]["project_memory_count"], 1)
+        self.assertEqual(health["local_write"]["last_write_at"], "2026-08-22T12:00:00+00:00")
+
     def test_health_exposes_actual_repository_branch_and_write_routes(self) -> None:
         brain = Path(self.tempdir.name) / "brain"
         remote = Path(self.tempdir.name) / "brain-remote.git"

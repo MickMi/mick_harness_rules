@@ -563,7 +563,7 @@ def project_memory_view(record: dict[str, Any]) -> dict[str, Any]:
     return {key: record.get(key) for key in keys}
 
 
-def list_project_memories(*, project: str | None = None) -> list[dict[str, Any]]:
+def list_project_memories(*, project: str | None = None, limit: int | None = None) -> list[dict[str, Any]]:
     root = project_memory_root()
     paths = (root / safe_slug(project)).glob("*.json") if project else root.glob("*/*.json")
     records = [json.loads(path.read_text(encoding="utf-8")) for path in paths] if root.exists() else []
@@ -578,7 +578,9 @@ def list_project_memories(*, project: str | None = None) -> list[dict[str, Any]]
             grouped[semantic] = record
         else:
             current["occurrence_count"] = int(current.get("occurrence_count", 1)) + 1
-    values = list(grouped.values())
+    values = sorted(grouped.values(), key=lambda item: item.get("created_at") or "", reverse=True)
+    if limit is not None:
+        values = values[:max(0, limit)]
     for current in values:
         current["similar_memory_ids"] = [
             other["memory_id"]
@@ -588,7 +590,7 @@ def list_project_memories(*, project: str | None = None) -> list[dict[str, Any]]
             and other.get("kind") == current.get("kind")
             and summaries_are_similar(str(current.get("summary") or ""), str(other.get("summary") or ""))
         ]
-    return sorted((project_memory_view(record) for record in values), key=lambda item: item.get("created_at") or "", reverse=True)
+    return [project_memory_view(record) for record in values]
 
 
 def undo_project_memory(identifier: str) -> dict[str, Any]:
@@ -1423,8 +1425,13 @@ def legacy_backfill_snapshot() -> dict[str, Any]:
 
 def health_snapshot(*, brain: Path | None = None) -> dict[str, Any]:
     root = brain or brain_root()
-    memories = list_project_memories()
     memory_records = [record for _, record in raw_project_memories()]
+    active_memories = [record for record in memory_records if record.get("status") != "merged"]
+    unique_memories = {
+        (record.get("project", ""), record.get("kind", ""), record.get("summary", ""))
+        for record in active_memories
+    }
+    latest_write_at = max((record.get("created_at") or "" for record in active_memories), default=None)
     candidates = list_candidates()
     ahead, behind, git_error = git_counts(root)
     repository = repository_snapshot(root)
@@ -1440,9 +1447,9 @@ def health_snapshot(*, brain: Path | None = None) -> dict[str, Any]:
         "repository": repository,
         "local_write": {
             "status": "ready" if repository_exists else "unavailable",
-            "project_memory_count": len(memories),
+            "project_memory_count": len(unique_memories),
             "project_memory_record_count": len(memory_records),
-            "last_write_at": memories[0].get("created_at") if memories else None,
+            "last_write_at": latest_write_at,
         },
         "remote_sync": {
             "status": "error" if git_error or sync_error else ("pending" if ahead or pending_sync else ("synced" if ahead is not None else "not_configured")),
@@ -1459,7 +1466,7 @@ def health_snapshot(*, brain: Path | None = None) -> dict[str, Any]:
         },
         "structured_events": {
             "status": "active",
-            "source_agents": sorted({item.get("source_agent") for item in memories if item.get("source_agent")}),
+            "source_agents": sorted({item.get("source_agent") for item in active_memories if item.get("source_agent")}),
             "auto_project_types": sorted(CONFIRMED_EVENT_TYPES),
         },
         "write_routes": write_routes_snapshot(root),

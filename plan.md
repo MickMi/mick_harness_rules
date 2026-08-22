@@ -2097,7 +2097,7 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 
 ### Step 174 — 2026-08-22
 - files: `generate.sh`, `setup.sh`, `scripts/*.sh`, `scripts/*.py`, `web/observe-dashboard.html`, `tests/`, `plan.md`
-- verify: 全仓 `130 tests / 0 failures`；`generate.sh --check`、Shell/Python/JavaScript/JSON 语法、临时项目 `setup.sh --non-interactive`、版本一致性、敏感信息扫描和 `git diff --check` 全部 exit 0；Harness Audit `8 PASS / 0 WARN / 0 FAIL`。
+- verify: 首轮全仓 `130 tests / 0 failures`；真实 6425 发现 1345 条项目记忆令首页阻塞后，将健康快照改为线性统计、项目活动限制为最近 100 条，并补 2 项回归测试；最终全仓 `132 tests / 0 failures`，真实数据计时由约 25 秒降至 health `0.353s`、list100 `0.236s`；`generate.sh --check`、Shell/Python/JavaScript/JSON 语法、临时项目 `setup.sh --non-interactive`、版本一致性、敏感信息扫描和 `git diff --check` 全部 exit 0；Harness Audit `8 PASS / 0 WARN / 0 FAIL`。
 
 ### Step 175 — 2026-08-22
 - files: Git branch `feat/v0.19-service-reliability`, Git branch `main`, `plan.md`
