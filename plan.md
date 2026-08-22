@@ -1,4 +1,4 @@
-> 🧭 状态：发布执行中 | 进度 176/177 | 当前归属：Executor（v0.19 发布）| 最近决策：v0.19.0 已部署到本机并通过真实 6425 路径；仅剩推送 main 与发布标签
+> 🧭 状态：v0.19.0 已发布 | 进度 177/177 | 当前归属：Release（交付完成）| 最近决策：发布代码、本机安装、唯一 6425 服务、远端 main 与 annotated v0.19.0 标签保持一致
 
 # Plan: Company Runtime V0 → Portfolio V0.2
 
@@ -2089,7 +2089,7 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 - [x] 174. [Release Gate] 全量测试、生成规则、Python/JavaScript/Shell/JSON 语法、安装 smoke、Harness audit、敏感信息和 diff 检查全部通过。
 - [x] 175. [提交与合并] 将 `feat/v0.19-service-reliability` 的完整范围提交，fast-forward 合并到本地 main，并确认工作树干净。
 - [x] 176. [本机部署] 更新 `~/.mick-harness`，同步 Agent loader，重启并验证唯一的 6425 服务；不覆盖用户未受管配置。
-- [ ] 177. [远端发布] 推送 main 与 annotated `v0.19.0` 标签，核对 GitHub 远端分支、标签和本地安装版本一致。
+- [x] 177. [远端发布] 推送 main 与 annotated `v0.19.0` 标签，核对 GitHub 远端分支、标签和本地安装版本一致。
 
 ### Step 173 — 2026-08-22
 - files: `VERSION`, `CHANGELOG.md`, `CHANGELOG.zh-CN.md`, `docs/VERSIONS.md`, `plan.md`
@@ -2106,6 +2106,10 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 ### Step 176 — 2026-08-22
 - files: installed `~/.mick-harness`, `~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md`, `~/Library/LaunchAgents/com.mick.harness.observer.plist`, `scripts/harness-brain-boundary.py`, `scripts/harness-observe.py`, `web/observe-dashboard.html`, `tests/test_harness_agents.py`, `plan.md`
 - verify: 安装版本为 `0.19.0`；Claude/Codex 受管 Loader 均标记 `Harness-Version: 0.19.0`；用户未跟踪的 `verify.sh` 与 `verify.d/` 保留；只有 PID `58533` 监听 `127.0.0.1:6425`，health 为 `status=ok / 8 projects / 7 valid / last_scan_error=null`；真实浏览器完成工作台加载并显示 7/8 项目、Harness 操作、项目进度、系统状态，console `0 error / 0 warning`。
+
+### Step 177 — 2026-08-22
+- files: GitHub branch `main`, annotated Git tag `v0.19.0`, installed `~/.mick-harness`, `plan.md`
+- verify: GitHub 已接受发布 main 基线 `4f6035c..26bb2dc`；最终发布记录与 annotated `v0.19.0` 使用原子推送，发布后以 `git ls-remote` 核对 main、tag object 与 tag peeled commit，并再次运行本机 `harness update` 对齐最终提交。
 
 ### 发布停止条件
 
