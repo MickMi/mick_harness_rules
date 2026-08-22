@@ -1,4 +1,4 @@
-> 🧭 状态：发布执行中 | 进度 174/177 | 当前归属：Executor（v0.19 发布）| 最近决策：v0.19.0 发布事实与 Release Gate 已完成；继续提交、合并、本机部署和远端发布
+> 🧭 状态：发布执行中 | 进度 175/177 | 当前归属：Executor（v0.19 发布）| 最近决策：发布分支已以 fast-forward 合并至本地 main；继续部署唯一的 6425 服务并完成远端发布
 
 # Plan: Company Runtime V0 → Portfolio V0.2
 
@@ -2087,7 +2087,7 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 
 - [x] 173. [发布事实] `VERSION`、`CHANGELOG.md`、`CHANGELOG.zh-CN.md`、`docs/VERSIONS.md` — 版本、日期、兼容性、迁移说明和标签统一为 v0.19.0。
 - [x] 174. [Release Gate] 全量测试、生成规则、Python/JavaScript/Shell/JSON 语法、安装 smoke、Harness audit、敏感信息和 diff 检查全部通过。
-- [ ] 175. [提交与合并] 将 `feat/v0.19-service-reliability` 的完整范围提交，fast-forward 合并到本地 main，并确认工作树干净。
+- [x] 175. [提交与合并] 将 `feat/v0.19-service-reliability` 的完整范围提交，fast-forward 合并到本地 main，并确认工作树干净。
 - [ ] 176. [本机部署] 更新 `~/.mick-harness`，同步 Agent loader，重启并验证唯一的 6425 服务；不覆盖用户未受管配置。
 - [ ] 177. [远端发布] 推送 main 与 annotated `v0.19.0` 标签，核对 GitHub 远端分支、标签和本地安装版本一致。
 
@@ -2098,6 +2098,10 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 ### Step 174 — 2026-08-22
 - files: `generate.sh`, `setup.sh`, `scripts/*.sh`, `scripts/*.py`, `web/observe-dashboard.html`, `tests/`, `plan.md`
 - verify: 全仓 `130 tests / 0 failures`；`generate.sh --check`、Shell/Python/JavaScript/JSON 语法、临时项目 `setup.sh --non-interactive`、版本一致性、敏感信息扫描和 `git diff --check` 全部 exit 0；Harness Audit `8 PASS / 0 WARN / 0 FAIL`。
+
+### Step 175 — 2026-08-22
+- files: Git branch `feat/v0.19-service-reliability`, Git branch `main`, `plan.md`
+- verify: 发布候选提交 `7ddfded` 创建成功；远端 `origin/main` 与本地发布基线均为 `4f6035c`；`git merge --ff-only feat/v0.19-service-reliability` 成功，main 无合并提交且仅领先远端发布提交。
 
 ### 发布停止条件
 
