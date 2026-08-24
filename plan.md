@@ -1,4 +1,4 @@
-> 🧭 状态：v0.20.0 发布执行中 | 进度 191/193 | 当前归属：Release | 最近决策：发布候选已快进合并本地 main，并在合并后的代码上通过全仓复验
+> 🧭 状态：v0.20.0 发布执行中 | 进度 192/193 | 当前归属：Release | 最近决策：本机安装、Agent Loader 与唯一 6425 已升级并通过真实任务办公室验收，仅剩远端发布
 
 # Plan: Company Runtime V0 → Portfolio V0.2
 
@@ -2211,7 +2211,7 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 - [x] 189. [发布事实] `VERSION`、中英文 Changelog、`docs/VERSIONS.md` 与计划统一为 v0.20.0，并写明兼容性和迁移方式。
 - [x] 190. [Release Gate] 重跑全仓测试、规则生成、脚本/JSON/Skill 校验、安装冒烟、敏感信息与 diff 检查。
 - [x] 191. [提交与合并] 提交 `feat/v0.20-requirement-gates`，fast-forward 合并本地 main，并在合并后的真实代码上复验。
-- [ ] 192. [本机部署] 更新 `~/.mick-harness`、Agent Loader 和唯一 6425 服务，并用真实浏览器验收需求级任务办公室。
+- [x] 192. [本机部署] 更新 `~/.mick-harness`、Agent Loader 和唯一 6425 服务，并用真实浏览器验收需求级任务办公室。
 - [ ] 193. [远端发布] 原子推送 main 与 annotated `v0.20.0`，核对远端分支、标签和本机安装提交一致。
 
 ### 发布停止条件
@@ -2231,3 +2231,9 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 ### Step 191 — 2026-08-24
 - files: Git branch `feat/v0.20-requirement-gates`, Git branch `main`, `plan.md`
 - verify: 发布候选提交 `17e0217` 创建成功；合并前本地 main 与 `origin/main` 均为 `64a64f1`；`git merge --ff-only feat/v0.20-requirement-gates` 成功，main 指向同一提交；合并后再次运行 141 tests / 0 failures、`generate.sh --check` 和 `git diff --check`，全部 exit 0。
+
+### Step 192 — 2026-08-24
+- files: installed `~/.mick-harness`, `~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md`, `~/Library/LaunchAgents/com.mick.harness.observer.plist`, `plan.md`
+- verify: 安装版与本地 main 均为 `7058059 / VERSION 0.20.0`；Claude/Codex 受管 Loader 均标记 `Harness-Version: 0.20.0`；用户未跟踪的 `verify.sh` 与 `verify.d/` 保留；6425 从 PID `58533` 切换为 `15239`，health 为 `status=ok / 8 projects / 7 valid / last_scan_error=null`。
+- interaction: 真实 6425 显示 v0.20.0 为 6/6；切换到 task-182 后仅展开一个任务办公室，开发详情只读取 task-182，不含 task-111/task-35；390×844 下 `scrollWidth=innerWidth=390`，角色区内部可横向浏览，桌面视口已恢复，控制台 0 error / 0 warning。
+- remaining risk: `harness update` 对使用 legacy all-rules 模式的项目提示 CLAUDE/Cursor 等兼容生成源缺失，但未删除或覆盖项目文件；全局 Claude/Codex Loader 与默认 AGENTS 入口已更新。本次不把既有兼容入口警告误报为 v0.20 门禁阻塞，后续版本应让 update 按登记项目模式生成相应兼容文件。
