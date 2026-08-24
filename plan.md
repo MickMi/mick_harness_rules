@@ -1,4 +1,4 @@
-> 🧭 状态：v0.20.1 已发布 | 进度 196/196 | 当前归属：Release（交付完成）| 最近决策：v0.20.0 保留不动，刷新恢复补丁通过 v0.20.1 发布并与本机 6425 对齐
+> 🧭 状态：v0.20.2 已发布 | 进度 201/201 | 当前归属：Release | 最近决策：Brain 身份只来自用户自己的私有仓库，本地模式不继承 Harness 维护者身份
 
 # Plan: Company Runtime V0 → Portfolio V0.2
 
@@ -184,7 +184,7 @@ Planner 回复：采用 A；这是测试入口兼容文件，不改变产品范�
 
 - symptom: `http://127.0.0.1:4317/` could not connect after V0 delivery.
 - root cause: no `watch` process was running, and the user-facing `harness` command still pointed to an older `~/.mick-harness` installation without the observe route.
-- files: `tests/test_harness_observe.py`; installed runtime `/Users/mickmi/.mick-harness/bin/harness`, `/Users/mickmi/.mick-harness/scripts/harness-observe.py`, `/Users/mickmi/.mick-harness/web/observe-dashboard.html`
+- files: `tests/test_harness_observe.py`; installed runtime `~/.mick-harness/bin/harness`, `~/.mick-harness/scripts/harness-observe.py`, `~/.mick-harness/web/observe-dashboard.html`
 - verify: installed `harness observe --help` passed; installed `harness observe watch` is listening on `127.0.0.1:4317`; `/healthz`, `/`, and `/api/index.json` returned 200; `python3 -B -m unittest tests/test_harness_observe.py` passed (9 tests, 0 failures, exit 0)
 - automation: added a CLI routing regression test so source-level removal of the `observe` command fails the suite.
 
@@ -259,12 +259,12 @@ Planner 回复：采用 A；这是测试入口兼容文件，不改变产品范�
 - notes: Hook errors are advisory and never block Codex; Stop returns `{\"continue\": true}` as required by the lifecycle contract.
 
 ### Step 13 — 2026-08-10 22:39
-- files: `README.md`, `docs/OBSERVE.md`, `scripts/harness-observe.py`, `tests/test_harness_observe.py`, `plan.md`; installed runtime under `/Users/mickmi/.mick-harness`
+- files: `README.md`, `docs/OBSERVE.md`, `scripts/harness-observe.py`, `tests/test_harness_observe.py`, `plan.md`; installed runtime under `~/.mick-harness`
 - verify: 19 unittests passed; shell/Python/JSON/HTML/JavaScript/generate/diff checks passed; real registry returned 5 projects (4 valid, 1 missing); `mick_harness_rules` resolved to Reviewer, 13/13 tasks; final Portfolio and Dashboard returned 200, POST returned 405; installed runtime/hook/dashboard checksums match source
 - notes: Numbered plan steps are the only task source; legacy completion-criteria tasks are marked abandoned and excluded, with a versioned collector signature forcing one safe re-import after parser upgrades. The live service runs `harness observe watch --all` on PID 86441. Browser automation policy still prevents DOM control of localhost, so refresh/click visual QA remains user-confirmed rather than automated.
 
 ### Step 14 — 2026-08-11 11:17
-- files: `web/observe-dashboard.html`, `tests/test_harness_observe.py`, `plan.md`; installed Dashboard under `/Users/mickmi/.mick-harness`
+- files: `web/observe-dashboard.html`, `tests/test_harness_observe.py`, `plan.md`; installed Dashboard under `~/.mick-harness`
 - verify: 20 unittests passed (0 failures); Dashboard JavaScript syntax passed; live 4317 HTML contains retry/reconnect controls; Portfolio API and page returned 200; source and installed Dashboard match; generate and diff checks passed
 - notes: A transient localhost fetch failure previously left the one-shot loader permanently stuck. Network requests now retry three times and the error state provides a manual reconnect action plus the exact service command. The regression contract is automated in `test_dashboard_can_recover_from_transient_network_failure`.
 
@@ -366,20 +366,20 @@ Planner 回复：采用 A；这是测试入口兼容文件，不改变产品范�
 - `docs/runtime-event-v0.schema.json`：新增 `plan.summary_observed` 与 `plan` subject，payload 只包含标题、总体目标、当前需求和来源路径。
 - `scripts/harness-observe.py`：新增纯函数 `parse_plan_steps()` 与 `parse_plan_summary()`；Collector 将两种步骤格式投影成既有 task，并把 Plan 摘要投影到 snapshot `plan`。
 - `web/observe-dashboard.html`：新增默认需求导航、总体目标卡、需求列表、四节点进度和“需要你处理”；技术记录保留时间线与事件表。
-- `tests/test_harness_observe.py`：覆盖 RaliTennis 风格 Plan 的 3/5 投影、目标提取、非 Steps 编号排除、Dashboard 默认视图与关键节点文案。
+- `tests/test_harness_observe.py`：覆盖 示例移动端项目 风格 Plan 的 3/5 投影、目标提取、非 Steps 编号排除、Dashboard 默认视图与关键节点文案。
 - `docs/OBSERVE.md`、`README.md`：将用户入口描述改为需求导航，说明技术记录和推断边界。
 
 ### 新步骤
 
-- [x] 21. 增加 Phase 4 失败用例与 `plan.summary_observed` schema 契约，固定 RaliTennis 风格 Plan 的期望投影。
+- [x] 21. 增加 Phase 4 失败用例与 `plan.summary_observed` schema 契约，固定 示例移动端项目 风格 Plan 的期望投影。
 - [x] 22. 实现 Plan 语义解析、摘要事件、任务状态与 snapshot 投影，并确保旧 checkbox Plan 不回归。
 - [x] 23. 将 Dashboard 项目默认页改成简化需求导航，保留技术记录与 URL 刷新恢复。
 - [x] 24. 更新产品文档、同步安装版，并让后台服务重新载入新运行时。
-- [x] 25. 运行全量回归、真实 RaliTennis 同步和浏览器端到端验证，记录页面状态、交互与刷新证据。
+- [x] 25. 运行全量回归、真实 示例移动端项目 同步和浏览器端到端验证，记录页面状态、交互与刷新证据。
 
 ### Phase 4 完成判定
 
-- [x] RaliTennis snapshot 显示总体目标、5 条需求、当前第 3 条；前 2 条完成、第 3 条进行中、后 2 条待开始。
+- [x] 示例移动端项目 snapshot 显示总体目标、5 条需求、当前第 3 条；前 2 条完成、第 3 条进行中、后 2 条待开始。
 - [x] 项目默认页面首屏显示总体目标、需求进度和需要用户处理的阻塞，不显示原始事件指标。
 - [x] 当前需求卡显示 `定义 → 实现 → 验证 → 交付`，并高亮真实当前节点与负责人。
 - [x] timeline / events 仍可访问，旧 `view=graph` URL 自动显示需求导航，刷新后选择保持。
@@ -390,7 +390,7 @@ Planner 回复：采用 A；这是测试入口兼容文件，不改变产品范�
 ### Step 21 — 2026-08-12
 - files: `docs/runtime-event-v0.schema.json`, `tests/test_harness_observe.py`, `plan.md`
 - verify: `python3 -m json.tool docs/runtime-event-v0.schema.json` exit 0；Phase 4 聚焦测试按预期红灯，分别暴露缺少 snapshot `plan` 投影和 Dashboard 默认 `overview` 视图
-- notes: 失败用例使用与真实 RaliTennis 相同的 `Current step: 3 / 5` + `## Steps` 编号格式，并验证其他编号章节不会被误识别。
+- notes: 失败用例使用与真实 示例移动端项目 相同的 `Current step: 3 / 5` + `## Steps` 编号格式，并验证其他编号章节不会被误识别。
 
 ### Step 22 — 2026-08-12
 - files: `scripts/harness-observe.py`, `docs/runtime-event-v0.schema.json`, `plan.md`
@@ -403,14 +403,14 @@ Planner 回复：采用 A；这是测试入口兼容文件，不改变产品范�
 - notes: 默认视图改为 `overview`，旧 `graph` 自动兼容；主页面去除 Agent/Harness 原始指标，只保留总体目标、需求进度、待处理和四节点详情。
 
 ### Step 24 — 2026-08-12
-- files: `docs/OBSERVE.md`, `README.md`, `scripts/harness-observe.py`, `tests/test_harness_observe.py`, `plan.md`; installed runtime under `/Users/mickmi/.mick-harness`
+- files: `docs/OBSERVE.md`, `README.md`, `scripts/harness-observe.py`, `tests/test_harness_observe.py`, `plan.md`; installed runtime under `~/.mick-harness`
 - verify: 源码与安装版 5 个文件 SHA-1 逐对一致；服务重启后 PID 41434，`health.status=ok`、4/5 项目有效、4 个项目同步、`last_scan_error=null`
 - notes: 首次重启由真实健康检查发现 block 解析覆盖 Plan 摘要，新增回归后修复并再次重启恢复健康；没有把降级状态当作完成。
 
 ### Step 25 — 2026-08-12
 - files: `scripts/harness-observe.py`, `tests/test_harness_observe.py`, `plan.md`; installed runtime and live service
 - verify: 32 个 unittest 通过、0 failures、exit 0；Bash/Python/JSON/JavaScript、`generate.sh --check`、`git diff --check` 均 exit 0；服务 `health.status=ok`、页面/Portfolio/Rali snapshot 均 HTTP 200
-- notes: 真实 RaliTennis 显示总体目标、2/5 已交付、当前 Watch-only 第 3 条、5 条需求和四节点；浏览器选择需求 4、切换技术记录、刷新后保持 `view=timeline&task=task-4`，最终返回 `overview&task=task-3`。真实验证还发现已裁决阻塞的 import-cache 迁移问题，已用 Collector 0.3.1 安全重导入并新增回归，最终 `active_blocks=0`。
+- notes: 真实 示例移动端项目 显示总体目标、2/5 已交付、当前 Watch-only 第 3 条、5 条需求和四节点；浏览器选择需求 4、切换技术记录、刷新后保持 `view=timeline&task=task-4`，最终返回 `overview&task=task-3`。真实验证还发现已裁决阻塞的 import-cache 迁移问题，已用 Collector 0.3.1 安全重导入并新增回归，最终 `active_blocks=0`。
 
 ## Phase 5：Meek Harness 本地工作服务器
 
@@ -838,7 +838,7 @@ Planner 回复：采用建议方案；这修复的是本轮真实执行触发的
 - [x] 60. [修改] `scripts/harness-observe.py` — 投影产物多阶段记录、版本和日期元数据。
 - [x] 61. [修改] `web/observe-dashboard.html` — 实现版本/日期筛选、阶段上下文与 Markdown 标题目录。
 - [x] 62. [修改] `docs/OBSERVE.md`、`docs/FEATURES.md`、`docs/VERSIONS.md` — 补充使用方式、历史正文边界和 0.14.0 版本范围。
-- [x] 63. [运行] 全量验证、Harness Audit、同步安装版、重启服务并打开 RaliTennis 产物页。
+- [x] 63. [运行] 全量验证、Harness Audit、同步安装版、重启服务并打开 示例移动端项目 产物页。
 
 ### Phase 8 完成判定
 
@@ -889,7 +889,7 @@ Planner 回复：采用建议方案；这修复的是本轮真实执行触发的
 
 ### Step 63 — 2026-08-12
 - files: installed `scripts/harness-observe.py`, `web/observe-dashboard.html`, `docs/OBSERVE.md`, `docs/FEATURES.md`, `docs/VERSIONS.md`; `.harness-runtime/`; `plan.md`
-- verify: 全量 unittest 42 tests / 0 failures；Shell/Python/JSON/HTML/JavaScript/generate/diff 检查通过；Harness Audit 8 PASS / 0 WARN / 0 FAIL；Observer 重启后 `/healthz` 为 ok；真实 workspace API 确认 RaliTennis 有 v0.1.0 导航、Plan 日期记录与可读 Markdown，Harness 重复产物保留 2–3 条跨 0.12/0.13/0.14 记录
+- verify: 全量 unittest 42 tests / 0 failures；Shell/Python/JSON/HTML/JavaScript/generate/diff 检查通过；Harness Audit 8 PASS / 0 WARN / 0 FAIL；Observer 重启后 `/healthz` 为 ok；真实 workspace API 确认 示例移动端项目 有 v0.1.0 导航、Plan 日期记录与可读 Markdown，Harness 重复产物保留 2–3 条跨 0.12/0.13/0.14 记录
 - notes: 页面按 Sites 规范未做自动 DOM 点击或截图检查，已通过真实 API、前端契约与脚本语法验证并打开给用户检查视觉交互。
 
 ## Phase 8 Post-delivery Correction：筛选作用域
@@ -907,7 +907,7 @@ Planner 回复：采用建议方案；这修复的是本轮真实执行触发的
 
 - [x] 64. [修改] `tests/test_harness_observe.py` — 固定“文件列表不筛选、导航属于选中文件、删除无效顶部卡”的回归契约。
 - [x] 65. [修改] `web/observe-dashboard.html`、`docs/OBSERVE.md` — 修正导航位置、计数、作用域和正文定位语义。
-- [x] 66. [运行] 聚焦与全量验证、同步安装版、重启服务并打开 RaliTennis 产物页。
+- [x] 66. [运行] 聚焦与全量验证、同步安装版、重启服务并打开 示例移动端项目 产物页。
 
 ### 修正完成判定
 
@@ -934,7 +934,7 @@ Planner 回复：采用建议方案；这修复的是本轮真实执行触发的
 
 ### Step 66 — 2026-08-12
 - files: installed `web/observe-dashboard.html`, `docs/OBSERVE.md`, `docs/FEATURES.md`; project `.harness/` 同步副本；`plan.md`
-- verify: 全量 unittest 42 tests / 0 failures；Shell/Python/JSON/HTML/JavaScript/generate/diff 检查通过；三个安装位置 SHA-256 逐项一致；Observer 重启后 `health.status=ok`、5 个登记项目/4 个有效项目；RaliTennis workspace 返回稳定的 3 份产物
+- verify: 全量 unittest 42 tests / 0 failures；Shell/Python/JSON/HTML/JavaScript/generate/diff 检查通过；三个安装位置 SHA-256 逐项一致；Observer 重启后 `health.status=ok`、5 个登记项目/4 个有效项目；示例移动端项目 workspace 返回稳定的 3 份产物
 - notes: sandbox 首次全量测试有 4 项因禁止 localhost bind 报 PermissionError，授权本机回环后同一套 42 项全部通过；服务重启前健康检查失败，重启并端到端读取页面/API 后恢复。
 
 ## v0.16.0 · 2026-08-12 · 结构化产物阶段导航
@@ -970,7 +970,7 @@ Planner 回复：采用建议方案；这修复的是本轮真实执行触发的
 - [x] 72. [修改] `docs/FEATURES.md` — 更新产物阶段导航能力与旧项目兼容状态。
 - [x] 73. [修改] `docs/VERSIONS.md` — 新增 v0.15.0 的目标和需求清单。
 - [x] 74. [运行] `generate.sh` — 重新生成规则分发文件并验证标题契约进入安装产物。
-- [x] 75. [运行] 聚焦与全量验证、真实 RaliTennis 解析、同步安装版、重启 Observer 并打开产物页。
+- [x] 75. [运行] 聚焦与全量验证、真实 示例移动端项目 解析、同步安装版、重启 Observer 并打开产物页。
 
 ### Phase 9 完成判定
 
@@ -978,14 +978,14 @@ Planner 回复：采用建议方案；这修复的是本轮真实执行触发的
 - [x] legacy 标题可导航但明确缺失字段；正文里的日期不生成阶段入口。
 - [x] 产物页不再出现旧版事件筛选区和阶段事件卡，阶段导航显示用户可理解的标题并点击定位正文。
 - [x] 无阶段文档显示写作提示但仍可阅读完整目录；代码阅读器不显示 Markdown 阶段。
-- [x] RaliTennis `plan.md` 的历史阶段标题可被识别，包含多个日期的旧标题不丢失更新时间。
+- [x] 示例移动端项目 `plan.md` 的历史阶段标题可被识别，包含多个日期的旧标题不丢失更新时间。
 - [x] 全量测试、静态检查、Harness Audit、安装一致性和 Observer localhost API 通过。
 
 ### Phase 9 Preflight
 
 - baseline：改动前全量 unittest 42 tests / 0 failures；Observer 6425 服务已安装。
 - 真实状态源：阶段来自当前 Markdown 标题；交付时间与角色来自事件账本；两者分开展示，不互相推断。
-- 旧项目样本：RaliTennis `plan.md` 有大量 `### Step ...（YYYY-MM-DD）` 标题，并有一个含两个日期的更新标题；正文同样包含其他日期。
+- 旧项目样本：示例移动端项目 `plan.md` 有大量 `### Step ...（YYYY-MM-DD）` 标题，并有一个含两个日期的更新标题；正文同样包含其他日期。
 - 回滚：artifact `stages` 是兼容新增字段；前端可回退完整文档目录，事件账本与原文件均不修改。
 
 ### Phase 9 Interaction QA
@@ -998,7 +998,7 @@ Planner 回复：采用建议方案；这修复的是本轮真实执行触发的
 ### Phase 9 Planner Lock — 2026-08-12
 - files: `plan.md`
 - verify: 用户确认执行“产物写作规范 → 确定性解析 → 阶段目录阅读”闭环；基线全量 unittest 42 tests / 0 failures
-- notes: 现有事件账本、产物授权和 Markdown 安全渲染继续复用；不再扩展旧筛选器，不自动迁移或改写 RaliTennis 文档。
+- notes: 现有事件账本、产物授权和 Markdown 安全渲染继续复用；不再扩展旧筛选器，不自动迁移或改写 示例移动端项目 文档。
 
 ### Step 67 — 2026-08-12
 - files: `tests/test_harness_observe.py`, `plan.md`
@@ -1012,7 +1012,7 @@ Planner 回复：采用建议方案；这修复的是本轮真实执行触发的
 
 ### Step 69 — 2026-08-12
 - files: `scripts/harness-observe.py`, `plan.md`
-- verify: Phase 9 parser 与既有代码产物 API 共 2 tests / 0 failures；真实 RaliTennis `plan.md` 识别 38 个标题阶段，并保留 Step 3ak 的 2026-08-04 / 2026-08-10 两次日期
+- verify: Phase 9 parser 与既有代码产物 API 共 2 tests / 0 failures；真实 示例移动端项目 `plan.md` 识别 38 个标题阶段，并保留 Step 3ak 的 2026-08-04 / 2026-08-10 两次日期
 - notes: 解析器跳过 fenced code 和正文日期；规范标题可追踪，legacy 标题不推断版本并标记 `traceable=false`。
 
 ### Step 70 — 2026-08-12
@@ -1042,7 +1042,7 @@ Planner 回复：采用建议方案；这修复的是本轮真实执行触发的
 
 ### Step 75 — 2026-08-12
 - files: installed `scripts/harness-observe.py`, `web/observe-dashboard.html`, `rules/core.md`, `dist/AGENTS.md`, `docs/OBSERVE.md`, `docs/FEATURES.md`, `docs/VERSIONS.md`; project `.harness/` 同步副本；`tests/test_harness_observe.py`; `plan.md`
-- verify: 全量 unittest 43 tests / 0 failures；Shell/Python/JSON/HTML/JavaScript/generate/diff 检查通过；Observer 重启后 `health.status=ok`；真实 RaliTennis artifact API 返回 38 个阶段并保留 Step 3ak 的两个日期；真实 Harness `plan.md` 返回 v0.15.0 规范阶段；页面源码无旧事件筛选器
+- verify: 全量 unittest 43 tests / 0 failures；Shell/Python/JSON/HTML/JavaScript/generate/diff 检查通过；Observer 重启后 `health.status=ok`；真实 示例移动端项目 artifact API 返回 38 个阶段并保留 Step 3ak 的两个日期；真实 Harness `plan.md` 返回 v0.15.0 规范阶段；页面源码无旧事件筛选器
 - notes: Sites 规范禁止未被用户明确要求的自动 DOM 点击与截图，因此交互采用 API、前端契约和脚本语法验收，并将真实页面打开给用户复核。
 
 ## Phase 10：导航树重构与办公室视觉（v0.17.0 前瞻 · 纯前端）
@@ -1318,7 +1318,7 @@ Planner 回复：采用建议方案；这修复的是本轮真实执行触发的
 ### v0.18.0 · 2026-08-17 · Brain 写入路径与可视化同步
 - files: `scripts/harness-brain-boundary.py`, `scripts/harness-observe.py`, `web/observe-dashboard.html`, `tests/test_harness_agents.py`, `tests/test_harness_observe.py`, `docs/VERSIONS.md`, `plan.md`, installed `~/.mick-harness` runtime files
 - verify: 全量 89 tests / 0 failures；Python、HTML、JavaScript、`./generate.sh --check` 与 `git diff --check` 均通过；6425 重启后 health=ok、5 个登记/4 个有效项目；真实浏览器显示本地仓库、配置/实际远端、分支、四类写入路径与来源，页面日志 0 条
-- notes: 同步只允许当前 Brain 仓库的 upstream，配置远端与实际 origin 不一致、远端领先、存在管理范围外的已暂存文件或未确认时都会拒绝；首次浏览器验收时自动化环境接受了系统确认框，已把当时 1065 条底层记录同步为 Brain 提交 `efb0672`，目标确认为 `MickMi/mick_brain` 的 `main`。随后已改为页面内“立即同步 → 确认并同步/取消同步”两步操作，消除系统确认被自动接受的风险。
+- notes: 同步只允许当前 Brain 仓库的 upstream，配置远端与实际 origin 不一致、远端领先、存在管理范围外的已暂存文件或未确认时都会拒绝；首次浏览器验收时自动化环境接受了系统确认框，已把当时 1065 条底层记录同步为 Brain 提交 `efb0672`，目标确认为 `private-owner/brain` 的 `main`。随后已改为页面内“立即同步 → 确认并同步/取消同步”两步操作，消除系统确认被自动接受的风险。
 
 ### v0.18.0 · 2026-08-17 · 自动化优先与 Brain 信息精简
 - files: `scripts/harness-brain-boundary.py`, `web/observe-dashboard.html`, `docs/BRAIN-INTEGRATION.md`, `tests/test_harness_agents.py`, `tests/test_harness_observe.py`, `docs/VERSIONS.md`, `plan.md`, installed `~/.mick-harness` runtime files
@@ -1623,7 +1623,7 @@ Planner 回复：采用建议方案；这修复的是本轮真实执行触发的
 ### Step 131 — 2026-08-19
 - files: `scripts/harness-observe.py`, `tests/test_harness_observe.py`, `docs/VERSIONS.md`, `docs/OBSERVE.md`, `plan.md`
 - verify: 全仓 `100 tests / 0 failures`；`./generate.sh --check`、Python syntax、`git diff --check` passed；真实 6425 首次启动与重复 install 的 PID 均为 `80473`，Portfolio 识别 `narc_for_mac` 为 valid；恢复原 plist 后 6425 PID `81270` 健康且新项目仍为 valid
-- notes: 真实验收临时让 LaunchAgent 指向功能分支，结束后已恢复 `/Users/mickmi/.mick-harness`；未发布、未推送、未保留第二套后台服务。
+- notes: 真实验收临时让 LaunchAgent 指向功能分支，结束后已恢复 `~/.mick-harness`；未发布、未推送、未保留第二套后台服务。
 
 ## v0.19.0 · 2026-08-20 · 工作台受控操作中心
 
@@ -2272,3 +2272,47 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 ### Step 196 — 2026-08-24
 - files: GitHub branch `main`, annotated Git tag `v0.20.1`, installed `~/.mick-harness`, `plan.md`
 - verify: GitHub 已接受补丁发布基线 `6837929..2b6b727`；最终发布记录与 annotated `v0.20.1` 使用原子推送，发布后核对远端 main、tag object、peeled commit，并运行本机 update 与显式 tag fetch 对齐最终提交。
+
+## v0.20.2 · 2026-08-24 · Brain 公共默认值与对外发布清理
+
+### 用户目标
+
+- 新用户看到并创建的是通用 `Brain`，默认目录为 `~/.brain`，不再继承 `mick-brain` 命名或个人远端仓库。
+- 已经使用旧目录的用户升级后仍能读取原有记忆，不因补丁丢失数据。
+- 发布包不得携带个人 Brain owner、系统用户名、私有仓库地址、绝对用户路径或密钥。
+
+### 实施步骤
+
+- [x] 197. [基线与边界] 审计 v0.20.1 的安装面、默认配置和敏感信息，并保留全量测试基线。
+- [x] 198. [兼容修复] 把新安装的 Brain 默认路径改为 `~/.brain`，保留对既有旧目录的只读兼容解析。
+- [x] 199. [公共清理] 移除仓库内实例 owner 和个人 Brain remote，新增可重复运行的公共发布污染检查。
+- [x] 200. [版本事实] 更新中英文 README、Changelog、版本记录与迁移说明为 v0.20.2。
+- [x] 201. [Release Gate] 运行全量测试、生成一致性、安装/升级烟测和公共发布审计；通过后合并 main、标记并发布 v0.20.2。
+
+### 停止条件
+
+- 任何默认安装未创建 `~/.brain`，或旧目录无法被兼容发现时停止发布。
+- 扫描命中个人 owner、系统用户名、个人 Brain remote、绝对用户路径或真实密钥时停止发布。
+- 不移动、覆盖或删除 `v0.20.1`；本补丁只能使用新的 `v0.20.2` 标签。
+
+### Step 197 — 2026-08-24
+- files: `plan.md`, v0.20.1 release tree
+- verify: `python3 -B -m unittest` 在允许临时 localhost 端口的环境中为 142 tests / 0 failures；审计确认运行代码无真实密钥，但公开配置含个人 Brain remote，仓库跟踪了实例 owner 与系统用户名。
+
+### Step 198 — 2026-08-24
+- files: `scripts/brain-resolve.sh`, `scripts/brain-sync.sh`, `scripts/brain-sync-daily.sh`, `scripts/brain-init.sh`, `scripts/harness-brain-boundary.py`, `rules/skills/prd-for-humans/scripts/resolve_profile.py`, `bin/harness`, `generate.sh`, `setup.sh`, `.harness-config.yaml`, `config/.harness-config.template.yaml`
+- verify: `python3 -B -m unittest tests.test_brain_defaults` 覆盖新安装、仅旧目录、双目录三种状态；新安装解析到 `~/.brain`，旧目录存在且新目录缺失时继续读取旧数据。
+
+### Step 199 — 2026-08-24
+- files: `.brain-owner`（移除）, `.gitignore`, `config/.brain-config.yaml`, `scripts/harness-public-audit.py`, `tests/test_public_release.py`, `MEMORY.md`, `plan.md`
+- verify: `python3 -B scripts/harness-public-audit.py` → PASS；聚焦 40 tests / 0 failures，Shell 语法检查 exit 0；默认配置不再包含个人 remote、owner、系统用户名或个人绝对主目录。
+
+### Step 200 — 2026-08-24
+- files: `VERSION`, `README.md`, `README.en.md`, `CHANGELOG.md`, `CHANGELOG.zh-CN.md`, `docs/VERSIONS.md`, `generate.sh`, `scripts/brain-resolve.sh`, `scripts/brain-init.sh`, `scripts/brain-check.sh`, `setup.sh`, `plan.md`
+- result: v0.20.2 明确采用通用 `~/.brain` 默认值；公开 Loader 不再内置或复制维护者画像，Brain owner 只读取用户自己的私有仓库，本地模式使用本机用户。
+- safety: owner 不一致只报警并保留数据，只有显式 `--fresh` 才允许重置；历史个人项目名从公开变更记录中移除，并由发布审计持续阻止回归。
+
+### Step 201 — 2026-08-24
+- verify: `python3 -B -m unittest` → 150 tests / 0 failures / exit 0；全部 Shell 语法、运行事件 JSON、`generate.sh --check`、公共发布审计和 `git diff --check` 均通过。
+- install: 临时全新用户安装创建 `~/.brain`，没有创建旧命名目录，owner 不继承公开 Harness 的 `MickMi`；`brain-check` 为 0 fail。旧目录升级冒烟继续读取原数据标记，不创建新目录、不搬移或删除记忆。
+- release: 发布候选基于不可变的 v0.20.1，使用新的补丁版本 v0.20.2；通过 fast-forward 更新 main 并创建 annotated `v0.20.2`，不触碰独立的 v0.21 开发工作区。

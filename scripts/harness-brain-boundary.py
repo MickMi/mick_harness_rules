@@ -57,8 +57,12 @@ def state_root() -> Path:
 
 
 def brain_root() -> Path:
-    configured = os.environ.get("MICK_BRAIN_ROOT") or os.environ.get("BRAIN_DIR")
-    return Path(configured).expanduser() if configured else Path.home() / ".mick-brain"
+    configured = os.environ.get("BRAIN_ROOT") or os.environ.get("BRAIN_DIR") or os.environ.get("MICK_BRAIN_ROOT")
+    if configured:
+        return Path(configured).expanduser()
+    preferred = Path.home() / ".brain"
+    legacy = Path.home() / ".mick-brain"
+    return legacy if not preferred.exists() and legacy.exists() else preferred
 
 
 def candidate_root() -> Path:

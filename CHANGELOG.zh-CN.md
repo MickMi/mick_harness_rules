@@ -6,6 +6,28 @@ Mick Agent Harness 的重要变更都会记录在本文件中。
 
 本项目遵循 Semantic Versioning 2.0。形如 `vX.Y.Z` 的 Git tag 是最终发布事实源。
 
+## [0.20.2] - 2026-08-24
+
+### 通用 Brain 默认值与公开发布隐私
+
+- 新安装使用通用私有记忆目录 `~/.brain`。升级时若新目录不存在，会继续发现旧目录，
+  不自动搬移或删除记忆。
+- 公开配置不再携带维护者的 Brain 远端或已跟踪 owner 文件。Brain 身份只从用户自己的
+  私有 Brain 仓库推导；纯本地 Brain 使用本机用户。
+- owner 不一致时默认保留私有记忆；只有用户显式传入 `--fresh` 才执行破坏性重置。
+- 生成的 Agent Loader 只引用私有 Capsule 来源，不复制其正文，也不再内置维护者画像。
+- 新增可重复运行的公开发布审计，阻止个人路径、身份、项目名、Brain 远端、兼容代码外
+  的旧默认名和疑似凭据进入发布包。
+
+兼容性：不会自动迁移数据。已有旧 Brain 继续可读，显式自定义路径和私有 Git 远端继续
+生效；新安装创建 `~/.brain`。
+
+迁移说明：运行 `harness update`。需要多机同步时，可在
+`config/.brain-config.yaml` 配置用户自己的私有 Brain 远端；纯本地使用不需要远端。
+
+验证：150 个 unittest、生成规则一致性、全部 Shell 语法、首次安装与旧目录升级冒烟、
+公开发布审计和 `git diff --check`。
+
 ## [0.20.1] - 2026-08-24
 
 ### 项目首页选择恢复补丁
@@ -161,7 +183,7 @@ turn 闭环与行为评测明确保持“未验证”。
 `artifact_scope` URL 参数被忽略并在下次状态写回时移除。无新依赖，无新写接口。
 
 验证：43 个 unittest、Shell/Python/JSON/JavaScript 语法、`generate.sh --check`、
-`git diff --check`、Harness Audit 8 PASS / 0 FAIL，真实 RaliTennis 解析出 38 个
+`git diff --check`、Harness Audit 8 PASS / 0 FAIL，真实示例移动端项目解析出 38 个
 阶段并保留多日期旧标题。
 
 ## [0.15.0] - 2026-08-12

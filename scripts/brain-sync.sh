@@ -40,7 +40,7 @@ BRAIN_REPO=""
 # --- Resolve brain ---
 source "$HARNESS_ROOT/scripts/brain-resolve.sh"
 ensure_brain_available "$HARNESS_ROOT" >/dev/null 2>&1 || true
-BRAIN_REPO="${BRAIN_DIR:-$HOME/.mick-brain}"
+BRAIN_REPO="${BRAIN_DIR:-$HOME/.brain}"
 
 log()   { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"; }
 

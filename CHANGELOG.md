@@ -7,6 +7,35 @@ All notable changes to Mick Agent Harness are documented in this file.
 This project follows Semantic Versioning 2.0. Git tags in the form `vX.Y.Z`
 are the release source of truth.
 
+## [0.20.2] - 2026-08-24
+
+### Public Brain Defaults and Release Privacy
+
+- New installations use the generic private-memory directory `~/.brain`.
+  Existing installations continue to discover the legacy directory when the
+  new path does not exist, without moving or deleting memory.
+- The public configuration no longer includes a maintainer Brain remote or a
+  tracked owner file. Brain identity now comes from the user's private Brain
+  repository; local-only Brain uses the local system user.
+- Owner mismatches preserve private memory by default. Destructive reset is
+  available only through an explicit `--fresh` request.
+- Generated Agent loaders reference private Capsule sources without copying
+  their contents, and no longer contain a built-in maintainer persona.
+- A repeatable public-release audit rejects personal paths, identities, project
+  names, Brain remotes, legacy defaults outside compatibility code, and
+  credential-shaped content.
+
+Compatibility: no automatic data migration is performed. An existing legacy
+Brain remains readable, explicit custom paths and private Git remotes continue
+to work, and new installations create `~/.brain`.
+
+Migration: run `harness update`. Optionally configure the user's private Brain
+remote in `config/.brain-config.yaml`; no remote is required for local use.
+
+Verification: 150 unittests, generated-rule consistency, complete Shell syntax,
+fresh-install and legacy-upgrade smoke tests, public-release audit, and
+`git diff --check`.
+
 ## [0.20.1] - 2026-08-24
 
 ### Overview Selection Restore Hotfix
@@ -213,7 +242,7 @@ the next state write. No new dependencies, no mutation endpoints.
 
 Verification: 43 unittests, shell/Python/JSON/JavaScript syntax,
 `generate.sh --check`, `git diff --check`, Harness Audit 8 PASS / 0 FAIL,
-real RaliTennis parse (38 stages, multi-date legacy heading preserved).
+real sample mobile project parse (38 stages, multi-date legacy heading preserved).
 
 ## [0.15.0] - 2026-08-12
 

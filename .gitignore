@@ -1,5 +1,5 @@
 # Brain data (lives in separate private repo, linked via symlink)
-# The brain/ symlink points to ~/.mick-brain/ (private git repo)
+# The brain/ symlink points to ~/.brain/ (private local or Git repo)
 brain
 
 # Brain migration backup (one-time, safe to delete after migration)

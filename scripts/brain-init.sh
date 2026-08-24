@@ -97,9 +97,14 @@ if [ -n "$BRAIN_REPO_REMOTE" ]; then
         info "Cloning brain repo: $BRAIN_REPO_REMOTE"
         info "  → $BRAIN_REPO_LOCAL"
         if clone_brain_repo "$HARNESS_ROOT"; then
-            ok "Brain repo cloned successfully."
+            resolve_brain_dir "$HARNESS_ROOT"
+            if [ "$BRAIN_REMOTE_STATUS" = "connected" ]; then
+                ok "Brain repo cloned successfully."
+            else
+                warn "Brain remote unavailable. Using private local Brain: $BRAIN_DIR"
+            fi
         else
-            warn "Failed to clone brain repo. Will use local brain/ directory as fallback."
+            warn "Failed to initialize Brain at: $BRAIN_REPO_LOCAL"
             warn "You can manually clone later: git clone $BRAIN_REPO_REMOTE $BRAIN_REPO_LOCAL"
         fi
     fi
@@ -138,39 +143,23 @@ if [ -n "$BRAIN_REPO_REMOTE" ]; then
         fi
     fi
 else
-    info "No brain_repo.remote configured. Using local brain/ directory."
-    ok "Local brain mode (single-repo)."
+    info "No brain_repo.remote configured."
+    ok "Private local Brain: $BRAIN_DIR"
 fi
 
 echo ""
 
 # ============================================================
-# Phase 0: Owner Detection — Detect fork user & auto-reset brain
+# Phase 0: Owner Detection — detect Brain ownership without deleting data
 # ============================================================
 info "Phase 0: Owner Detection — Checking brain ownership..."
 
 BRAIN_OWNER_FILE="$BRAIN_DIR/.brain-owner"
 
-# Extract current Git remote owner from harness repo
+# Extract the owner from the private Brain remote. The public Harness remote is
+# shared by every user and must not become part of private Brain identity.
 detect_current_owner() {
-    local remote_url=""
-    remote_url=$(git -C "$HARNESS_ROOT" remote get-url origin 2>/dev/null || echo "")
-
-    if [ -z "$remote_url" ]; then
-        echo ""
-        return
-    fi
-
-    # Extract owner from various URL formats:
-    # https://github.com/OWNER/REPO.git → OWNER
-    # git@github.com:OWNER/REPO.git → OWNER
-    local owner=""
-    if echo "$remote_url" | grep -qE '^https?://'; then
-        owner=$(echo "$remote_url" | sed -E 's|https?://[^/]+/([^/]+)/.*|\1|')
-    elif echo "$remote_url" | grep -qE '^git@'; then
-        owner=$(echo "$remote_url" | sed -E 's|git@[^:]+:([^/]+)/.*|\1|')
-    fi
-    echo "$owner"
+    brain_remote_owner "$BRAIN_DIR"
 }
 
 # Read recorded owner from .brain-owner
@@ -288,23 +277,15 @@ record_owner() {
     local owner="$1"
     local sys_user="$2"
     local new_repo=""
-    local remote_url=""
-    remote_url=$(git -C "$HARNESS_ROOT" remote get-url origin 2>/dev/null || echo "")
-    if echo "$remote_url" | grep -qE '^https?://'; then
-        new_repo=$(echo "$remote_url" | sed -E 's|https?://[^/]+/[^/]+/([^/.]+).*|\1|')
-    elif echo "$remote_url" | grep -qE '^git@'; then
-        new_repo=$(echo "$remote_url" | sed -E 's|git@[^:]+:[^/]+/([^/.]+).*|\1|')
-    fi
-    [ -z "$new_repo" ] && new_repo="unknown"
+    new_repo=$(brain_remote_repo "$BRAIN_DIR")
 
     # Ensure brain directory structure exists
     mkdir -p "$BRAIN_DIR/global" "$BRAIN_DIR/projects" "$BRAIN_DIR/sessions"
 
     cat << OWNER_EOF > "$BRAIN_OWNER_FILE"
 # Brain Owner Identity
-# This file records who owns this harness + brain instance.
-# When a fork user runs brain-init.sh, the script detects the mismatch
-# and automatically resets brain data to a clean state.
+# This file records who owns this private Brain instance.
+# Owner mismatches are reported without changing private memory.
 # DO NOT edit manually — managed by brain-init.sh.
 
 owner: $owner
@@ -354,14 +335,15 @@ elif [ -z "$RECORDED_OWNER" ]; then
         echo -e "${YELLOW}  Is this YOUR data, or did you clone someone else's repo?${NC}"
         echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         echo ""
-        # Non-interactive: auto-reset if stdin is not a terminal
+        # Never delete private memory implicitly in non-interactive mode.
         if [ -t 0 ]; then
             echo -n "  Reset brain to start fresh? [Y/n] "
             read -r answer
             answer=${answer:-Y}
         else
-            answer="Y"
-            info "Non-interactive mode detected. Auto-resetting brain."
+            answer="N"
+            warn "Non-interactive mode detected. Preserving existing Brain data."
+            warn "Run with --fresh only when a reset is explicitly intended."
         fi
 
         if [[ "$answer" =~ ^[Yy] ]]; then
@@ -376,29 +358,29 @@ elif [ -z "$RECORDED_OWNER" ]; then
     ok "Owner recorded: $CURRENT_OWNER"
 
 elif [ -n "$CURRENT_OWNER" ] && [ "$CURRENT_OWNER" != "$RECORDED_OWNER" ]; then
-    # Git remote owner mismatch — this is a fork user!
+    # Brain remote owner mismatch. Preserve data until the user explicitly
+    # chooses --fresh; an identity check must never destroy private memory.
     echo ""
     echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${YELLOW}  🔀 Fork Detected!${NC}"
+    echo -e "${YELLOW}  🔀 Brain Owner Mismatch${NC}"
     echo -e "${YELLOW}  Recorded owner : $RECORDED_OWNER${NC}"
     echo -e "${YELLOW}  Current owner  : $CURRENT_OWNER${NC}"
     echo -e "${YELLOW}  ${NC}"
-    echo -e "${YELLOW}  The brain data belongs to the original author.${NC}"
-    echo -e "${YELLOW}  Auto-resetting to give you a clean brain...${NC}"
+    echo -e "${YELLOW}  The Brain may belong to a different remote owner.${NC}"
+    echo -e "${YELLOW}  Data is preserved. Run with --fresh to reset explicitly.${NC}"
     echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
-    reset_brain_for_new_owner "$CURRENT_OWNER"
-    record_owner "$CURRENT_OWNER" "$CURRENT_SYS_USER"
+    warn "Owner record left unchanged; private Brain data was not modified."
 
 elif [ -n "$CURRENT_SYS_USER" ] && [ -n "$RECORDED_SYS_USER" ] && [ "$CURRENT_SYS_USER" != "$RECORDED_SYS_USER" ]; then
-    # Same Git remote but different system user — likely a direct clone (not fork)
+    # Same Brain remote but different system user.
     echo ""
     echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${YELLOW}  👤 Different System User Detected!${NC}"
     echo -e "${YELLOW}  Recorded user : $RECORDED_SYS_USER${NC}"
     echo -e "${YELLOW}  Current user  : $CURRENT_SYS_USER${NC}"
     echo -e "${YELLOW}  ${NC}"
-    echo -e "${YELLOW}  You appear to be a different person using this harness repo.${NC}"
+    echo -e "${YELLOW}  You appear to be a different person using this Brain.${NC}"
     echo -e "${YELLOW}  The brain data may belong to someone else.${NC}"
     echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
@@ -407,8 +389,9 @@ elif [ -n "$CURRENT_SYS_USER" ] && [ -n "$RECORDED_SYS_USER" ] && [ "$CURRENT_SY
         read -r answer
         answer=${answer:-Y}
     else
-        answer="Y"
-        info "Non-interactive mode detected. Auto-resetting brain."
+        answer="N"
+        warn "Non-interactive mode detected. Preserving existing Brain data."
+        warn "Run with --fresh only when a reset is explicitly intended."
     fi
 
     if [[ "$answer" =~ ^[Yy] ]]; then
@@ -539,7 +522,8 @@ if [ "$BRAIN_IS_EXTERNAL" = "true" ] && [ -d "$BRAIN_REPO_LOCAL/.git" ]; then
 # Trigger: git commit / git pull (merge) in Brain repo
 # Action: regenerate harness rules for all registered projects
 set -euo pipefail
-REGISTRY="$HOME/.mick-brain/.harness-projects"
+REGISTRY="$HOME/.brain/.harness-projects"
+[ -f "$REGISTRY" ] || REGISTRY="$HOME/.mick-brain/.harness-projects"
 [ ! -f "$REGISTRY" ] && exit 0
 while IFS= read -r project || [ -n "$project" ]; do
     [ -z "$project" ] && continue

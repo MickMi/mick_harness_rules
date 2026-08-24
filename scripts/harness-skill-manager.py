@@ -57,7 +57,7 @@ FINDING_RULES = (
     (
         "brain_write",
         "review",
-        re.compile(r"(?:write|append|commit|push|写入|追加|提交|同步)[^\n]{0,100}(?:\.mick-brain|mick[_ -]?brain|Brain memory|Brain 记忆)", re.I),
+        re.compile(r"(?:write|append|commit|push|写入|追加|提交|同步)[^\n]{0,100}(?:\.brain|\.mick-brain|mick[_ -]?brain|Brain memory|Brain 记忆)", re.I),
         "包含 Brain 写入或同步行为",
     ),
     (

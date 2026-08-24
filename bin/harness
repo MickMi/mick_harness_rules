@@ -561,6 +561,8 @@ cmd_brain() {
                 if [ -d "${BRAIN_DIR:-}" ]; then
                     if [ "${BRAIN_REMOTE_STATUS:-none}" = "connected" ]; then
                         echo -e "  Brain repo  : ${GREEN}connected${NC} ($BRAIN_DIR)"
+                    elif [ "${BRAIN_USING_LEGACY_PATH:-false}" = "true" ]; then
+                        echo -e "  Brain repo  : ${YELLOW}legacy local path${NC} ($BRAIN_DIR; new default: $HOME/.brain)"
                     elif [ -d "$BRAIN_DIR/.git" ]; then
                         echo -e "  Brain repo  : ${YELLOW}local fallback${NC} ($BRAIN_DIR)"
                     else
@@ -577,7 +579,7 @@ cmd_brain() {
                 hook_adapters_status
             fi
             # Check evolution data
-            local trail="${BRAIN_DIR:-$HOME/.mick-brain}/global/evolution/audit-trail.md"
+            local trail="${BRAIN_DIR:-$HOME/.brain}/global/evolution/audit-trail.md"
             if [ -f "$trail" ]; then
                 local entries
                 entries=$(grep -c "^## " "$trail" 2>/dev/null || true)
@@ -790,7 +792,7 @@ cmd_metrics() {
     local target="${1:-$(pwd)}"
     local plan="$target/plan.md"
     local audit_log=""
-    for f in "$HARNESS_GLOBAL/audit-log.md" "$HARNESS_GLOBAL/scripts/../audit-log.md" "$HOME/.mick-brain/global/evolution/audit-trail.md"; do
+    for f in "$HARNESS_GLOBAL/audit-log.md" "$HARNESS_GLOBAL/scripts/../audit-log.md" "$HOME/.brain/global/evolution/audit-trail.md" "$HOME/.mick-brain/global/evolution/audit-trail.md"; do
         [ -f "$f" ] && audit_log="$f" && break
     done
 

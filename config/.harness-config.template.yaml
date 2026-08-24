@@ -4,7 +4,7 @@
 # 描述本项目想用什么样的工作流。AI 在每次工作前必须读它来决定行为。
 #
 # ✅ 应该 commit 到项目仓库（团队共享 / 跨机器一致）
-# ❌ 不要写入隐私（个人 brain 偏好走 ~/.mick-brain/，不走这里）
+# ❌ 不要写入隐私（个人 Brain 数据走 ~/.brain/，不走这里）
 #
 # 字段说明用 # 注释。所有字段都有 default，确保旧项目升级时不报错。
 
@@ -29,7 +29,7 @@ brain:
 
   # 私有 brain 仓库的位置（绝对路径或 ~ 开头）
   # setup.sh 会自动 clone 到这里，不存在则按 .brain-config.yaml 中的 remote 拉
-  path: "~/.mick-brain"
+  path: "~/.brain"
 
 
 # === 2. Design（设计工作方式）✨ 核心字段 ===

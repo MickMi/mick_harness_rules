@@ -88,8 +88,8 @@
 - [2026-04-22] ADR-016: 双仓库模型回归（Dual-Repo Model — Harness + Brain Separation）
   - **取代 ADR-007 的单仓库模型**，回归 ADR-002 的双仓库思路（但动机不同）
   - Harness 仓库（公开）：工程护栏、脚本工具、框架 ADR → `mick_harness_rules`
-  - Brain 仓库（私有）：个人记忆、偏好、项目经验 → `mick_brain`（`https://github.com/MickMi/mick_brain`）
-  - Brain 仓库默认 clone 到 `~/.mick-brain/`，harness 中的 `brain/` 目录通过 symlink 指向它
+  - Brain 仓库（私有）：个人记忆、偏好、项目经验 → 用户自行配置的私有 Git 仓库
+  - Brain 默认位于 `~/.brain/`，harness 中的 `brain/` 目录通过 symlink 指向它
   - 新增 `scripts/brain-resolve.sh` 共享库：所有 brain-*.sh 脚本 source 它来解析 BRAIN_DIR 路径
   - `.brain-config.yaml` 新增 `brain_repo.remote` 和 `brain_repo.local_path` 配置
   - 向后兼容：未配置 brain_repo 时，所有脚本 fallback 到本地 `brain/` 目录

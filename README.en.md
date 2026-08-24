@@ -137,7 +137,7 @@ harness metrics
 | `harness agents sync` | `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md` | Inject managed loaders | Remove the `MICK-HARNESS-GLOBAL` block |
 | `harness init` | project `AGENTS.md`, `.harness/`, `.gitignore` | Mount Harness into the project | Delete `.harness`; remove the `AGENTS.md` symlink or `HARNESS:BEGIN` block |
 | `harness init --full` | project `.harness-config.yaml` | Enable full config and checks | Delete the config file |
-| `harness brain install` | `~/.mick-brain`, optional Claude hook/LaunchAgent | Create Brain and enable sync | Delete Brain or disable the hook |
+| `harness brain install` | `~/.brain`, optional Claude hook/LaunchAgent | Create Brain and enable sync | Delete Brain or disable the hook |
 
 If a project already has a rule file with the same name, Harness injects a marked block and keeps existing content.
 
@@ -185,7 +185,7 @@ Mick Agent Harness has four layers:
 | Global Harness | Local shared rules and tooling | `~/.mick-harness`, `harness install` |
 | Agent Loader | Global entry injected into a code-agent surface | `harness agents sync`, `harness export codex` |
 | Project Manifest | Small project entry that points to the global Harness | `AGENTS.md`, `.harness/` |
-| Private Brain | Private long-term memory and evolution signals | `~/.mick-brain`, `harness brain install` |
+| Private Brain | Private long-term memory and evolution signals | `~/.brain`, `harness brain install` |
 
 Recommended shape:
 
@@ -220,7 +220,7 @@ harness update
 
 ## Advanced: Private Brain
 
-Brain is private long-term memory. By default it lives in `~/.mick-brain`, and it can also be configured as a private Git repository.
+Brain is private long-term memory. By default it lives in `~/.brain`, and it can also use the user's own private Git repository. The public Harness does not ship anyone's Brain URL, identity, or memory content.
 
 Brain has three layers:
 
@@ -237,7 +237,7 @@ harness brain install
 harness brain status
 ```
 
-If the user has no Brain yet, `harness brain install` creates a local `~/.mick-brain` skeleton. If a private remote is configured but cannot be cloned, Harness falls back to a local Brain instead of blocking `harness init --full`, `harness check`, or the original Harness workflow.
+If the user has no Brain yet, `harness brain install` creates a local `~/.brain` skeleton. If a private remote is configured but cannot be cloned, Harness falls back to a local Brain instead of blocking `harness init --full`, `harness check`, or the original Harness workflow. Existing installations that used the legacy directory keep reading their data, while new installations no longer create the old product-specific path.
 
 Brain is private data. It should not be committed into the public Harness repo or a business project repo.
 
