@@ -34,6 +34,7 @@
 - 讨论中：目标、已确定、待确认、边界、推荐分期的简明共识。
 - 用户明确需要时：`docs/PRD-<feature>.md`，面向人类评审并按需求体量自适应结构，不塞实现细节或为了模板补空章节。
 - 版本管理时：更新 `docs/PROJECT.md` 与 `docs/VERSIONS.md`；需求包含稳定 id、状态和迁移原因。
+- 准备开发时：按需求 ID 回写 `gate_result=ready_for_review`，并给 Reviewer 提供目标、用户行为、已确认边界和待裁决项；这不是审查批准。
 
 ## 验收
 
@@ -45,5 +46,6 @@
 ## 交接
 
 - 需求还模糊：留在 PM，给出下一项最关键问题。
-- 共识已锁定且用户要实现：交 Planner，附目标、范围、验收和未决风险。
+- 共识已锁定且用户要实现：先交 Reviewer 执行 `product_review`；审查批准后再进入 Planner / Designer / Executor。
+- Reviewer 返回 `changes_requested`：由 PM 裁决或补齐产品逻辑；范围实质变化后必须重新审查，不能沿用旧批准。
 - 用户只要人类沟通文档：交付 PRD，不自动启动实现。

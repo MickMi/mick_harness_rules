@@ -127,7 +127,7 @@ harness agents doctor
 
 - Loader 与 Hook 写入均保留同目录 `.mick-harness.bak`，并只修改 Harness 自己的受管区块或 Hook 项。
 - 已注入项目无需复制新规则；运行 `harness update` 刷新全局版本并同步已登记项目。
-- 旧事件仍可读取。v0.17 新提交使用 ingest envelope `0.2.0`，离线事件先进入项目 `.harness-runtime/outbox/`，确认写入后自动清除。
+- 旧事件仍可读取。v0.17+ 提交继续使用向后兼容的 ingest envelope `0.2.0`；v0.20 工作回合新增可选的 `review_mode`、`gate_result`、`workflow_exception` 和证据引用。离线事件先进入项目 `.harness-runtime/outbox/`，确认写入后自动清除。
 - 最后必须重开 Claude Code / Codex 会话。只有新 session 的事件带有当前 `rule_version`，工作台才显示“加载已验证”；Hook 已配置但没有新会话时显示“待真实会话”。
 - Codex CLI 还需要在自身 `/hooks` 界面信任项目/全局 Hook；Codex Desktop 当前不提供该入口。未信任时不能把文件已写入当作 Hook 已执行。
 

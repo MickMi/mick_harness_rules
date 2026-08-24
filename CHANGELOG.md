@@ -7,6 +7,49 @@ All notable changes to Mick Agent Harness are documented in this file.
 This project follows Semantic Versioning 2.0. Git tags in the form `vX.Y.Z`
 are the release source of truth.
 
+## [0.20.0] - 2026-08-24
+
+### Requirement-level Product Gates and Task Offices
+
+- **Deterministic requirement workflow**: each v0.20 requirement now advances
+  independently through `PM → product review → development → QA → release
+  ready`. A version-wide Plan, free-text handoff, or another requirement's
+  activity can no longer advance the current requirement.
+- **Pre-development product review**: Reviewer gains a dedicated
+  `product_review` mode and the bundled `product-logic-review` Skill. It checks
+  user paths, state changes, permissions, timing, failure recovery, and boundary
+  cases before development, returning an explicit approval or change request.
+- **Evidence-backed delivery gates**: development requires artifact and
+  self-verification references; QA must independently record pass/fail evidence.
+  High-risk work may add a separate post-QA `release_review`, while narrowly
+  defined technical-only fixes use an auditable exception instead of bypassing
+  the workflow silently.
+- **Task-scoped role office**: every current-version requirement shows its own
+  compact PM, Review, Development, QA, and Release path. Selecting a requirement
+  expands its animated role office in place; role history, decisions, and
+  artifacts stay scoped to that requirement, with Designer inserted only when
+  it actually participated.
+- **Truthful compatibility projection**: legacy events remain readable without
+  fabricated approvals. Invalid role transitions and plan/status conflicts are
+  retained for audit and explained in the workbench, but do not move the
+  effective requirement stage.
+
+Compatibility: existing projects, v0.19 event ledgers, Agent loaders, Brain
+repositories, and the `127.0.0.1:6425` endpoint remain compatible. The runtime
+event contract adds optional fields only, and no third-party dependency was
+added.
+
+Migration: run `harness update`. It refreshes the global Harness, registered
+project mounts, Agent loaders, and the single 6425 Observer service. Historical
+events remain visible; new product gates apply to requirements planned in
+v0.20.0 or later.
+
+Verification: 141 unittests, generated-rule consistency, Python, JavaScript,
+Shell and JSON syntax, Skill validation, `git diff --check`, a non-interactive
+temporary-project setup smoke test, and real-browser desktop/mobile validation
+on the 6246 development service with requirement switching, scoped drawers,
+zero page overflow, and no console errors or warnings.
+
 ## [0.19.0] - 2026-08-22
 
 ### Controlled Operations, Skill Governance, and Harness Evolution

@@ -72,6 +72,14 @@ Reviewer 不是“再跑一次测试”的别名。它审查原始需求、受�
 
 项目导航使用“项目主页 / 版本记录 / 交付物”。项目主页负责当前版本行动，版本记录负责历史版本、分支、工作区和发布标签关系。
 
+## v0.20.0 · 2026-08-22 · 需求级角色门禁
+
+从 v0.20 开始，每条需求独立执行 `PM → Reviewer(product_review) → Executor → QA → Release`。复杂需求可在产品审查后插入 Planner / Designer；高风险交付可在 QA 通过后增加 `Reviewer(release_review)`。产品 Reviewer 负责在开发前检查用户路径、状态变化和边界逻辑，QA 负责开发后的独立验收，两者不是同一个环节。
+
+工作台不再把“出现过一条角色事件”等同于阶段已经推进。只有结构化门禁结果、同一 `requirement_id` 和对应证据均有效时，后端状态机才接受跳转；PM 直接回写 QA、开发缺交付/自检、QA 缺独立证据等事件仍保留在审计中，但页面会标明“未推进有效阶段”及原因。历史版本继续使用旧投影，不会因为缺少新字段而失效。
+
+Reviewer 的两种模式必须显式写入事件：`product_review` 结论为 `approved|changes_requested`；`release_review` 只在高风险或用户要求时使用。需求范围改变会令旧产品审查及下游门禁失效，重新回到产品审查。纯技术修复只有在不改变产品行为、记录例外原因并仍有开发产物、自检和 QA 证据时，才可跳过产品审查。
+
 ## v0.19.0 · 2026-08-22 · 项目问题回流 Harness
 
 Brain 项目记忆和 Harness 改进是两条不同链路：项目记忆保存某个项目已经确认的事实；Harness 改进只处理“现有 Harness 没有阻止或发现的问题”。工作台不会自动把每条项目记忆都判成 Harness 缺陷，用户必须在项目记忆中明确点击“提交为 Harness 问题”，并选择建议落点：Rule、Skill、Checker 或 Profile。
@@ -152,7 +160,14 @@ harness observe emit work.round_started --ref task-3-turn-1 --role Executor \
 harness observe emit work.round_completed --ref task-3-turn-1 --role Executor \
   --requirement task-3 --objective "实现本地事件接收" \
   --summary "接收、鉴权和持久化已验证" --next-role QA \
-  --artifact docs/OBSERVE.md --artifact scripts/harness-observe.py
+  --gate-result delivered \
+  --artifact docs/OBSERVE.md --artifact scripts/harness-observe.py \
+  --verification "python-unittest:event-ingest"
+
+harness observe emit work.round_completed --ref task-3-qa --role QA \
+  --requirement task-3 --objective "独立验证事件接收" \
+  --summary "鉴权、幂等和离线恢复通过" --gate-result passed \
+  --verification "qa-report:event-ingest"
 ```
 
 发生关键取舍时使用 `decision.recorded`，角色工作转交时使用 `handoff.created`。同一个事件引用默认形成稳定幂等键，重复提交不会重复写入。

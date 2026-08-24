@@ -47,11 +47,13 @@
     "positive": [
       {"prompt": "审查当前改动", "expected": "先给按严重度排序且可定位的 findings"},
       {"prompt": "判断 Bug 是否修复", "expected": "要求复现用例与回归证据"},
-      {"prompt": "审查共享契约", "expected": "检查兼容性、安全、数据和失败路径"}
+      {"prompt": "审查共享契约", "expected": "检查兼容性、安全、数据和失败路径"},
+      {"prompt": "开发前检查这条需求有没有逻辑漏洞", "expected": "声明 product_review，按风险模拟用户路径和状态变化，输出 approved 或 changes_requested"}
     ],
     "boundary": [
       {"prompt": "没有 Mock 的改动", "expected": "不强行输出 Mock 专项评分；证据不足时回流 Executor 补充，不臆测"},
-      {"prompt": "只看到 diff", "expected": "读取必要上下文后再下结论；读后仍不足则回流 Executor/Planner，不凭 diff 臆断"}
+      {"prompt": "只看到 diff", "expected": "读取必要上下文后再下结论；读后仍不足则回流 Executor/Planner，不凭 diff 臆断"},
+      {"prompt": "产品审查发现取消后的状态没定义，但先让开发做起来", "expected": "输出 changes_requested 并回 PM，不允许带 blocking 产品缺口进入开发"}
     ]
   },
   "designer": {

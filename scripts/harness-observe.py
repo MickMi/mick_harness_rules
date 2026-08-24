@@ -54,6 +54,14 @@ MAX_ARTIFACT_BYTES = 512 * 1024
 MAX_OPERATION_BODY = 16 * 1024
 OPERATION_LOCK_STALE_SECONDS = 30 * 60
 ROLES = {"PM", "Planner", "Executor", "QA", "Reviewer", "Designer", "Orchestrator", "Unknown"}
+REVIEW_MODES = {"product_review", "release_review"}
+GATE_RESULTS_BY_ROLE = {
+    "PM": {"ready_for_review"},
+    "Reviewer": {"approved", "changes_requested"},
+    "Executor": {"delivered"},
+    "QA": {"passed", "failed"},
+}
+WORKFLOW_EXCEPTIONS = {"technical_only"}
 OFFICE_ROLES = (
     {"role_id": "PM", "label": "PM", "source_roles": ("PM", "Planner", "Orchestrator")},
     {"role_id": "Designer", "label": "设计", "source_roles": ("Designer",)},
@@ -583,7 +591,11 @@ def validate_ingest_envelope(envelope: dict[str, Any], expected_project_id: str 
     if event_type in {"work.round_started", "work.round_completed"}:
         validate_keys(
             payload,
-            allowed={"role", "objective", "summary", "status", "requirement_id", "next_role", "blocker", "platform", "session_ref", "turn_ref", "artifact_refs", "verification_refs"},
+            allowed={
+                "role", "objective", "summary", "status", "requirement_id", "next_role", "blocker",
+                "platform", "session_ref", "turn_ref", "artifact_refs", "verification_refs",
+                "review_mode", "gate_result", "workflow_exception", "exception_reason",
+            },
             required={"role", "objective", "status"},
             label="Work round payload",
         )
@@ -601,6 +613,23 @@ def validate_ingest_envelope(envelope: dict[str, Any], expected_project_id: str 
             raise ObserveError(f"Unsupported next role: {payload['next_role']}", 422)
         if payload.get("platform") is not None and payload["platform"] not in {"codex", "claude", "cursor", "other"}:
             raise ObserveError("Work round platform is invalid", 422)
+        review_mode = payload.get("review_mode")
+        gate_result = payload.get("gate_result")
+        workflow_exception = payload.get("workflow_exception")
+        if review_mode is not None and (payload["role"] != "Reviewer" or review_mode not in REVIEW_MODES):
+            raise ObserveError("Work round review_mode is only valid for Reviewer", 422)
+        if gate_result is not None and gate_result not in GATE_RESULTS_BY_ROLE.get(payload["role"], set()):
+            raise ObserveError(f"Work round gate_result is invalid for {payload['role']}", 422)
+        if payload["role"] == "Reviewer" and gate_result is not None and review_mode is None:
+            raise ObserveError("Reviewer gate_result requires review_mode", 422)
+        if workflow_exception is not None and (
+            payload["role"] != "Executor" or workflow_exception not in WORKFLOW_EXCEPTIONS
+        ):
+            raise ObserveError("Work round workflow_exception is invalid", 422)
+        if workflow_exception is not None and not payload.get("exception_reason"):
+            raise ObserveError("Work round workflow_exception requires exception_reason", 422)
+        if payload.get("exception_reason") is not None:
+            require_text(payload, "exception_reason", maximum=2000)
         for key in ("artifact_refs", "verification_refs"):
             if payload.get(key) is not None and (
                 not isinstance(payload[key], list)
@@ -752,6 +781,11 @@ def build_work_envelope(
     session_ref: str | None = None,
     turn_ref: str | None = None,
     artifact_refs: list[str] | None = None,
+    verification_refs: list[str] | None = None,
+    review_mode: str | None = None,
+    gate_result: str | None = None,
+    workflow_exception: str | None = None,
+    exception_reason: str | None = None,
     producer: str = "harness-agent",
 ) -> dict[str, Any]:
     payload = {
@@ -766,6 +800,11 @@ def build_work_envelope(
         **({"session_ref": session_ref} if session_ref else {}),
         **({"turn_ref": turn_ref} if turn_ref else {}),
         **({"artifact_refs": artifact_refs} if artifact_refs else {}),
+        **({"verification_refs": verification_refs} if verification_refs else {}),
+        **({"review_mode": review_mode} if review_mode else {}),
+        **({"gate_result": gate_result} if gate_result else {}),
+        **({"workflow_exception": workflow_exception} if workflow_exception else {}),
+        **({"exception_reason": exception_reason} if exception_reason else {}),
     }
     envelope = {
         "schema_version": INGEST_SCHEMA_VERSION,
@@ -2698,6 +2737,283 @@ def evidence_reference_label(value: Any) -> str:
     return str(value)
 
 
+REQUIREMENT_STAGE_LABELS = {
+    "product_definition": "PM 明确需求",
+    "product_review": "产品逻辑审查",
+    "solution_design": "方案与设计",
+    "development": "开发实现",
+    "qa": "独立测试",
+    "release_review": "发布审查",
+    "release_ready": "等待发布",
+    "completed": "需求已完成",
+}
+
+
+def requirement_gates_enabled(version: Any) -> bool:
+    return version_sort_key(version) >= version_sort_key("0.20.0")
+
+
+def requirement_workflow_snapshot(
+    planned: dict[str, Any],
+    rounds: list[dict[str, Any]],
+    handoffs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Project one v0.20 requirement through deterministic, evidence-backed gates."""
+    stage = "product_definition"
+    gate_status = "pending"
+    gate_reason = "PM 需要明确用户行为与边界，再提交产品逻辑审查。"
+    current_role: str | None = "PM"
+    accepted_round_ids: list[str] = []
+    rejected: list[dict[str, Any]] = []
+
+    def reject(item: dict[str, Any], reason: str) -> None:
+        rejected.append({
+            "round_id": item.get("round_id"),
+            "role": item.get("role"),
+            "status": item.get("status"),
+            "review_mode": item.get("review_mode"),
+            "gate_result": item.get("gate_result"),
+            "sequence": item.get("derived_from_sequence"),
+            "reason": reason,
+        })
+
+    def accept(item: dict[str, Any]) -> None:
+        round_id = item.get("round_id")
+        if round_id and round_id not in accepted_round_ids:
+            accepted_round_ids.append(round_id)
+
+    def valid_active_role(item: dict[str, Any]) -> bool:
+        role = item.get("role")
+        if stage == "product_definition":
+            return role == "PM"
+        if stage == "product_review":
+            return role == "Reviewer" and item.get("review_mode") == "product_review"
+        if stage == "solution_design":
+            return role in {"Planner", "Designer"}
+        if stage == "development":
+            return role == "Executor"
+        if stage == "qa":
+            return role == "QA"
+        if stage == "release_review":
+            return role == "Reviewer" and item.get("review_mode") == "release_review"
+        return False
+
+    for item in rounds:
+        role = item.get("role")
+        status = item.get("status")
+        gate_result = item.get("gate_result")
+        review_mode = item.get("review_mode")
+
+        if status == "active":
+            technical_exception = (
+                stage == "product_definition"
+                and role == "Executor"
+                and item.get("workflow_exception") == "technical_only"
+                and bool(item.get("exception_reason"))
+            )
+            if technical_exception:
+                stage = "development"
+                current_role = "Executor"
+                gate_status = "exception"
+                gate_reason = f"纯技术修复例外：{item['exception_reason']}"
+                accept(item)
+            elif valid_active_role(item):
+                current_role = office_role(role) or role
+                accept(item)
+            else:
+                reject(item, f"{role or 'Unknown'} 不能在‘{REQUIREMENT_STAGE_LABELS[stage]}’阶段开始工作。")
+            continue
+
+        if status not in {"completed", "blocked", "verification_pending"}:
+            reject(item, f"未知工作状态 {status!r} 不能推进需求。")
+            continue
+        if status in {"blocked", "verification_pending"}:
+            if valid_active_role(item):
+                accept(item)
+                current_role = office_role(role) or role
+                gate_status = status
+                gate_reason = item.get("blocker") or item.get("summary") or "当前门禁尚未通过。"
+            else:
+                reject(item, f"{role or 'Unknown'} 不能阻塞不属于自己的‘{REQUIREMENT_STAGE_LABELS[stage]}’阶段。")
+            continue
+
+        if role == "PM" and gate_result == "ready_for_review" and stage != "product_definition":
+            accept(item)
+            stage = "product_review"
+            current_role = "Reviewer"
+            gate_status = "scope_changed"
+            gate_reason = "需求范围已变化，旧产品审查及其下游门禁失效，必须重新审查。"
+            continue
+
+        if stage == "product_definition":
+            if role == "PM" and gate_result == "ready_for_review":
+                accept(item)
+                stage = "product_review"
+                current_role = "Reviewer"
+                gate_status = "pending"
+                gate_reason = "等待 Reviewer 完成开发前产品逻辑审查。"
+                continue
+            if (
+                role == "Executor"
+                and item.get("workflow_exception") == "technical_only"
+                and item.get("exception_reason")
+                and gate_result == "delivered"
+            ):
+                if not item.get("artifact_refs") or not item.get("verification_refs"):
+                    reject(item, "纯技术修复交付仍需实现产物和自检证据。")
+                    continue
+                accept(item)
+                stage = "qa"
+                current_role = "QA"
+                gate_status = "pending"
+                gate_reason = f"纯技术修复例外已交付，等待 QA：{item['exception_reason']}"
+                continue
+            reject(item, f"{role or 'Unknown'} 不能跳过 PM 准备和产品逻辑审查。")
+            continue
+
+        if stage == "product_review":
+            if role != "Reviewer" or review_mode != "product_review":
+                reject(item, f"{role or 'Unknown'} 不能在产品审查通过前推进需求。")
+                continue
+            if gate_result == "changes_requested":
+                accept(item)
+                stage = "product_definition"
+                current_role = "PM"
+                gate_status = "changes_requested"
+                gate_reason = item.get("summary") or "产品逻辑存在阻塞问题，需要 PM 裁决。"
+                continue
+            if gate_result != "approved":
+                reject(item, "产品审查必须结构化记录 approved 或 changes_requested。")
+                continue
+            accept(item)
+            if item.get("next_role") in {"Planner", "Designer"}:
+                stage = "solution_design"
+                current_role = office_role(item.get("next_role")) or item.get("next_role")
+                gate_reason = f"产品审查已批准，等待 {item['next_role']} 完成方案。"
+            else:
+                stage = "development"
+                current_role = "Executor"
+                gate_reason = "产品逻辑审查已批准，等待开发实现。"
+            gate_status = "approved"
+            continue
+
+        if stage == "solution_design":
+            if role not in {"Planner", "Designer"}:
+                reject(item, f"{role or 'Unknown'} 不能跳过已安排的方案/设计交付。")
+                continue
+            accept(item)
+            stage = "development"
+            current_role = "Executor"
+            gate_status = "approved"
+            gate_reason = "产品逻辑与方案已确认，等待开发实现。"
+            continue
+
+        if stage == "development":
+            if role != "Executor" or gate_result != "delivered":
+                reject(item, f"{role or 'Unknown'} 不能在开发交付前推进到下一门禁。")
+                continue
+            if not item.get("artifact_refs"):
+                reject(item, "开发交付缺少实现产物引用，不能进入 QA。")
+                continue
+            if not item.get("verification_refs"):
+                reject(item, "开发交付缺少本轮自检证据，不能进入 QA。")
+                continue
+            accept(item)
+            stage = "qa"
+            current_role = "QA"
+            gate_status = "pending"
+            gate_reason = "开发已交付产物和自检证据，等待 QA 独立验收。"
+            continue
+
+        if stage == "qa":
+            if role != "QA" or gate_result not in {"passed", "failed"}:
+                reject(item, f"{role or 'Unknown'} 不能替代 QA 的 passed / failed 结论。")
+                continue
+            if not item.get("verification_refs"):
+                reject(item, "QA 结论缺少独立验证证据，不能推进门禁。")
+                continue
+            accept(item)
+            if gate_result == "failed":
+                stage = "development"
+                current_role = "Executor"
+                gate_status = "failed"
+                gate_reason = item.get("summary") or "QA 未通过，返回开发修复。"
+            elif item.get("next_role") == "Reviewer":
+                stage = "release_review"
+                current_role = "Reviewer"
+                gate_status = "pending"
+                gate_reason = "QA 已通过，高风险交付等待发布审查。"
+            else:
+                stage = "release_ready"
+                current_role = None
+                gate_status = "passed"
+                gate_reason = "产品审查、开发交付和 QA 证据完整，可以进入发布 Gate。"
+            continue
+
+        if stage == "release_review":
+            if role != "Reviewer" or review_mode != "release_review" or gate_result not in {"approved", "changes_requested"}:
+                reject(item, f"{role or 'Unknown'} 不能替代 release_review 的结构化结论。")
+                continue
+            accept(item)
+            if gate_result == "changes_requested":
+                stage = "development"
+                current_role = "Executor"
+                gate_status = "changes_requested"
+                gate_reason = item.get("summary") or "发布审查发现阻塞问题，返回开发处理。"
+            else:
+                stage = "release_ready"
+                current_role = None
+                gate_status = "approved"
+                gate_reason = "QA 与发布审查均已通过，可以进入发布 Gate。"
+            continue
+
+        reject(item, f"需求已处于‘{REQUIREMENT_STAGE_LABELS[stage]}’，该事件不会推进状态。")
+
+    plan_conflict: str | None = None
+    if planned.get("status") == "completed":
+        if stage == "release_ready":
+            stage = "completed"
+            current_role = None
+            gate_status = "completed"
+            gate_reason = "需求门禁证据完整，版本计划已确认完成。"
+        elif stage != "completed":
+            plan_conflict = f"版本清单已标记完成，但有效门禁仍停在‘{REQUIREMENT_STAGE_LABELS[stage]}’。"
+            gate_status = "plan_conflict"
+            gate_reason = f"{plan_conflict} 勾选不会推进需求。"
+
+    allowed_next_roles = {
+        "product_definition": ["PM"],
+        "product_review": ["Reviewer"],
+        "solution_design": ["Planner", "Designer"],
+        "development": ["Executor"],
+        "qa": ["QA"],
+        "release_review": ["Reviewer"],
+        "release_ready": ["Release"],
+        "completed": [],
+    }[stage]
+    return {
+        "stage": stage,
+        "stage_label": REQUIREMENT_STAGE_LABELS[stage],
+        "gate_status": gate_status,
+        "gate_reason": gate_reason,
+        "current_role": current_role,
+        "allowed_next_roles": allowed_next_roles,
+        "accepted_round_ids": accepted_round_ids,
+        "rejected_transitions": rejected,
+        "observed_handoffs": [
+            {
+                "handoff_id": item.get("handoff_id"),
+                "from_role": item.get("from_role"),
+                "to_role": item.get("to_role"),
+                "status": item.get("status"),
+                "sequence": item.get("derived_from_sequence"),
+            }
+            for item in handoffs
+        ],
+        "plan_conflict": plan_conflict,
+    }
+
+
 def current_version_snapshot(snapshot: dict[str, Any], versions: dict[str, Any]) -> dict[str, Any] | None:
     """Project the active version requirement-by-requirement from matching runtime evidence."""
     version_items = versions.get("items", [])
@@ -2733,6 +3049,18 @@ def current_version_snapshot(snapshot: dict[str, Any], versions: dict[str, Any])
             ),
             key=lambda item: item.get("derived_from_sequence", 0),
         )
+        observed_rounds = rounds
+        observed_handoffs = handoffs
+        gated_workflow = (
+            requirement_workflow_snapshot(planned, observed_rounds, observed_handoffs)
+            if requirement_gates_enabled(current.get("version"))
+            else None
+        )
+        if gated_workflow is not None:
+            accepted_round_ids = set(gated_workflow["accepted_round_ids"])
+            rounds = [item for item in observed_rounds if item.get("round_id") in accepted_round_ids]
+            # Handoffs remain observable in workflow audit but cannot advance a v0.20 gate by themselves.
+            handoffs = []
         candidate_verifications = sorted(
             (item for item in all_verifications if item.get("task_id") == requirement_id),
             key=lambda item: item.get("derived_from_sequence", 0),
@@ -2754,10 +3082,19 @@ def current_version_snapshot(snapshot: dict[str, Any], versions: dict[str, Any])
             if latest_round
             else None
         )
+        if gated_workflow is not None:
+            current_role = gated_workflow["current_role"]
         observed_status = planned.get("observed_status") or snapshot.get("tasks", {}).get(requirement_id, {}).get("status")
 
         if blocks:
             effective_status = "blocked"
+        elif gated_workflow is not None:
+            if gated_workflow["stage"] == "completed":
+                effective_status = "completed"
+            elif gated_workflow["stage"] == "product_definition" and not gated_workflow["accepted_round_ids"]:
+                effective_status = "planned"
+            else:
+                effective_status = "in_progress"
         elif planned.get("status") == "completed":
             effective_status = "completed"
         elif active_rounds or rounds or observed_status in {"active", "in_progress", "verification_pending"}:
@@ -2873,6 +3210,8 @@ def current_version_snapshot(snapshot: dict[str, Any], versions: dict[str, Any])
             next_step = f"先处理阻塞：{blocks[-1].get('summary') or blocks[-1].get('reason') or '未记录阻塞说明'}"
         elif effective_status == "completed":
             next_step = "需求已完成"
+        elif gated_workflow is not None:
+            next_step = gated_workflow["gate_reason"]
         elif active_rounds:
             next_step = active_rounds[-1].get("objective") or active_rounds[-1].get("summary") or "继续当前工作"
         elif latest_handoff and office_role(latest_handoff.get("to_role")):
@@ -2908,6 +3247,7 @@ def current_version_snapshot(snapshot: dict[str, Any], versions: dict[str, Any])
                     else None
                 ),
                 "role_path": role_path,
+                "workflow": gated_workflow,
                 "test": test_snapshot,
                 "blocks": blocks,
                 "artifacts": artifacts,
@@ -2921,7 +3261,7 @@ def current_version_snapshot(snapshot: dict[str, Any], versions: dict[str, Any])
                         "summary": item.get("summary"),
                         "sequence": item.get("derived_from_sequence"),
                     }
-                    for item in reversed(rounds)
+                    for item in reversed(observed_rounds)
                 ],
             }
         )
@@ -4494,6 +4834,11 @@ def build_parser() -> argparse.ArgumentParser:
     emit.add_argument("--to-role", choices=sorted(ROLES))
     emit.add_argument("--round", dest="round_ref")
     emit.add_argument("--artifact", dest="artifact_refs", action="append", default=[], help="Project-relative deliverable path (repeatable)")
+    emit.add_argument("--verification", dest="verification_refs", action="append", default=[], help="Verification evidence reference (repeatable)")
+    emit.add_argument("--review-mode", choices=sorted(REVIEW_MODES))
+    emit.add_argument("--gate-result", choices=sorted(set().union(*GATE_RESULTS_BY_ROLE.values())))
+    emit.add_argument("--workflow-exception", choices=sorted(WORKFLOW_EXCEPTIONS))
+    emit.add_argument("--exception-reason")
     hook_config = subparsers.add_parser("hook-config")
     hook_config.add_argument("platform", choices=("codex", "claude"), help="Agent platform to configure")
     return parser
@@ -4575,6 +4920,11 @@ def main(argv: list[str] | None = None) -> int:
                     next_role=args.next_role,
                     blocker=args.blocker,
                     artifact_refs=args.artifact_refs,
+                    verification_refs=args.verification_refs,
+                    review_mode=args.review_mode,
+                    gate_result=args.gate_result,
+                    workflow_exception=args.workflow_exception,
+                    exception_reason=args.exception_reason,
                     idempotency_key=idempotency_key,
                 )
             elif args.event_type == "decision.recorded":

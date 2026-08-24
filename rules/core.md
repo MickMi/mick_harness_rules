@@ -125,7 +125,7 @@
 ```
 发送前自检：如果本轮做了 Self-Test / Harness 加载检查但没有卡片，或卡片出现 `🧠 状态`、缺少 `📐 边界`、字段顺序不一致、多槽合并为一句，视为本轮未完成，必须重写卡片后再发送。
 
-**本地工作服务器回写**：如果本机存在 `harness observe emit`，执行型任务在开始实质工作时 best-effort 发送 `work.round_started`，交付回合发送同一 `--ref` 的 `work.round_completed`；角色使用本轮真实职责，`--requirement` 使用 plan 中可定位的 task id，完成事件只写目标、工作摘要、阻塞和下一角色。若本轮产生了用户需要阅读的文档、代码或报告，使用可重复的 `--artifact <项目相对路径>` 回写产物引用，只写路径不写文件正文。发生关键取舍或角色交接时分别发送 `decision.recorded` / `handoff.created`。禁止把 Prompt、聊天全文、密钥、命令参数、环境变量或完整日志放入事件；回写失败不得阻塞用户任务，也不得因此省略回合卡片。
+**本地工作服务器回写**：如果本机存在 `harness observe emit`，执行型任务在开始实质工作时 best-effort 发送 `work.round_started`，交付回合发送同一 `--ref` 的 `work.round_completed`；角色使用本轮真实职责，`--requirement` 使用 plan 中可定位的 task id。需求门禁完成事件必须结构化：PM 用 `--gate-result ready_for_review`；Reviewer 同时写 `--review-mode product_review|release_review` 与 `--gate-result approved|changes_requested`；Executor 用 `--gate-result delivered` 并同时附 `--artifact` 和 `--verification`；QA 用 `--gate-result passed|failed` 并附独立 `--verification`。纯技术例外必须额外写 `--workflow-exception technical_only --exception-reason <原因>`。发生关键取舍或角色交接时分别发送 `decision.recorded` / `handoff.created`。事件只写目标、摘要、阻塞、下一角色和引用路径；禁止放入 Prompt、聊天全文、密钥、命令参数、环境变量或完整日志。回写失败不得阻塞用户任务，也不得因此省略回合卡片。
 
 **可追踪 Markdown 阶段**：当本轮向 `plan.md`、版本记录、研究报告等持续演进的 Markdown 追加一个已进入版本计划、需要用户日后回看的新阶段时，该阶段的 H2/H3 标题使用 `## vX.Y.Z · YYYY-MM-DD · <用户可理解的阶段标题>`（按文档层级可改为 `###`）。版本必须来自真实版本计划，日期必须是实际沟通或决策日期，标题描述用户目标或结果；禁止编造版本、用文件修改时间代替沟通日期，或依靠正文中散落的日期让工作台猜阶段。旧文档无需为本轮交付自动重写。
 

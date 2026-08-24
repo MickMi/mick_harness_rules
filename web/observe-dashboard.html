@@ -221,8 +221,9 @@
     .requirement-command-head h2 { margin: 0; font-size: 20px; }
     .requirement-command-summary { color: var(--muted); font-size: 12px; white-space: nowrap; }
     .requirement-card-list { display: grid; gap: 10px; margin-top: 14px; }
-    .current-requirement-card { width: 100%; display: grid; grid-template-columns: minmax(210px, .85fr) minmax(180px, .7fr) minmax(220px, 1fr); gap: 18px; align-items: start; border: 1px solid var(--border); border-left: 4px solid var(--border); border-radius: 12px; background: var(--surface); color: inherit; padding: 15px 16px; text-align: left; cursor: pointer; }
-    .current-requirement-card:hover, .current-requirement-card:focus-visible { border-color: var(--accent); }
+    .current-requirement-card { width: 100%; min-width: 0; overflow: visible; border: 1px solid var(--border); border-left: 4px solid var(--border); border-radius: 12px; background: var(--surface); color: inherit; }
+    .requirement-summary-button { width: 100%; min-width: 0; display: grid; grid-template-columns: minmax(210px, .85fr) minmax(230px, .8fr) minmax(220px, 1fr); gap: 18px; align-items: start; border: 0; border-radius: inherit; background: transparent; color: inherit; padding: 15px 16px; text-align: left; cursor: pointer; }
+    .requirement-summary-button:hover, .requirement-summary-button:focus-visible { background: color-mix(in srgb, var(--accent-soft) 48%, transparent); }
     .current-requirement-card[data-selected="true"] { border-left-color: var(--accent); background: var(--accent-soft); }
     .current-requirement-card[data-status="completed"] { border-left-color: var(--success); }
     .current-requirement-card[data-status="blocked"] { border-left-color: var(--danger); }
@@ -240,9 +241,30 @@
     .requirement-role-node[data-status="active"] { background: var(--accent); color: white; }
     .requirement-role-arrow { color: var(--muted); font-size: 11px; }
     .requirement-work { margin: 10px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+    .requirement-squad { display: flex; flex-wrap: wrap; gap: 5px 9px; align-items: end; }
+    .mini-role { display: grid; grid-template-columns: 30px; justify-items: center; gap: 3px; color: var(--muted); font-size: 9px; font-weight: 650; }
+    .mini-role-avatar { position: relative; width: 28px; height: 25px; border-radius: 52% 48% 45% 42% / 56% 54% 44% 42%; background: var(--mini-jelly, #7bd08c); opacity: .34; transform-origin: 50% 100%; }
+    .mini-role-avatar::before, .mini-role-avatar::after { content: ""; position: absolute; top: 10px; width: 3px; height: 4px; border-radius: 50%; background: #17191d; }
+    .mini-role-avatar::before { left: 8px; }
+    .mini-role-avatar::after { right: 8px; }
+    .mini-role-task { position: absolute; right: -4px; bottom: 1px; width: 10px; height: 13px; border: 2px solid var(--mini-jelly, #7bd08c); border-radius: 3px; background: var(--surface); }
+    .mini-role[data-role="PM"] { --mini-jelly: #58a7f7; }
+    .mini-role[data-role="Reviewer"] { --mini-jelly: #9e83e8; }
+    .mini-role[data-role="Designer"] { --mini-jelly: #ffa266; }
+    .mini-role[data-role="Executor"] { --mini-jelly: #7bd08c; }
+    .mini-role[data-role="QA"] { --mini-jelly: #eb84b9; }
+    .mini-role[data-status="completed"] .mini-role-avatar { opacity: .72; }
+    .mini-role[data-status="waiting"] .mini-role-avatar { opacity: 1; box-shadow: 0 0 0 3px color-mix(in srgb, var(--mini-jelly) 23%, transparent); }
+    .mini-role[data-status="active"] .mini-role-avatar { opacity: 1; animation: mini-jelly-active 1.1s ease-in-out infinite; }
+    .mini-role-arrow { align-self: center; margin-bottom: 14px; color: var(--muted); font-size: 10px; }
+    .mini-release { align-self: center; margin-bottom: 10px; border-radius: 999px; background: var(--surface-2); padding: 4px 7px; color: var(--muted); font-size: 9px; font-weight: 700; }
+    .mini-release[data-status="ready"], .mini-release[data-status="completed"] { background: var(--success-soft); color: var(--success); }
+    @keyframes mini-jelly-active { 0%, 100% { transform: translateY(0) scale(1); } 45% { transform: translateY(2px) scale(1.08, .92); } 70% { transform: translateY(-3px) scale(.96, 1.06); } }
     .requirement-quality { min-width: 0; display: grid; gap: 8px; }
-    .requirement-test-scope, .requirement-evidence, .requirement-next { margin: 0; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
-    .requirement-test-scope strong, .requirement-evidence strong, .requirement-next strong { color: var(--muted); font-size: 10px; letter-spacing: .04em; text-transform: uppercase; }
+    .requirement-test-scope, .requirement-evidence, .requirement-next, .requirement-gate { margin: 0; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+    .requirement-test-scope strong, .requirement-evidence strong, .requirement-next strong, .requirement-gate strong { color: var(--muted); font-size: 10px; letter-spacing: .04em; text-transform: uppercase; }
+    .requirement-gate { border-left: 2px solid var(--accent); padding-left: 8px; }
+    .requirement-rejected { color: var(--warning); }
     .requirement-block { color: var(--danger); font-size: 12px; }
     .project-purpose { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 20px; margin: 0; padding: 18px 4px; border-bottom: 1px solid var(--border); }
     .project-purpose-label { color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .04em; }
@@ -250,6 +272,13 @@
     .project-purpose-source { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; }
     .office-flow-rail { display: flex; align-items: center; gap: 10px; border-left: 3px solid var(--accent); background: var(--surface-soft); padding: 10px 13px; }
     .office-flow-rail[data-kind="suggested"] { border-left-style: dashed; }
+    .task-office { width: 100%; min-width: 0; max-width: 100%; overflow: hidden; border-top: 1px solid var(--border); background: color-mix(in srgb, var(--surface-soft) 72%, transparent); padding: 16px; }
+    .task-office-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: start; }
+    .task-office-title { margin: 0; font-size: 16px; }
+    .task-office-copy { margin: 4px 0 0; color: var(--muted); font-size: 11px; }
+    .task-office-scene { min-width: 680px; display: grid; grid-template-columns: repeat(5, minmax(112px, 1fr)); gap: 8px; padding: 28px 4px 8px; }
+    .task-office .role-office-scroll { width: 100%; min-width: 0; max-width: 100%; margin: 0; padding: 0; overflow-x: auto; }
+    .task-office-note { margin-top: 8px; color: var(--muted); font-size: 10px; }
     .role-drawer-backdrop { position: fixed; inset: 0; background: color-mix(in srgb, var(--code-bg) 40%, transparent); z-index: 90; }
     .role-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 94vw); background: var(--surface); border-left: 1px solid var(--border); z-index: 91; overflow-y: auto; padding: var(--space-6); }
     .role-drawer-close { float: right; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: var(--radius-sm); padding: 4px 12px; cursor: pointer; }
@@ -568,7 +597,8 @@
       .detail { position: static; }
       .overview-hero-grid { grid-template-columns: 1fr; }
       .overview-command { grid-template-columns: repeat(3, minmax(0, 1fr)); border-left: 0; border-top: 1px solid var(--border); }
-      .current-requirement-card { grid-template-columns: minmax(190px, .8fr) minmax(180px, .7fr) minmax(220px, 1fr); }
+      .requirement-summary-button { grid-template-columns: minmax(190px, .8fr) minmax(210px, .8fr) minmax(220px, 1fr); }
+      .task-office-head { grid-template-columns: 1fr; }
       .office-head { grid-template-columns: 1fr; }
       .office-flow-rail { justify-self: start; }
       .workbench-secondary { grid-template-columns: 1fr; }
@@ -587,7 +617,7 @@
       .project-owner { grid-column: 1; grid-row: 3; }
       .project-progress { grid-column: 2; grid-row: 3; min-width: 100px; }
       .project-purpose { grid-template-columns: 1fr; gap: 7px; }
-      .current-requirement-card { grid-template-columns: 1fr 1fr; }
+      .requirement-summary-button { grid-template-columns: 1fr 1fr; }
       .requirement-quality { grid-column: 1 / -1; border-top: 1px solid var(--border); padding-top: 10px; }
     }
     @media (max-width: 560px) {
@@ -607,7 +637,7 @@
       .overview-status-strip { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .requirement-command-head { display: grid; grid-template-columns: 1fr; gap: 3px; }
       .requirement-command-summary { white-space: normal; }
-      .current-requirement-card { grid-template-columns: 1fr; gap: 12px; }
+      .requirement-summary-button { grid-template-columns: 1fr; gap: 12px; }
       .requirement-quality { grid-column: auto; }
       .flow-line, .office-flow-rail { flex-wrap: wrap; }
       .office-flow-rail { width: 100%; }
@@ -2161,6 +2191,40 @@
         return jelly;
       }
 
+      const requirementProcessRoles = ["PM", "Reviewer", "Executor", "QA"];
+      const requirementOfficeRoleOrder = ["PM", "Reviewer", "Designer", "Executor", "QA"];
+
+      function requirementRoleStatus(requirement, roleId) {
+        const progress = (requirement?.role_path || []).find(item => item.role === roleId);
+        if (requirement?.current_work?.role === roleId) return "active";
+        if (requirement?.current_role === roleId) return progress?.status === "active" ? "active" : "waiting";
+        return progress ? (progress.status === "active" ? "active" : "completed") : "idle";
+      }
+
+      function renderRequirementSquad(requirement) {
+        const squad = el("span", "requirement-squad");
+        const actualRoles = new Set((requirement?.role_path || []).map(item => item.role));
+        const roles = [...requirementProcessRoles];
+        if (actualRoles.has("Designer") || requirement?.current_role === "Designer") roles.splice(2, 0, "Designer");
+        roles.forEach((roleId, index) => {
+          if (index) squad.append(el("span", "mini-role-arrow", "→"));
+          const role = el("span", "mini-role");
+          role.dataset.role = roleId;
+          role.dataset.status = requirementRoleStatus(requirement, roleId);
+          const avatar = el("span", "mini-role-avatar");
+          avatar.append(el("span", "mini-role-task"));
+          role.append(avatar, el("span", "", roleLabel(roleId)));
+          squad.append(role);
+        });
+        squad.append(el("span", "mini-role-arrow", "→"));
+        const release = el("span", "mini-release", requirement?.effective_status === "completed" ? "已完成" : "待发布");
+        release.dataset.status = requirement?.effective_status === "completed"
+          ? "completed"
+          : ["release_ready", "release_review"].includes(requirement?.workflow?.stage) ? "ready" : "pending";
+        squad.append(release);
+        return squad;
+      }
+
       function currentVersion() {
         const versions = state.workspace?.versions?.items || [];
         return versions.find(item => item.status === "in_progress")
@@ -2201,13 +2265,16 @@
           artifacts: item.artifact_refs || [],
           verification_refs: item.verification_refs || []
         }));
-        const currentTransition = state.workspace?.organization?.current_transition;
+        const scopedRequirementId = role.scope_requirement_id || null;
+        const currentTransition = role.scope_transition || state.workspace?.organization?.current_transition;
         if (role.status === "waiting" && currentTransition?.to_role === role.role_id) {
           card.append(el("p", "section-help", `${roleLabel(currentTransition.from_role)} 已完成上一段工作，正在等待 ${role.label} 接手。`));
         } else if (rounds.length) {
           card.append(el("p", "section-help", rounds[0].summary || rounds[0].objective));
         } else if (role.participation === "missing_independent_validation") {
           card.append(el("p", "section-help error", "开发或设计已交付，但账本中没有 QA 的独立验收回合。开发自验不等于 QA 参与。"));
+        } else if (role.participation === "expected") {
+          card.append(el("p", "section-help", role.latest_summary || "当前门禁正在等待这个角色接手。"));
         } else {
           card.append(el("p", "section-help", "这个角色尚未参与当前项目的已回写工作。"));
         }
@@ -2219,6 +2286,7 @@
         });
         Object.values(state.snapshot.decisions || {}).forEach(item => {
           const id = item.requirement_id || item.task_id;
+          if (scopedRequirementId && id !== scopedRequirementId) return;
           if (id && officeRoleId(item.role) === role.role_id && !requirementMap.has(id)) requirementMap.set(id, item.title);
         });
         const requirementIds = new Set(requirementMap.keys());
@@ -2265,7 +2333,9 @@
         const delivery = el("div", "detail-section");
         delivery.append(el("h3", "", "交付物"));
         const materials = el("div", "material-list");
+        const scopedArtifactPaths = new Set(rounds.flatMap(item => item.artifact_refs || []));
         const artifacts = (state.workspace?.artifacts || []).filter(item => {
+          if (scopedRequirementId) return item.requirement_id === scopedRequirementId || scopedArtifactPaths.has(item.path);
           return officeRoleId(item.role) === role.role_id || (item.requirement_id && requirementIds.has(item.requirement_id));
         });
         artifacts.forEach(item => {
@@ -2311,14 +2381,46 @@
           || versionRequirements.find(item => item.effective_status === "in_progress" || item.effective_status === "blocked")
           || versionRequirements[0]
           || null;
+        const acceptedRolePath = selectedRequirement?.role_path || [];
+        const acceptedLastRole = acceptedRolePath[acceptedRolePath.length - 1]?.role || null;
+        const workflowTransitions = selectedRequirement?.workflow && selectedRequirement.current_role && acceptedLastRole && acceptedLastRole !== selectedRequirement.current_role
+          ? [{
+              kind: selectedRequirement.current_role === "QA" ? "quality_gate" : "requirement_gate",
+              from_role: acceptedLastRole,
+              to_role: selectedRequirement.current_role,
+              status: "pending",
+              summary: selectedRequirement.workflow.gate_reason,
+              requirement_id: selectedRequirement.requirement_id,
+            }]
+          : [];
         const selectedTransitions = selectedRequirement?.effective_status === "completed" ? [] :
-          (organization.transitions || []).filter(item => item.requirement_id === selectedRequirement?.requirement_id);
+          selectedRequirement?.workflow
+            ? workflowTransitions
+            : (organization.transitions || []).filter(item => item.requirement_id === selectedRequirement?.requirement_id);
         const transition = selectedTransitions[selectedTransitions.length - 1] || null;
         const currentRole = selectedRequirement?.current_role || null;
         const blockCount = versionRequirements.reduce((total, item) => total + (item.blocks || []).length, 0);
         const nextStep = selectedRequirement?.next_step || "等待 PM 规划";
         const completionRatio = version.total ? Math.round(completed / version.total * 100) : 0;
         const requirementStatusNames = { completed: "已完成", in_progress: "进行中", planned: "待开始", blocked: "已阻塞", skipped: "已移出" };
+        const requirementRoleMap = new Map((selectedRequirement?.role_path || []).map(item => [item.role, item]));
+        const officeRoles = (organization.roles || []).map(role => {
+          if (!selectedRequirement) return role;
+          const progress = requirementRoleMap.get(role.role_id);
+          const isCurrentRole = role.role_id === currentRole;
+          const history = (role.history || []).filter(item => item.requirement_id === selectedRequirement.requirement_id);
+          return {
+            ...role,
+            status: requirementRoleStatus(selectedRequirement, role.role_id),
+            participation: progress ? "recorded" : isCurrentRole ? "expected" : "not_recorded",
+            latest_summary: progress?.summary || progress?.objective || (isCurrentRole ? selectedRequirement.workflow?.gate_reason : null),
+            latest_requirement_id: progress || isCurrentRole ? selectedRequirement.requirement_id : null,
+            scope_requirement_id: selectedRequirement.requirement_id,
+            scope_transition: transition,
+            history,
+            work_rounds: (role.work_rounds || []).filter(item => (item.requirement_id || item.task_id) === selectedRequirement.requirement_id),
+          };
+        }).sort((left, right) => requirementOfficeRoleOrder.indexOf(left.role_id) - requirementOfficeRoleOrder.indexOf(right.role_id));
 
         const hero = el("section", "project-overview-hero");
         const heroGrid = el("div", "overview-hero-grid");
@@ -2355,18 +2457,20 @@
         const requirementsCopy = el("div", "");
         requirementsCopy.append(
           el("h2", "", "当前版本需求"),
-          el("p", "section-help", "每条需求独立显示角色路径、当前工作、测试范围、证据和下一步；点击后联动角色办公室。")
+          el("p", "section-help", "每条需求都有自己的任务小队；点击后在卡片内展开角色办公室、交付历史和门禁状态。")
         );
         requirementsHead.append(requirementsCopy, el("span", "requirement-command-summary", version.total ? `${completed}/${version.total} 已完成` : "尚无需求"));
         requirementsSection.append(requirementsHead);
         const requirementList = el("div", "requirement-card-list");
         versionRequirements.forEach(requirement => {
-          const card = el("button", "current-requirement-card");
-          card.type = "button";
+          const card = el("article", "current-requirement-card");
           card.dataset.status = requirement.effective_status;
           card.dataset.selected = String(requirement.requirement_id === selectedRequirement?.requirement_id);
-          card.setAttribute("aria-pressed", card.dataset.selected);
-          card.setAttribute("aria-label", `查看需求 ${requirement.requirement_id}：${requirement.title}`);
+          const summaryButton = el("button", "requirement-summary-button");
+          summaryButton.type = "button";
+          summaryButton.setAttribute("aria-pressed", card.dataset.selected);
+          summaryButton.setAttribute("aria-expanded", card.dataset.selected);
+          summaryButton.setAttribute("aria-label", `查看需求 ${requirement.requirement_id}：${requirement.title}`);
 
           const identity = el("span", "requirement-identity");
           identity.append(
@@ -2378,8 +2482,9 @@
           identity.append(requirementState);
 
           const rolePath = el("span", "requirement-role-path");
-          rolePath.append(el("span", "requirement-section-label", "实际角色路径"));
-          const roleList = el("span", "requirement-role-list");
+          rolePath.append(el("span", "requirement-section-label", "任务小队"));
+          rolePath.append(renderRequirementSquad(requirement));
+          const roleList = el("span", "requirement-role-list sr-only");
           (requirement.role_path || []).forEach((item, index) => {
             if (index) roleList.append(el("span", "requirement-role-arrow", "→"));
             const node = el("span", "requirement-role-node", roleLabel(item.role));
@@ -2394,6 +2499,24 @@
             : "当前没有进行中的角色回合"));
 
           const quality = el("span", "requirement-quality");
+          const workflow = requirement.workflow;
+          if (workflow) {
+            const gateLine = el("span", "requirement-gate");
+            gateLine.append(
+              el("strong", "", "当前门禁"),
+              document.createTextNode(` · ${workflow.stage_label} · ${workflow.gate_reason}`),
+            );
+            quality.append(gateLine);
+            const rejectedTransitions = workflow.rejected_transitions || [];
+            if (rejectedTransitions.length) {
+              const latestRejected = rejectedTransitions[rejectedTransitions.length - 1];
+              quality.append(el(
+                "span",
+                "requirement-rejected",
+                `${rejectedTransitions.length} 条角色事件未推进有效阶段 · ${latestRejected.reason}`,
+              ));
+            }
+          }
           const test = requirement.test || {};
           const testScope = test.status === "not_started" ? (test.message || "尚未进入独立测试") : (test.scope || "测试范围未记录");
           const scopeLine = el("span", "requirement-test-scope");
@@ -2415,13 +2538,72 @@
           nextLine.append(el("strong", "", "下一步"), document.createTextNode(` · ${requirement.next_step || "未记录"}`));
           quality.append(nextLine);
 
-          card.append(identity, rolePath, quality);
-          card.addEventListener("click", () => {
+          summaryButton.append(identity, rolePath, quality);
+          summaryButton.addEventListener("click", () => {
             state.taskId = requirement.requirement_id;
             state.selectedRole = null;
             writeUrlState();
             render();
           });
+          card.append(summaryButton);
+
+          if (requirement.requirement_id === selectedRequirement?.requirement_id) {
+            const taskOffice = el("div", "task-office");
+            taskOffice.dataset.requirement = requirement.requirement_id;
+            const taskOfficeHead = el("div", "task-office-head");
+            const taskOfficeCopy = el("div", "");
+            taskOfficeCopy.append(
+              el("h3", "task-office-title", `${requirement.requirement_id} · 任务办公室`),
+              el("p", "task-office-copy", "主流程为 PM → Review → 开发 → 测试 → 待发布；Designer 仅在实际参与时插入。"),
+            );
+            taskOfficeHead.append(taskOfficeCopy);
+            if (transition) {
+              const current = el("div", "flow-line office-flow-rail");
+              current.dataset.kind = transition.kind;
+              const gateLabel = transition.kind === "quality_gate" ? "质量门禁" : transition.kind === "requirement_gate" ? "需求门禁" : "流程流转";
+              current.append(
+                el("span", "flow-kind", gateLabel),
+                el("span", "flow-role", roleLabel(transition.from_role)),
+                el("span", "flow-arrow"),
+                el("span", "flow-role", roleLabel(transition.to_role)),
+                el("span", "flow-kind", transition.kind === "quality_gate" ? "独立验收" : "等待接手"),
+              );
+              taskOfficeHead.append(current);
+            } else {
+              taskOfficeHead.append(el("div", "muted", requirement.effective_status === "completed" ? "这支任务小队已经完成交付。" : "当前没有进行中的任务流转。"));
+            }
+            taskOffice.append(taskOfficeHead);
+
+            const officeScroll = el("div", "role-office-scroll");
+            const taskOfficeScene = el("div", "task-office-scene");
+            officeRoles.forEach(role => {
+              const roleButton = el("button", "role-station");
+              roleButton.type = "button";
+              roleButton.dataset.role = role.role_id;
+              roleButton.dataset.status = role.status;
+              if (transition?.from_role === role.role_id) roleButton.dataset.flow = "source";
+              if (transition?.to_role === role.role_id) roleButton.dataset.flow = "target";
+              roleButton.setAttribute("aria-pressed", String(state.selectedRole === role.role_id));
+              roleButton.setAttribute("aria-label", `${role.label}，${officeStatusLabel(role.status)}`);
+              const hover = el("span", "role-hover-card");
+              hover.append(el("strong", "", `${role.label} · ${officeStatusLabel(role.status)}`));
+              hover.append(el("span", "", role.latest_summary || "尚未参与这条需求"));
+              const visual = el("span", "role-visual");
+              visual.append(renderRoleJelly(role));
+              const meta = el("span", "role-card-meta");
+              meta.append(el("strong", "role-name", role.status === "active" ? `${role.label} · 工作中` : role.label));
+              roleButton.append(hover, visual, meta);
+              roleButton.addEventListener("click", () => {
+                state.selectedRole = state.selectedRole === role.role_id ? null : role.role_id;
+                writeUrlState();
+                render();
+              });
+              taskOfficeScene.append(roleButton);
+            });
+            officeScroll.append(taskOfficeScene);
+            taskOffice.append(officeScroll, el("p", "task-office-note", "点击角色查看他在这条需求中的历史任务、交付物和结论。"));
+            card.append(taskOffice);
+          }
           requirementList.append(card);
         });
         if (!requirementList.childElementCount) requirementList.append(el("div", "empty", "当前版本尚未分配需求。"));
@@ -2433,93 +2615,6 @@
         purposeBody.append(el("p", "project-purpose-copy", project.goal || "PM 尚未建立稳定项目目标。"));
         purposeBody.append(el("span", "project-purpose-source", project.source ? `来源：${project.source}` : "尚未登记长期目标来源"));
         purpose.append(purposeBody); root.append(purpose);
-
-        const requirementRoleMap = new Map((selectedRequirement?.role_path || []).map(item => [item.role, item]));
-        const officeRoles = (organization.roles || []).map(role => {
-          if (!selectedRequirement) return role;
-          const progress = requirementRoleMap.get(role.role_id);
-          const history = (role.history || []).filter(item => item.requirement_id === selectedRequirement.requirement_id);
-          return {
-            ...role,
-            status: progress?.status === "active" ? "active" : progress?.status === "waiting" ? "waiting" : progress ? "completed" : "idle",
-            participation: progress ? "recorded" : "not_recorded",
-            latest_summary: progress?.summary || progress?.objective || null,
-            latest_requirement_id: progress ? selectedRequirement.requirement_id : null,
-            history,
-            work_rounds: (role.work_rounds || []).filter(item => (item.requirement_id || item.task_id) === selectedRequirement.requirement_id),
-          };
-        });
-
-        const office = el("section", "section-card office-shell");
-        const officeHead = el("div", "office-head");
-        const officeCopy = el("div", "");
-        officeCopy.append(
-          el("h2", "", "角色办公室"),
-          el("p", "section-help", selectedRequirement
-            ? `正在查看 ${selectedRequirement.requirement_id} 的实际参与；未参与角色保持静默。`
-            : "选择一条需求后查看实际参与角色。")
-        );
-        officeHead.append(officeCopy);
-        if (transition) {
-          const current = el("div", "flow-line office-flow-rail");
-          current.dataset.kind = transition.kind;
-          const fromRole = el("span", "flow-role", roleLabel(transition.from_role));
-          const toRole = el("span", "flow-role", roleLabel(transition.to_role));
-          current.append(
-            el("span", "flow-kind", transition.kind === "handoff" ? "正在交接" : transition.kind === "quality_gate" ? "质量门禁" : "建议下一步"),
-            fromRole,
-            el("span", "flow-arrow"),
-            toRole,
-            el("span", "flow-kind", transition.kind === "handoff" ? "等待接手" : transition.kind === "quality_gate" ? "独立验收" : "建议接手")
-          );
-          officeHead.append(current);
-        } else {
-          officeHead.append(el("div", "muted", "当前没有角色流转。"));
-        }
-        office.append(officeHead);
-
-        const officeScroll = el("div", "role-office-scroll");
-        const roleList = el("div", "role-office-scene");
-        officeRoles.forEach(role => {
-          const button = el("button", "role-station");
-          button.type = "button";
-          button.dataset.role = role.role_id;
-          button.dataset.status = role.status;
-          if (transition?.from_role === role.role_id) button.dataset.flow = "source";
-          if (transition?.to_role === role.role_id) button.dataset.flow = "target";
-          button.setAttribute("aria-pressed", String(state.selectedRole === role.role_id));
-          button.setAttribute("aria-label", `${role.label}，${officeStatusLabel(role.status)}`);
-          const hover = el("span", "role-hover-card");
-          hover.append(el("strong", "", `${role.label} · ${officeStatusLabel(role.status)}`));
-          hover.append(el("span", "", role.latest_summary || (role.participation === "missing_independent_validation" ? "尚无 QA 独立验收记录" : "尚无已回写任务")));
-          const visual = el("span", "role-visual");
-          visual.append(renderRoleJelly(role));
-          const meta = el("span", "role-card-meta");
-          const displayName = role.status === "active" ? `${role.label} · 工作中` : role.label;
-          meta.append(el("strong", "role-name", displayName));
-          button.append(hover, visual, meta);
-          button.addEventListener("click", () => { state.selectedRole = state.selectedRole === role.role_id ? null : role.role_id; writeUrlState(); render(); });
-          roleList.append(button);
-        });
-        officeScroll.append(roleList); office.append(officeScroll);
-
-        const trail = el("div", "transition-trail");
-        const seenTransitions = new Set();
-        const recentTransitions = selectedTransitions.slice().reverse().filter(item => {
-          const key = `${item.from_role}:${item.to_role}:${item.kind}`;
-          if (seenTransitions.has(key)) return false;
-          seenTransitions.add(key);
-          return true;
-        }).slice(0, 5).reverse();
-        recentTransitions.forEach(item => {
-          const kindLabel = item.kind === "handoff" ? "已交接" : item.kind === "quality_gate" ? "质量门禁" : "建议";
-          const pill = el("span", "transition-pill", `${roleLabel(item.from_role)} → ${roleLabel(item.to_role)} · ${kindLabel}`);
-          pill.dataset.current = String(item.transition_id === transition?.transition_id);
-          trail.append(pill);
-        });
-        if (!trail.childElementCount) trail.append(el("span", "muted", "角色开始工作后，流转会出现在这里。"));
-        office.append(trail);
-        root.append(office);
 
         const attention = el("section", "section-card");
         attention.append(el("h2", "", "需要你处理"));

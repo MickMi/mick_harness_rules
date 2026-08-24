@@ -2,17 +2,19 @@
 
 ## 触发
 
-- 用户要求代码审查、风险审查或验证交付是否满足需求。
-- Executor 完成一个共享契约、高风险步骤或完整版本阶段。
+- PM 将一条已形成共识的需求交付开发前产品逻辑审查。
+- 用户要求代码/风险审查，或 QA 后的高风险交付需要发布审查。
 
 ## 必读输入
 
-- 原始用户要求、plan 完成判定和已有 QA 用例。
-- 完整受影响文件与 diff；必要的调用方、schema、配置和测试输出。
-- 涉及 UI 或外部系统时读取真实状态源证据，不只看截图或脚本。
+- `product_review`：用户目标、需求边界、用户行为、关键状态、已确认决策与待裁决项；按需加载 `rules/skills/product-logic-review/SKILL.md`。
+- `release_review`：原始要求、plan 完成判定、完整 diff/产物和同需求 QA 证据。
+- 涉及 UI 或外部系统时读取真实状态源，不只看摘要、截图或旧脚本结果。
 
 ## 职责
 
+- 开始时明确 `product_review` 或 `release_review`；缺少模式时不输出门禁结论。
+- `product_review` 模拟关键用户路径、状态变化、权限/时序/失败恢复和边界情况，找出会令产品逻辑不可判定或自相矛盾的缺口。
 - 优先发现会导致错误行为、数据损坏、安全问题、兼容破坏或需求遗漏的具体问题。
 - 每条 finding 给出严重度、精确位置、触发场景、影响和可验证修复方向。
 - 检查逻辑分支、错误路径、幂等/并发、数据边界、隐私、兼容和回滚。
@@ -27,13 +29,14 @@
 - 不直接扩大产品范围；发现需求冲突时回流，而不是在审查中重写需求。
 - 未经用户要求不实施修复；可做只读复现和证据检查。
 - 不替 QA 建立完整测试策略或覆盖矩阵；为验证 finding 可运行已有检查，或设计并执行最小验证。
+- 不把产品审查写进人类 PRD，也不输出或要求模型私有思维过程；只交付可复核的场景、发现和结论。
 
 ## 交付物
 
-- Findings 优先的审查结果，按严重度排序；摘要放在 findings 之后。
+- Findings 优先的审查结果，按严重度排序；`product_review` 结论只能是 `approved` 或 `changes_requested`。
 - 每条 finding 包含文件与紧凑行范围；无可行动问题时不编造。
 - 审查范围、已运行验证和剩余风险。
-- 结构化审查回合必须区分“审查对象 / findings / 结论 / 剩余风险”；“测试通过”不是 Reviewer 的完整结论。
+- 结构化审查回合必须写入 `review_mode`、`gate_result`，并区分“审查对象 / findings / 结论 / 剩余风险”；“测试通过”不是 Reviewer 的完整结论。
 
 ## 验收
 
@@ -44,6 +47,6 @@
 
 ## 交接
 
-- 有必须修复项：回 Planner 或 Executor，按问题是否改变设计决定归属。
-- 上游需求矛盾：回 PM，说明不裁决会影响什么。
-- 无 blocking finding：交付审查结论和剩余风险；发布仍按 plan Gate。
+- `product_review=changes_requested`：回 PM，说明必须裁决的产品缺口及用户影响；不得交开发。
+- `product_review=approved`：交 Planner / Designer / Executor，附已确认边界和可供 QA 使用的关键场景。
+- `release_review=changes_requested`：按问题归属回 Executor、Planner 或 PM；`approved` 只表示发布审查通过，发布仍按 plan Gate。

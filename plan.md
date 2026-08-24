@@ -1,4 +1,4 @@
-> 🧭 状态：v0.19.0 已发布 | 进度 177/177 | 当前归属：Release（交付完成）| 最近决策：发布代码、本机安装、唯一 6425 服务、远端 main 与 annotated v0.19.0 标签保持一致
+> 🧭 状态：v0.20.0 发布执行中 | 进度 190/193 | 当前归属：Release | 最近决策：版本事实与最终 Release Gate 已通过，进入提交、合并和部署
 
 # Plan: Company Runtime V0 → Portfolio V0.2
 
@@ -2115,3 +2115,115 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 
 - 任一 Release Gate 失败，或发现无法解释的文件、私有 Brain 数据、密钥、版本不一致时，停止在打标签之前。
 - 合并后本机部署失败时不推送标签；远端推送失败时保留本地提交和标签并明确报告真实状态。
+
+## v0.20.0 · 2026-08-22 · 需求级角色门禁
+
+### 用户目标
+
+- 每条需求拥有独立、可解释的执行链，不再让一次 Plan 或一条自由文本交接把整个版本直接推进到测试或 Reviewer。
+- 产品开发前由 Reviewer 做产品逻辑审查：模拟用户路径、状态变化和边界情况；有阻塞问题时退回 PM，批准后才允许进入开发。
+- 开发完成后必须有独立 QA 证据才能进入发布准备；高风险交付可在 QA 后再次触发 Reviewer 的发布审查。
+- 工作台区分“Agent 声称做了什么”和“门禁认可的有效阶段”，非法跳转保留审计记录但不推进需求状态。
+
+### 产品与流程边界
+
+- 主路径为 `PM → Reviewer(product_review) → Executor → QA → Release`；复杂设计或技术方案可在产品审查后插入 Planner / Designer。
+- Reviewer 是一个角色、两种明确模式：开发前 `product_review` 必选，QA 后 `release_review` 仅在高风险或用户要求时启用；两者不能靠摘要文本猜测。
+- 纯技术修复在不改变产品行为且有明确复现证据时，可记录受控例外 `Executor → QA → Release`；例外必须结构化声明并保留原因。
+- 版本允许多条需求处于不同阶段；版本总进度不代表某个统一角色阶段，角色办公室按选中需求展示有效链路。
+- 旧事件继续可读；未携带 v0.20 门禁字段的历史事件不反向伪造产品审查结论。
+- Skill 只提供 Reviewer 的产品逻辑审查方法，不接管 Harness 权限、调度、完成定义，也不把审查附件混入面向人类的 PRD。
+
+### 实施步骤
+
+- [x] 178. [失败契约] 固定结构化审查模式、门禁结果、非法跳转、逐需求状态与工作台解释性 UI；保存 132 项发布基线。
+- [x] 179. [产品逻辑 Skill] 新增 `product-logic-review`，提供按风险缩放的用户路径模拟、边界检查、发现分级和批准/退回合同。
+- [x] 180. [事件契约] 扩展工作回合的结构化 `review_mode`、`gate_result` 与受控例外字段，保持旧事件兼容并拒绝非法组合。
+- [x] 181. [需求状态机] 用确定性投影计算每条需求的有效阶段、允许下一角色、门禁原因和被拒绝的跳转；自由文本只作展示，不推进状态。
+- [x] 182. [角色合同] 收紧 PM、Reviewer、Executor、QA 与编排规则，使角色交接、交付物和回退条件与状态机一致。
+- [x] 183. [工作台] 在当前版本需求卡和角色办公室展示有效流程、当前门禁、阻塞原因及非法跳转审计，不用版本级角色覆盖需求级事实。
+- [x] 184. [验证] 完成聚焦测试、全仓回归、Skill 校验、生成一致性、语法/diff 检查与 6246 真实桌面/窄屏路径。
+- [x] 185. [Review] 对状态机兼容性、门禁绕过、UI 可用性和发布范围做独立复核，确认是否具备合并条件。
+- [x] 186. [失败契约] 固定“每条需求自带任务小队、选中需求内联展开办公室、主流程与可选 Designer 分离”的页面合同。
+- [x] 187. [任务办公室] 将项目级角色办公室下沉到当前版本的每条需求卡，按需求状态驱动角色动作、交接、历史与详情。
+- [x] 188. [交互验收] 完成全仓回归，并在 6246 验证多需求切换、角色详情、刷新恢复和窄屏边界。
+
+### 完成判定
+
+- [x] Reviewer 的产品逻辑审查在开发前运行，输出结构化批准或退回；发布审查与产品审查在数据和页面上可区分。
+- [x] PM → QA、PM → release Reviewer、未交付的 Executor → QA 等跳转不会推进有效阶段，且用户能看到原因和原事件。
+- [x] 同一版本的不同需求可分别停在 PM、产品审查、开发、QA、发布准备，并拥有独立角色历史。
+- [x] QA 只验证已通过产品门禁且有开发交付的需求；测试范围和证据能回溯到同一 `requirement_id`。
+- [x] 旧项目和旧事件仍可展示，不因缺少新字段崩溃或被错误判为已通过门禁。
+- [x] 全仓回归、规则生成、Skill 校验和 6246 真实路径均提供本次证据；不部署 6425、不合并 main、不发布。
+
+### Step 178 — 2026-08-22
+- baseline: `python3 -B -m unittest` → 132 tests / 0 failures / exit 0；`./generate.sh --check` → 生成物一致 / exit 0。
+- branch: `feat/v0.20-requirement-gates` 从已发布的 main 建立；本阶段不修改 main。
+
+### Step 179 — 2026-08-23
+- artifact: `rules/skills/product-logic-review/SKILL.md` 与独立审查产物 `docs/reviews/v0.20-requirement-gates-product-review.md`。
+- verify: Skill Creator `quick_validate.py` 返回 `Skill is valid!`；Reviewer 行为合同覆盖 `approved`、`changes_requested` 和私有思维过程边界。
+
+### Step 180 — 2026-08-23
+- files: `docs/runtime-event-v0.schema.json`、`scripts/harness-observe.py`、`tests/test_harness_observe.py`。
+- verify: 服务拒绝角色与 `review_mode` / `gate_result` 的非法组合；旧 `0.2.0` envelope 与历史投影继续兼容。
+
+### Step 181 — 2026-08-23
+- projection: 同一版本六条需求分别按 PM → product Reviewer → Executor → QA 回写；API 逐条显示独立 stage、角色路径、证据和零 rejected transition。
+- boundary: 纯技术例外仍需原因、开发产物、自检和 QA；范围变化会使旧产品审查失效。
+
+### Step 182 — 2026-08-23
+- files: `rules/roles/{orchestration,pm,reviewer,executor,qa}.md`、`rules/core.md`、`dist/AGENTS.md`。
+- verify: 10 项角色合同通过；生成 Loader 与源规则一致；Reviewer 的 `product_review` / `release_review` 不再混用。
+
+### Step 183 — 2026-08-23
+- interaction: 6246 真实页面依次显示 PM 等待、Reviewer → Executor 需求门禁、Executor → QA 质量门禁和最终 6/6；完成后负责人为“未分配”，角色路径保留 PM → Review → 开发 → 测试。
+- responsive: 390×844 下 `scrollWidth = innerWidth = 390`，需求卡单列且控制台 `0 error / 0 warning`；视口已恢复。
+
+### Step 184 — 2026-08-23
+- verify: 最终 `python3 -B -m unittest` → 140 tests / 0 failures / exit 0；JavaScript syntax、JSON、`generate.sh --check`、Skill 校验与 `git diff --check` 均 exit 0。
+- service: 6246 `health.status=ok`，8 个登记项目 / 7 个有效项目；六条 v0.20 需求均有独立 QA evidence ref。
+
+### Step 185 — 2026-08-23
+- review finding: 初版允许 `docs/VERSIONS.md` 完成勾选覆盖门禁；新增失败合同并修正为只有 `release_ready + checkbox` 才确认完成，提前勾选显示 `plan_conflict` 且不推进。
+- result: 无 blocking finding；分支具备合并候选条件，但本轮未提交、未合并 main、未部署 6425、未发布或打 Tag。
+
+### Step 186 — 2026-08-23
+- scope change: 用户要求工作台使用最新角色流程，并让每个小 task 与角色办公室直接结合；重新打开 `task-182` 的页面范围，不改变后端门禁语义。
+- interaction contract: 默认卡片显示任务小队；选中后在同一卡片内展开该需求的办公室与交接，禁止在页面下方保留可能指向另一需求的全局办公室。
+
+### Step 187 — 2026-08-23
+- files: `web/observe-dashboard.html`、`tests/test_harness_observe.py`、`docs/VERSIONS.md`。
+- result: 每条需求卡默认显示 PM → Review → 开发 → 测试 → 待发布任务小队；Designer 仅在真实参与时插入；选中需求在卡片内展开五角色办公室，角色抽屉只读取同一 requirement 的历史、决策和交付物。
+- regression: 真实点击发现开发抽屉混入 task-111 / task-35 历史，已收紧 `scope_requirement_id` 与产物路径过滤并复验不再混入。
+
+### Step 188 — 2026-08-23
+- verify: `python3 -B -m unittest` → 141 tests / 0 failures / exit 0；HTML、JavaScript、生成一致性和 diff 检查均通过。
+- interaction: 6246 依次切换 task-182 / task-183，URL、唯一展开办公室和角色抽屉同步；task-182 最终有效路径为 PM → Reviewer → Executor → QA，2 条 QA 证据、0 rejected transition。
+- responsive: 390×844 下 `scrollWidth = innerWidth = 390`，任务办公室内部横向浏览角色但不撑破页面；桌面视口已恢复，控制台 0 error / 0 warning。
+- service probe: 受限终端的 localhost 检查曾产生假失败；真实健康源确认 PID 5242、6246 status=ok，未重启已有设计服务。
+
+## v0.20.0 · 2026-08-24 · 正式发布
+
+### 发布步骤
+
+- [x] 189. [发布事实] `VERSION`、中英文 Changelog、`docs/VERSIONS.md` 与计划统一为 v0.20.0，并写明兼容性和迁移方式。
+- [x] 190. [Release Gate] 重跑全仓测试、规则生成、脚本/JSON/Skill 校验、安装冒烟、敏感信息与 diff 检查。
+- [ ] 191. [提交与合并] 提交 `feat/v0.20-requirement-gates`，fast-forward 合并本地 main，并在合并后的真实代码上复验。
+- [ ] 192. [本机部署] 更新 `~/.mick-harness`、Agent Loader 和唯一 6425 服务，并用真实浏览器验收需求级任务办公室。
+- [ ] 193. [远端发布] 原子推送 main 与 annotated `v0.20.0`，核对远端分支、标签和本机安装提交一致。
+
+### 发布停止条件
+
+- 任一 Release Gate 失败，或发现无法解释的文件、私有 Brain 数据、密钥、版本不一致时，停止在打标签之前。
+- 合并后本机部署失败时不推送标签；远端推送失败时保留本地提交并明确报告真实状态。
+
+### Step 189 — 2026-08-24
+- files: `VERSION`, `CHANGELOG.md`, `CHANGELOG.zh-CN.md`, `docs/VERSIONS.md`, `plan.md`
+- verify: `VERSION=0.20.0`；中英文 Changelog 均包含 `0.20.0 / 2026-08-24`，兼容性、`harness update` 迁移方式和验证事实一致；版本记录为 `released / main / v0.20.0`。
+
+### Step 190 — 2026-08-24
+- files: `generate.sh`, `setup.sh`, `scripts/`, `rules/skills/product-logic-review/`, `tests/`, `web/observe-dashboard.html`, `plan.md`
+- verify: `python3 -B -m unittest` → 141 tests / 0 failures / exit 0；`generate.sh` 与 `--check`、Python/JavaScript/Shell/JSON 语法、Skill Creator 校验、`git diff --check` 全部 exit 0；临时项目非交互 setup smoke 通过并已清理。
+- notes: 敏感信息扫描仅命中 `tests/test_harness_agents.py:301` 的脱敏测试假密钥，未发现其他匹配；首轮安装断言误把生成标题限定为 Loader 文案，读取真实软链接和生成文件后改为项目实际合同并复验通过，未修改安装实现。

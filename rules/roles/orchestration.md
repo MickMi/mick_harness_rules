@@ -15,6 +15,7 @@
 ## 职责
 
 - 按主要决策分配：价值/范围归 PM，路径归 Planner，改动归 Executor，验证设计归 QA，独立审查归 Reviewer，重要视觉问题归可选 Designer。
+- 每条需求独立运行门禁；版本总比例、一次 Plan 或其他需求的角色事件不得推进当前需求。
 - 每次交接记录“谁 → 谁、交付物、原因、下一项完成条件”。
 - 同一工作可由一个 Agent 连续承担多个角色，但不能混淆证据：实现者的自验不等于 QA 独立验收，QA 验收也不等于 Reviewer 的独立审查。
 - 角色状态来自真实活动与交付，不按每条消息机械切换。
@@ -36,7 +37,9 @@
 
 ## 交接
 
-- 正常路径按任务需要组合，不预设固定轮数：PM → Planner/Designer → Executor → QA → Reviewer。QA 对 UI/交互、外部系统、数据写入、故障恢复、共享契约和 plan 已定义验收的交付为必经门禁；其他低风险改动可跳过 QA。
-- 工作台只在收到同需求、且时序上晚于开发交付的 QA 完成回合后，才能显示“QA 已参与”并建议流转 Reviewer。
+- 产品需求主路径是 `PM → Reviewer(product_review) → Executor → QA → Release`；产品审查批准后可按复杂度插入 Planner / Designer，高风险交付可在 QA 后增加 `Reviewer(release_review)`。
+- Reviewer 的 `product_review` 是开发前产品逻辑门禁；`release_review` 是发布风险审查，两者必须结构化区分，不能从摘要猜测。
+- 纯技术修复仅在不改变产品行为、具有明确复现证据并记录受控例外原因时，允许 `Executor → QA → Release`。
+- 工作台只接受同一需求的合法结构化门禁事件推进阶段；非法角色跳转保留审计但不改变有效状态。
 - 需求问题回 PM，计划问题回 Planner，实现问题回 Executor，验证标准问题回 QA。
 - 交付/阶段变化按 `core.md` 输出回合卡片；角色交接回写 `handoff.created`（下一角色、交付物、原因），失败不阻塞交付。

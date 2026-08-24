@@ -21,6 +21,14 @@
 - 更新方式：重新审计下方固定来源；通过后人工更新本适配 Skill 和行为评测，不做上游自动同步。
 - 移除方式：删除该目录并移除 Designer 中的加载提示；不影响核心 Harness。
 
+### product-logic-review（Harness 原生 Skill）
+
+- 路径：`rules/skills/product-logic-review/`。
+- 角色：Reviewer，仅用于开发前 `product_review`。
+- 用途：按风险模拟用户旅程、状态变化、权限、时序、失败恢复和边界情况，输出结构化 `approved` 或 `changes_requested`。
+- 安全边界：不写人类 PRD、不实施代码、不替 QA 设计完整测试、不输出模型私有思维过程、不安装 Hook 或写 Brain。
+- 来源：基于 Mick Harness 的需求级门禁合同原生设计；不复制第三方 Skill，不引入网络、脚本或外部依赖。
+
 ## 已审计来源
 
 | 来源 | 固定 commit | 许可证 | 结论 | 使用方式 |

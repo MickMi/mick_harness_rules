@@ -1217,7 +1217,7 @@ class ObserveRuntimeTests(unittest.TestCase):
     def test_dashboard_uses_real_role_work_events(self) -> None:
         dashboard = DASHBOARD.read_text(encoding="utf-8")
 
-        for label in ("角色办公室", "建议下一步", "正在交接", "执行详情", "需求决策", "交付物", "尚未参与"):
+        for label in ("任务办公室", "需求门禁", "质量门禁", "执行详情", "需求决策", "交付物", "尚未参与"):
             self.assertIn(label, dashboard)
         self.assertIn("work_rounds", dashboard)
         self.assertIn("decisions", dashboard)
@@ -1375,7 +1375,7 @@ class ObserveRuntimeTests(unittest.TestCase):
         self.assertIn("-webkit-line-clamp: 2", dashboard)
         self.assertIn("@media (max-width: 760px)", dashboard)
         self.assertIn("prefers-reduced-motion", dashboard)
-        for label in ("下一步", "当前负责", "建议接手"):
+        for label in ("下一步", "当前负责", "等待接手"):
             self.assertIn(label, dashboard)
 
     def test_dashboard_navigation_and_brain_actions_close_user_paths(self) -> None:
@@ -1888,6 +1888,272 @@ class ObserveRuntimeTests(unittest.TestCase):
         self.assertIsNone(handoff["current_work"])
         self.assertEqual(handoff["next_step"], "等待 QA 接手")
 
+    def test_v020_requirement_gates_reject_role_jumps_and_project_independent_stages(self) -> None:
+        versions = {
+            "items": [{
+                "version": "0.20.0",
+                "status": "in_progress",
+                "requirements": [
+                    {"requirement_id": "task-review", "title": "等待产品审查", "status": "planned"},
+                    {"requirement_id": "task-dev", "title": "进入开发", "status": "planned"},
+                    {"requirement_id": "task-qa", "title": "进入测试", "status": "planned"},
+                    {"requirement_id": "task-release", "title": "等待发布", "status": "planned"},
+                ],
+            }]
+        }
+
+        def round_item(sequence, requirement_id, role, gate_result, **extra):
+            return {
+                "round_id": f"round-{requirement_id}-{sequence}",
+                "requirement_id": requirement_id,
+                "role": role,
+                "status": "completed",
+                "objective": f"{role} 处理 {requirement_id}",
+                "gate_result": gate_result,
+                "derived_from_sequence": sequence,
+                **extra,
+            }
+
+        rounds = {
+            "pm-review": round_item(1, "task-review", "PM", "ready_for_review", next_role="Reviewer"),
+            # 这条 QA 事件必须保留审计，但不能让需求跳过产品审查和开发。
+            "qa-jump": round_item(2, "task-review", "QA", "passed", verification_refs=["qa:jump"]),
+            "pm-dev": round_item(3, "task-dev", "PM", "ready_for_review", next_role="Reviewer"),
+            "review-dev": round_item(
+                4, "task-dev", "Reviewer", "approved", review_mode="product_review", next_role="Executor"
+            ),
+            "pm-qa": round_item(5, "task-qa", "PM", "ready_for_review", next_role="Reviewer"),
+            "review-qa": round_item(
+                6, "task-qa", "Reviewer", "approved", review_mode="product_review", next_role="Executor"
+            ),
+            "dev-qa": round_item(
+                7,
+                "task-qa",
+                "Executor",
+                "delivered",
+                next_role="QA",
+                artifact_refs=["src/feature.py"],
+                verification_refs=["unit:feature"],
+            ),
+            "pm-release": round_item(8, "task-release", "PM", "ready_for_review", next_role="Reviewer"),
+            "review-release": round_item(
+                9, "task-release", "Reviewer", "approved", review_mode="product_review", next_role="Executor"
+            ),
+            "dev-release": round_item(
+                10,
+                "task-release",
+                "Executor",
+                "delivered",
+                next_role="QA",
+                artifact_refs=["src/release.py"],
+                verification_refs=["unit:release"],
+            ),
+            "qa-release": round_item(
+                11, "task-release", "QA", "passed", verification_refs=["e2e:release"]
+            ),
+        }
+        current = OBSERVE.current_version_snapshot(
+            {"tasks": {}, "work_rounds": rounds, "handoffs": {}, "verifications": [], "blocks": {}},
+            versions,
+        )
+        by_id = {item["requirement_id"]: item for item in current["requirements"]}
+
+        self.assertEqual(by_id["task-review"]["workflow"]["stage"], "product_review")
+        self.assertEqual(by_id["task-review"]["current_role"], "Reviewer")
+        self.assertEqual(len(by_id["task-review"]["workflow"]["rejected_transitions"]), 1)
+        self.assertIn("QA", by_id["task-review"]["workflow"]["rejected_transitions"][0]["reason"])
+        self.assertEqual([item["role"] for item in by_id["task-review"]["role_path"]], ["PM"])
+
+        self.assertEqual(by_id["task-dev"]["workflow"]["stage"], "development")
+        self.assertEqual(by_id["task-dev"]["current_role"], "Executor")
+        self.assertEqual(by_id["task-qa"]["workflow"]["stage"], "qa")
+        self.assertEqual(by_id["task-qa"]["current_role"], "QA")
+        self.assertEqual(by_id["task-release"]["workflow"]["stage"], "release_ready")
+        self.assertIsNone(by_id["task-release"]["current_role"])
+
+    def test_v020_product_review_changes_and_missing_delivery_evidence_block_progress(self) -> None:
+        current = OBSERVE.current_version_snapshot(
+            {
+                "tasks": {},
+                "handoffs": {},
+                "verifications": [],
+                "blocks": {},
+                "work_rounds": {
+                    "pm": {
+                        "round_id": "pm",
+                        "requirement_id": "task-gate",
+                        "role": "PM",
+                        "status": "completed",
+                        "objective": "明确需求",
+                        "gate_result": "ready_for_review",
+                        "next_role": "Reviewer",
+                        "derived_from_sequence": 1,
+                    },
+                    "review": {
+                        "round_id": "review",
+                        "requirement_id": "task-gate",
+                        "role": "Reviewer",
+                        "review_mode": "product_review",
+                        "gate_result": "approved",
+                        "status": "completed",
+                        "objective": "审查产品逻辑",
+                        "next_role": "Executor",
+                        "derived_from_sequence": 2,
+                    },
+                    "dev": {
+                        "round_id": "dev",
+                        "requirement_id": "task-gate",
+                        "role": "Executor",
+                        "gate_result": "delivered",
+                        "status": "completed",
+                        "objective": "实现需求",
+                        "artifact_refs": ["src/gate.py"],
+                        "verification_refs": [],
+                        "next_role": "QA",
+                        "derived_from_sequence": 3,
+                    },
+                },
+            },
+            {"items": [{
+                "version": "0.20.0",
+                "status": "in_progress",
+                "requirements": [{"requirement_id": "task-gate", "title": "门禁证据", "status": "planned"}],
+            }]},
+        )["requirements"][0]
+
+        self.assertEqual(current["workflow"]["stage"], "development")
+        self.assertEqual(current["current_role"], "Executor")
+        self.assertIn("自检证据", current["workflow"]["rejected_transitions"][0]["reason"])
+
+        changes = OBSERVE.requirement_workflow_snapshot(
+            {"requirement_id": "task-changes", "status": "planned"},
+            [
+                {
+                    "round_id": "pm-ready",
+                    "role": "PM",
+                    "status": "completed",
+                    "gate_result": "ready_for_review",
+                    "derived_from_sequence": 1,
+                },
+                {
+                    "round_id": "review-changes",
+                    "role": "Reviewer",
+                    "review_mode": "product_review",
+                    "status": "completed",
+                    "gate_result": "changes_requested",
+                    "summary": "取消后的数据状态尚未定义",
+                    "derived_from_sequence": 2,
+                },
+            ],
+            [],
+        )
+        self.assertEqual(changes["stage"], "product_definition")
+        self.assertEqual(changes["current_role"], "PM")
+        self.assertEqual(changes["gate_status"], "changes_requested")
+
+    def test_v020_release_review_and_scope_change_are_distinct_from_product_review(self) -> None:
+        def item(sequence, role, gate_result, **extra):
+            return {
+                "round_id": f"round-{sequence}",
+                "role": role,
+                "status": "completed",
+                "gate_result": gate_result,
+                "derived_from_sequence": sequence,
+                **extra,
+            }
+
+        release = OBSERVE.requirement_workflow_snapshot(
+            {"requirement_id": "task-risk", "status": "planned"},
+            [
+                item(1, "PM", "ready_for_review"),
+                item(2, "Reviewer", "approved", review_mode="product_review"),
+                item(3, "Executor", "delivered", artifact_refs=["src/risk.py"], verification_refs=["unit:risk"]),
+                item(4, "QA", "passed", verification_refs=["e2e:risk"], next_role="Reviewer"),
+                item(5, "Reviewer", "approved", review_mode="release_review"),
+            ],
+            [],
+        )
+        self.assertEqual(release["stage"], "release_ready")
+        self.assertEqual(release["gate_status"], "approved")
+
+        changed = OBSERVE.requirement_workflow_snapshot(
+            {"requirement_id": "task-risk", "status": "planned"},
+            [
+                item(1, "PM", "ready_for_review"),
+                item(2, "Reviewer", "approved", review_mode="product_review"),
+                item(3, "Executor", "delivered", artifact_refs=["src/risk.py"], verification_refs=["unit:risk"]),
+                item(4, "QA", "passed", verification_refs=["e2e:risk"]),
+                item(5, "PM", "ready_for_review"),
+            ],
+            [],
+        )
+        self.assertEqual(changed["stage"], "product_review")
+        self.assertEqual(changed["gate_status"], "scope_changed")
+        self.assertEqual(changed["current_role"], "Reviewer")
+
+    def test_v020_technical_only_exception_requires_a_reason_and_still_enters_qa(self) -> None:
+        workflow = OBSERVE.requirement_workflow_snapshot(
+            {"requirement_id": "task-fix", "status": "planned"},
+            [{
+                "round_id": "fix-delivery",
+                "role": "Executor",
+                "status": "completed",
+                "gate_result": "delivered",
+                "workflow_exception": "technical_only",
+                "exception_reason": "只修复空指针，不改变任何用户行为",
+                "artifact_refs": ["src/null_fix.py"],
+                "verification_refs": ["regression:null-fix"],
+                "derived_from_sequence": 1,
+            }],
+            [],
+        )
+        self.assertEqual(workflow["stage"], "qa")
+        self.assertEqual(workflow["current_role"], "QA")
+        self.assertEqual(workflow["gate_status"], "pending")
+
+    def test_v020_version_checkbox_cannot_bypass_requirement_gates(self) -> None:
+        requirement = OBSERVE.current_version_snapshot(
+            {"tasks": {}, "work_rounds": {}, "handoffs": {}, "verifications": [], "blocks": {}},
+            {"items": [{
+                "version": "0.20.0",
+                "status": "in_progress",
+                "requirements": [{
+                    "requirement_id": "task-checkbox",
+                    "title": "不能只靠勾选完成",
+                    "status": "completed",
+                }],
+            }]},
+        )["requirements"][0]
+
+        self.assertEqual(requirement["effective_status"], "planned")
+        self.assertEqual(requirement["workflow"]["stage"], "product_definition")
+        self.assertTrue(requirement["workflow"]["plan_conflict"])
+        self.assertIn("版本清单已标记完成", requirement["workflow"]["gate_reason"])
+
+    def test_work_round_contract_uses_structured_review_and_gate_fields(self) -> None:
+        envelope = OBSERVE.build_work_envelope(
+            self.project,
+            event_type="work.round_completed",
+            role="Reviewer",
+            round_ref="review-product",
+            requirement_id="task-178",
+            objective="审查用户路径和边界情况",
+            summary="无阻塞发现",
+            status="completed",
+            next_role="Executor",
+            review_mode="product_review",
+            gate_result="approved",
+            idempotency_key="review-product",
+        )
+        self.assertEqual(envelope["payload"]["review_mode"], "product_review")
+        self.assertEqual(envelope["payload"]["gate_result"], "approved")
+
+        invalid = json.loads(json.dumps(envelope))
+        invalid["payload"]["role"] = "QA"
+        invalid["source"]["role"] = "QA"
+        with self.assertRaisesRegex(OBSERVE.ObserveError, "review_mode"):
+            OBSERVE.validate_ingest_envelope(invalid, OBSERVE.project_id(self.project))
+
     def test_dashboard_uses_current_version_requirement_command_center(self) -> None:
         dashboard = DASHBOARD.read_text(encoding="utf-8")
 
@@ -1903,6 +2169,38 @@ class ObserveRuntimeTests(unittest.TestCase):
         for label in ("当前版本需求", "测试范围未记录", "尚未进入独立测试", "版本记录"):
             self.assertIn(label, dashboard)
         self.assertNotIn('["versions", "版本与需求"]', dashboard)
+
+    def test_dashboard_explains_requirement_gate_and_rejected_transitions(self) -> None:
+        dashboard = DASHBOARD.read_text(encoding="utf-8")
+        for marker in (
+            "requirement-gate",
+            "workflow.stage_label",
+            "workflow.gate_reason",
+            "workflowTransitions",
+            'selectedRequirement.current_role === "QA" ? "quality_gate" : "requirement_gate"',
+            'participation: progress ? "recorded" : isCurrentRole ? "expected"',
+            'transition.kind === "requirement_gate" ? "需求门禁"',
+            "rejected_transitions",
+            "未推进有效阶段",
+        ):
+            self.assertIn(marker, dashboard)
+
+    def test_dashboard_embeds_latest_role_flow_inside_each_requirement(self) -> None:
+        dashboard = DASHBOARD.read_text(encoding="utf-8")
+        for marker in (
+            "requirement-summary-button",
+            "requirement-squad",
+            "task-office",
+            "task-office-scene",
+            "requirementProcessRoles",
+            "scope_requirement_id",
+            "scope_transition",
+            '["PM", "Reviewer", "Executor", "QA"]',
+            '["PM", "Reviewer", "Designer", "Executor", "QA"]',
+            "Designer 仅在实际参与时插入",
+        ):
+            self.assertIn(marker, dashboard)
+        self.assertNotIn('root.append(office);', dashboard)
 
     def test_completed_qa_round_is_visible_as_fallback_evidence(self) -> None:
         current = OBSERVE.current_version_snapshot(

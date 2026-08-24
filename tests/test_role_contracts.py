@@ -43,6 +43,19 @@ class RoleContractTests(unittest.TestCase):
         self.assertIn("最小验证", text)
         self.assertNotIn("不设计或执行测试用例", text)
 
+    def test_product_review_is_a_mandatory_pre_development_gate(self) -> None:
+        orchestration = (ROLE_DIR / "orchestration.md").read_text(encoding="utf-8")
+        reviewer = (ROLE_DIR / "reviewer.md").read_text(encoding="utf-8")
+        skill = (ROOT / "rules" / "skills" / "product-logic-review" / "SKILL.md").read_text(encoding="utf-8")
+
+        self.assertIn("PM → Reviewer(product_review) → Executor → QA → Release", orchestration)
+        self.assertIn("product_review", reviewer)
+        self.assertIn("release_review", reviewer)
+        self.assertIn("name: product-logic-review", skill)
+        self.assertIn("changes_requested", skill)
+        self.assertIn("approved", skill)
+        self.assertIn("不要输出私有思维过程", skill)
+
     def test_designer_role_stays_generic_while_craft_preferences_live_in_skill(self) -> None:
         role = (ROLE_DIR / "designer.md").read_text(encoding="utf-8")
         skill = (ROOT / "rules" / "skills" / "designer-craft" / "SKILL.md").read_text(encoding="utf-8")

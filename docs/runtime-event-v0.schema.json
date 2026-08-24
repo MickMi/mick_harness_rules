@@ -356,7 +356,11 @@
         "session_ref": {"type": "string", "maxLength": 200},
         "turn_ref": {"type": "string", "maxLength": 200},
         "artifact_refs": {"type": "array", "items": {"type": "string", "maxLength": 200}, "maxItems": 32, "uniqueItems": true},
-        "verification_refs": {"type": "array", "items": {"type": "string", "maxLength": 200}, "maxItems": 32, "uniqueItems": true}
+        "verification_refs": {"type": "array", "items": {"type": "string", "maxLength": 200}, "maxItems": 32, "uniqueItems": true},
+        "review_mode": {"enum": ["product_review", "release_review"]},
+        "gate_result": {"enum": ["ready_for_review", "approved", "changes_requested", "delivered", "passed", "failed"]},
+        "workflow_exception": {"enum": ["technical_only"]},
+        "exception_reason": {"type": "string", "minLength": 1, "maxLength": 2000}
       }
     },
     "decisionPayload": {
