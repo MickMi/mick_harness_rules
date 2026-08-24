@@ -1,4 +1,4 @@
-> 🧭 状态：v0.20.0 已发布 | 进度 193/193 | 当前归属：Release（交付完成）| 最近决策：发布代码、本机安装、唯一 6425、远端 main 与 annotated v0.20.0 标签保持一致
+> 🧭 状态：v0.20.1 热修复执行中 | 进度 194/196 | 当前归属：QA | 最近决策：需求选择恢复逻辑与自动回归已完成，进入真实 6425 部署验收
 
 # Plan: Company Runtime V0 → Portfolio V0.2
 
@@ -2241,3 +2241,25 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 ### Step 193 — 2026-08-24
 - files: GitHub branch `main`, annotated Git tag `v0.20.0`, installed `~/.mick-harness`, `plan.md`
 - verify: GitHub 已接受 v0.20 发布基线 `64a64f1..0a670f3`；最终发布记录与 annotated `v0.20.0` 使用原子推送，发布后以 `git ls-remote` 核对 main、tag object 与 tag peeled commit，并再次运行本机 `harness update` 对齐最终提交。
+
+## v0.20.1 · 2026-08-24 · 项目首页刷新恢复
+
+### 用户目标
+
+- 从 URL 打开或点击某条当前版本需求后，刷新仍停留在同一需求、同一任务办公室和同一角色上下文。
+- 首页不得把最新 Plan 步骤误当成版本需求；没有有效需求参数时，只在当前版本需求内选择合理默认项。
+
+### 实施步骤
+
+- [x] 194. [修复] 让项目首页用当前版本需求集合校验和恢复 `task` 参数，并为无选择状态建立需求内默认规则。
+- [ ] 195. [验证与部署] 增加自动回归，运行全仓门禁，部署 6425，并在真实浏览器验证选择、刷新和角色详情范围。
+- [ ] 196. [发布] 更新补丁版本事实，合并 main，发布 annotated `v0.20.1`，并对齐远端与本机安装。
+
+### 停止条件
+
+- 刷新后 URL、展开办公室或角色抽屉任一仍指向不同需求时停止发布。
+- v0.20.0 标签不得移动、覆盖或删除；补丁只能发布为新的 v0.20.1。
+
+### Step 194 — 2026-08-24
+- files: `web/observe-dashboard.html`, `tests/test_harness_observe.py`, `VERSION`, `CHANGELOG.md`, `CHANGELOG.zh-CN.md`, `docs/VERSIONS.md`, `plan.md`
+- verify: 先在真实 6425 复现 `task=task-182` 刷新后被移除并回到 task-178；定位为 `selectRun()` 只用 legacy `snapshot.tasks` 校验需求 ID。修复后新增自动合同检查；`python3 -B -m unittest` → 142 tests / 0 failures，JavaScript/Python 语法、`generate.sh --check`、版本与 diff 检查全部 exit 0。

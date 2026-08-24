@@ -3208,10 +3208,24 @@
         ]);
         state.snapshot = snapshot;
         state.events = events;
-        if (state.taskId && (!snapshot.tasks?.[state.taskId] || snapshot.tasks[state.taskId].status === "abandoned")) {
+        const currentRequirements = state.workspace?.current_version?.requirements || [];
+        const currentRequirementIds = new Set(currentRequirements.map(item => item.requirement_id));
+        const taskIsCurrentRequirement = currentRequirementIds.has(state.taskId);
+        const snapshotTask = state.taskId ? snapshot.tasks?.[state.taskId] : null;
+        if (
+          state.taskId
+          && (
+            (state.view === "overview" && currentRequirements.length && !taskIsCurrentRequirement)
+            || (!taskIsCurrentRequirement && (!snapshotTask || snapshotTask.status === "abandoned"))
+          )
+        ) {
           state.taskId = null;
         }
-        if (!state.taskId && snapshot.plan?.current_task_id && snapshot.tasks?.[snapshot.plan.current_task_id]) {
+        if (!state.taskId && state.view === "overview" && currentRequirements.length) {
+          const preferredRequirement = currentRequirements.find(item => ["in_progress", "blocked"].includes(item.effective_status))
+            || currentRequirements[0];
+          state.taskId = preferredRequirement.requirement_id;
+        } else if (!state.taskId && snapshot.plan?.current_task_id && snapshot.tasks?.[snapshot.plan.current_task_id]) {
           state.taskId = snapshot.plan.current_task_id;
         }
         const officeRoles = state.workspace?.organization?.roles || [];

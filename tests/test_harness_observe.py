@@ -2202,6 +2202,18 @@ class ObserveRuntimeTests(unittest.TestCase):
             self.assertIn(marker, dashboard)
         self.assertNotIn('root.append(office);', dashboard)
 
+    def test_dashboard_preserves_current_version_requirement_across_refresh(self) -> None:
+        dashboard = DASHBOARD.read_text(encoding="utf-8")
+
+        for marker in (
+            "const currentRequirements = state.workspace?.current_version?.requirements || [];",
+            "const currentRequirementIds = new Set(currentRequirements.map(item => item.requirement_id));",
+            "const taskIsCurrentRequirement = currentRequirementIds.has(state.taskId);",
+            'state.view === "overview" && currentRequirements.length && !taskIsCurrentRequirement',
+            "state.taskId = preferredRequirement.requirement_id;",
+        ):
+            self.assertIn(marker, dashboard)
+
     def test_completed_qa_round_is_visible_as_fallback_evidence(self) -> None:
         current = OBSERVE.current_version_snapshot(
             {

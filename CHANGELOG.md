@@ -7,6 +7,25 @@ All notable changes to Mick Agent Harness are documented in this file.
 This project follows Semantic Versioning 2.0. Git tags in the form `vX.Y.Z`
 are the release source of truth.
 
+## [0.20.1] - 2026-08-24
+
+### Overview Selection Restore Hotfix
+
+- Preserve a current-version requirement selected through the `task` URL
+  parameter when the project page reloads. Overview validation now uses the
+  current version's requirement IDs instead of incorrectly rejecting them
+  against the legacy Plan task table.
+- When an overview URL has no valid requirement selection, choose the current
+  version's in-progress or blocked requirement, then its first requirement,
+  rather than leaking an unrelated active Plan step into the URL.
+
+Compatibility: no schema, event, loader, or project-file migration is needed.
+Run `harness update` to refresh the dashboard and the 6425 Observer service.
+
+Verification: 142 unittests, generated-rule and diff checks, plus real-browser
+selection, reload, drawer scope, desktop width, and console validation on the
+installed 6425 service.
+
 ## [0.20.0] - 2026-08-24
 
 ### Requirement-level Product Gates and Task Offices
