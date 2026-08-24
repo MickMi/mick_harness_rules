@@ -1,4 +1,4 @@
-> 🧭 状态：v0.20.1 热修复执行中 | 进度 195/196 | 当前归属：Release | 最近决策：原始刷新缺陷已在安装版 6425 红—绿复验，仅剩补丁标签与远端对齐
+> 🧭 状态：v0.20.1 已发布 | 进度 196/196 | 当前归属：Release（交付完成）| 最近决策：v0.20.0 保留不动，刷新恢复补丁通过 v0.20.1 发布并与本机 6425 对齐
 
 # Plan: Company Runtime V0 → Portfolio V0.2
 
@@ -2253,7 +2253,7 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 
 - [x] 194. [修复] 让项目首页用当前版本需求集合校验和恢复 `task` 参数，并为无选择状态建立需求内默认规则。
 - [x] 195. [验证与部署] 增加自动回归，运行全仓门禁，部署 6425，并在真实浏览器验证选择、刷新和角色详情范围。
-- [ ] 196. [发布] 更新补丁版本事实，合并 main，发布 annotated `v0.20.1`，并对齐远端与本机安装。
+- [x] 196. [发布] 更新补丁版本事实，合并 main，发布 annotated `v0.20.1`，并对齐远端与本机安装。
 
 ### 停止条件
 
@@ -2268,3 +2268,7 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 - files: installed `~/.mick-harness`, `web/observe-dashboard.html`, `tests/test_harness_observe.py`, `docs/VERSIONS.md`, `plan.md`
 - verify: 安装版升到 `613b084 / VERSION 0.20.1`，6425 从 PID `15239` 切换到 `30909` 并保持 health ok；task-194 按 PM → product Review → Executor → QA 回写，显示等待发布且有 2 条独立 QA 证据。
 - interaction: 真实浏览器打开 task-194 后执行 reload，URL 继续包含 `task=task-194`、页面仍展开唯一 task-194 任务办公室且当前查看一致；开发角色详情包含 task-194、不含 task-182；桌面 `scrollWidth=innerWidth=1280`，控制台 0 error / 0 warning。
+
+### Step 196 — 2026-08-24
+- files: GitHub branch `main`, annotated Git tag `v0.20.1`, installed `~/.mick-harness`, `plan.md`
+- verify: GitHub 已接受补丁发布基线 `6837929..2b6b727`；最终发布记录与 annotated `v0.20.1` 使用原子推送，发布后核对远端 main、tag object、peeled commit，并运行本机 update 与显式 tag fetch 对齐最终提交。
