@@ -1,4 +1,7 @@
 import json
+import os
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -6,6 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY_PATH = ROOT / "config" / "command-registry.json"
 DOC_PATH = ROOT / "docs" / "COMMANDS.md"
+CLI_PATH = ROOT / "bin" / "harness"
 
 
 class CommandContractTests(unittest.TestCase):
@@ -71,6 +75,129 @@ class CommandContractTests(unittest.TestCase):
             "不会自动 merge、push、tag、deploy 或 publish",
         ):
             self.assertIn(phrase, self.docs)
+
+
+class PlanGoalCommandTests(unittest.TestCase):
+    def run_harness(self, project: Path, *args: str) -> subprocess.CompletedProcess[str]:
+        env = os.environ.copy()
+        env["MICK_HARNESS_ROOT"] = str(ROOT)
+        env["MICK_HARNESS_ACTIVITY"] = "0"
+        return subprocess.run(
+            [str(CLI_PATH), *args, "--project", str(project)],
+            cwd=project,
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+    def make_project(self, root: Path, with_versions: bool = True) -> Path:
+        project = root / "sample-project"
+        (project / "docs").mkdir(parents=True)
+        (project / "AGENTS.md").write_text("# Rules\n", encoding="utf-8")
+        if with_versions:
+            (project / "docs" / "VERSIONS.md").write_text(
+                "# Versions\n\n"
+                "## 0.3.0\n\n"
+                "- Status: locked\n"
+                "- Goal: 让用户看清当前项目进展。\n\n"
+                "### Requirements\n\n"
+                "- [ ] `task-1` 展示当前需求\n"
+                "- [x] `task-2` 保留历史记录\n\n"
+                "## 0.2.0\n\n"
+                "- Status: released\n"
+                "- Goal: 旧版本\n",
+                encoding="utf-8",
+            )
+        return project
+
+    def test_plan_preview_does_not_write(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project = self.make_project(Path(temporary))
+            result = self.run_harness(project, "plan", "--title", "当前版本交付")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("预览完成，未发生写入", result.stdout)
+            self.assertIn("拟纳入当前版本未完成需求：1 条", result.stdout)
+            self.assertFalse((project / "plan.md").exists())
+
+    def test_plan_apply_creates_archive_from_project_facts(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project = self.make_project(Path(temporary))
+            result = self.run_harness(project, "plan", "--title", "当前版本交付", "--apply")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            content = (project / "plan.md").read_text(encoding="utf-8")
+            self.assertIn("# Plan: sample-project", content)
+            self.assertIn("当前版本交付", content)
+            self.assertIn("`task-1` 展示当前需求", content)
+            self.assertNotIn("`task-2` 保留历史记录", content)
+
+    def test_plan_apply_refuses_to_overwrite_active_plan(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project = self.make_project(Path(temporary))
+            plan = project / "plan.md"
+            original = "> 🧭 状态：开发中\n\n# Plan: Existing\n\n- [ ] keep this\n"
+            plan.write_text(original, encoding="utf-8")
+            result = self.run_harness(project, "plan", "--apply")
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("存在尚未完成的活跃计划", result.stdout)
+            self.assertEqual(plan.read_text(encoding="utf-8"), original)
+
+    def test_plan_apply_appends_after_completed_history(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project = self.make_project(Path(temporary))
+            plan = project / "plan.md"
+            plan.write_text(
+                "> 🧭 状态：已完成\n\n# Plan: Existing\n\n- [x] old delivery\n",
+                encoding="utf-8",
+            )
+            result = self.run_harness(project, "plan", "--title", "新阶段", "--apply")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            content = plan.read_text(encoding="utf-8")
+            self.assertIn("old delivery", content)
+            self.assertIn("## ", content)
+            self.assertIn("· 新阶段", content)
+
+    def test_goal_preview_and_apply_preserve_the_human_profile(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project = self.make_project(Path(temporary), with_versions=False)
+            profile = project / "docs" / "PROJECT.md"
+            profile.write_text(
+                "# Project Profile\n\n## Goal\n\n旧目标。\n\n## Audience\n\n个人开发者。\n",
+                encoding="utf-8",
+            )
+            goal = "让个人开发者持续看清多个项目的真实交付状态。"
+            preview = self.run_harness(project, "goal", "--set", goal)
+            self.assertEqual(preview.returncode, 0, preview.stderr)
+            self.assertIn("预览完成，未发生写入", preview.stdout)
+            self.assertIn("旧目标", profile.read_text(encoding="utf-8"))
+
+            applied = self.run_harness(project, "goal", "--set", goal, "--apply")
+            self.assertEqual(applied.returncode, 0, applied.stderr)
+            content = profile.read_text(encoding="utf-8")
+            self.assertIn(goal, content)
+            self.assertIn("## Audience\n\n个人开发者。", content)
+            self.assertNotIn("旧目标。", content)
+
+    def test_goal_rejects_version_or_technical_delivery_as_long_term_goal(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project = self.make_project(Path(temporary), with_versions=False)
+            result = self.run_harness(
+                project,
+                "goal",
+                "--set",
+                "实现 v0.21 API 并修复 task-8。",
+                "--apply",
+            )
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("不像稳定的人类产品目标", result.stdout)
+            self.assertFalse((project / "docs" / "PROJECT.md").exists())
+
+    def test_invalid_command_input_uses_the_contract_exit_code(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project = self.make_project(Path(temporary), with_versions=False)
+            result = self.run_harness(project, "plan", "--unknown")
+            self.assertEqual(result.returncode, 64)
+            self.assertIn("输入无效", result.stderr)
 
 
 if __name__ == "__main__":

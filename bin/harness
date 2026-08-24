@@ -702,6 +702,17 @@ cmd_check() {
 # ============================================================
 # harness report — summarize current project plan status
 # ============================================================
+cmd_structured_workflow() {
+    local command="$1"
+    shift
+    local engine="$HARNESS_GLOBAL/scripts/harness-command.py"
+    if [ ! -f "$engine" ]; then
+        fail "Command engine not found: $engine"
+        return 69
+    fi
+    python3 "$engine" "$command" "$@"
+}
+
 cmd_report() {
     local target="${1:-$(pwd)}"
     local plan="$target/plan.md"
@@ -931,6 +942,14 @@ case "${1:-}" in
         shift
         cmd_check "${1:-}"
         ;;
+    plan)
+        shift
+        cmd_structured_workflow plan "$@"
+        ;;
+    goal)
+        shift
+        cmd_structured_workflow goal "$@"
+        ;;
     brain)
         shift
         cmd_brain "$@"
@@ -966,6 +985,8 @@ case "${1:-}" in
         echo "  harness agents [scan|doctor|sync|migrate|hooks] 管理本机 Code Agent 接入"
         echo "  harness update           更新全局 Harness + 刷新所有注册项目"
         echo "  harness check [dir]      验证当前项目脚手架完整性"
+        echo "  harness plan [options]   扫描项目并预览/建立 plan.md（默认只预览）"
+        echo "  harness goal [options]   查看/维护长期项目目标（默认只预览）"
         echo "  harness report [dir]     查看当前任务计划与执行状态"
         echo "  harness metrics [dir]    聚合任务质量指标"
         echo "  harness observe [cmd]    汇总项目进度并向本地工作服务器回写 Agent 事件"
