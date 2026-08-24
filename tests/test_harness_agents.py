@@ -224,6 +224,39 @@ class AgentManagerTests(unittest.TestCase):
         self.assertNotIn("MICK-HARNESS-CODEX", text)
         self.assertIn("# User content", text)
 
+    def test_sync_links_only_managed_command_skills_and_is_idempotent(self) -> None:
+        registry = self.tier_one_registry()
+
+        preview = self.manager.sync_agents(registry, home=self.home, dry_run=True)
+        preview_skills = [change for change in preview if change.get("kind") == "skill"]
+        self.assertEqual(
+            [change["skill"] for change in preview_skills],
+            ["harness-plan", "harness-goal", "harness-brain", "harness-e2e"],
+        )
+        self.assertTrue(all(change["changed"] for change in preview_skills))
+        self.assertFalse((self.home / ".codex" / "skills").exists())
+
+        first = self.manager.sync_agents(registry, home=self.home, dry_run=False)
+        second = self.manager.sync_agents(registry, home=self.home, dry_run=False)
+        first_skills = [change for change in first if change.get("kind") == "skill"]
+        second_skills = [change for change in second if change.get("kind") == "skill"]
+        self.assertTrue(all(Path(change["target"]).is_symlink() for change in first_skills))
+        self.assertTrue(all(change["status"] == "linked" for change in first_skills))
+        self.assertTrue(all(not change["changed"] for change in second_skills))
+
+    def test_sync_preserves_user_owned_skill_with_same_name(self) -> None:
+        target = self.home / ".codex" / "skills" / "harness-plan"
+        target.mkdir(parents=True)
+        marker = target / "user-owned.txt"
+        marker.write_text("keep", encoding="utf-8")
+
+        changes = self.manager.sync_agents(self.tier_one_registry(), home=self.home, dry_run=False)
+        plan_change = next(change for change in changes if change.get("skill") == "harness-plan")
+
+        self.assertEqual(plan_change["status"], "conflict")
+        self.assertFalse(plan_change["changed"])
+        self.assertEqual(marker.read_text(encoding="utf-8"), "keep")
+
     def test_conflicting_marker_refuses_to_write(self) -> None:
         target = self.home / ".codex" / "AGENTS.md"
         target.parent.mkdir()
@@ -296,6 +329,22 @@ class BrainBoundaryTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.patch.stop()
         self.tempdir.cleanup()
+
+    def test_bundled_legacy_remote_is_not_a_new_user_configuration(self) -> None:
+        home = Path(self.tempdir.name) / "home"
+        with mock.patch.dict(
+            os.environ,
+            {
+                "HOME": str(home),
+                "MICK_HARNESS_CONFIG_DIR": str(Path(self.tempdir.name) / "config"),
+                "MICK_HARNESS_BRAIN_LEGACY_CONFIG": "",
+            },
+        ):
+            config = self.module.brain_configuration()
+
+        self.assertEqual(config["mode"], "disabled")
+        self.assertEqual(config["source"], "default")
+        self.assertFalse((home / ".mick-brain").exists())
 
     def test_candidate_is_redacted_deduplicated_and_public_output_has_no_body(self) -> None:
         secret = "sk-abcdefghijklmnopqrstuvwxyz123456"

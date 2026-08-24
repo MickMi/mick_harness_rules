@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -278,6 +280,52 @@ def _atomic_write(path: Path, content: str, *, backup: bool) -> None:
             temporary.unlink()
 
 
+def _sync_skill_links(agent: dict[str, Any], *, home: Path, dry_run: bool) -> list[dict[str, Any]]:
+    config = agent.get("skills") or {}
+    target_value = config.get("target")
+    names = config.get("managed") or []
+    if not target_value or not isinstance(names, list):
+        return []
+    root = harness_root().resolve()
+    source_root = root / "rules" / "skills"
+    target_root = home / str(target_value)
+    changes: list[dict[str, Any]] = []
+    for name in names:
+        if not isinstance(name, str) or not re.fullmatch(r"[a-z0-9-]+", name):
+            raise AgentManagerError(f"Invalid managed Skill name for {agent['id']}: {name}")
+        source = (source_root / name).resolve()
+        if not source.is_dir() or root not in source.parents:
+            raise AgentManagerError(f"Managed Skill source is missing or unsafe: {source}")
+        target = target_root / name
+        status = "missing"
+        changed = False
+        if target.is_symlink():
+            status = "linked" if target.resolve(strict=False) == source else "conflict"
+        elif target.exists():
+            status = "conflict"
+        if status == "missing":
+            changed = True
+            if not dry_run:
+                target_root.mkdir(parents=True, exist_ok=True)
+                temporary = target_root / f".{name}.mick-harness.tmp"
+                with contextlib.suppress(FileNotFoundError):
+                    temporary.unlink()
+                temporary.symlink_to(source, target_is_directory=True)
+                os.replace(temporary, target)
+                status = "linked"
+        changes.append(
+            {
+                "agent_id": agent["id"],
+                "kind": "skill",
+                "skill": name,
+                "target": str(target),
+                "changed": changed,
+                "status": status,
+            }
+        )
+    return changes
+
+
 def sync_agents(registry: dict[str, Any], *, home: Path, dry_run: bool, migrate: bool = False) -> list[dict[str, Any]]:
     changes: list[dict[str, Any]] = []
     for agent in registry["agents"]:
@@ -295,9 +343,10 @@ def sync_agents(registry: dict[str, Any], *, home: Path, dry_run: bool, migrate:
         rendered = _render_loader(agent, home)
         desired = f"{rendered}\n{preserved}\n" if preserved else rendered
         changed = desired.encode("utf-8") != current.encode("utf-8")
-        changes.append({"agent_id": agent["id"], "target": str(target), "changed": changed, "removed_blocks": removed})
+        changes.append({"agent_id": agent["id"], "kind": "loader", "target": str(target), "changed": changed, "removed_blocks": removed})
         if changed and not dry_run:
             _atomic_write(target, desired, backup=target.exists())
+        changes.extend(_sync_skill_links(agent, home=home, dry_run=dry_run))
     return changes
 
 
@@ -405,7 +454,9 @@ def main(argv: list[str] | None = None) -> int:
     elif not args.quiet:
         label = "would update" if args.dry_run else "updated"
         for change in changes:
-            print(f"{change['agent_id']}: {label if change['changed'] else 'unchanged'} · {change['target']}")
+            state = "conflict" if change.get("status") == "conflict" else (label if change["changed"] else "unchanged")
+            suffix = f" · Skill {change['skill']}" if change.get("kind") == "skill" else ""
+            print(f"{change['agent_id']}: {state} · {change['target']}{suffix}")
     return 0
 
 

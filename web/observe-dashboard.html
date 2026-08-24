@@ -288,6 +288,8 @@
     .operation-head { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; }
     .operation-head h2 { margin: 0; font-size: 18px; }
     .operation-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin-top: 12px; }
+    .operation-group-title { margin: 14px 0 0; color: var(--muted); font-size: 11px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+    .operation-grid[data-group="command"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     .operation-action { min-width: 0; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: inherit; padding: 11px 12px; text-align: left; cursor: pointer; }
     .operation-action:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); }
     .operation-action:disabled { cursor: not-allowed; opacity: .55; }
@@ -299,8 +301,9 @@
     .operation-history { margin-top: 12px; }
     .operation-history summary { cursor: pointer; color: var(--muted); font-size: 12px; }
     .operation-history-list { display: grid; margin-top: 7px; border-top: 1px solid var(--border); }
-    .operation-history-row { display: grid; grid-template-columns: minmax(120px, .7fr) minmax(0, 1.4fr) auto; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 11px; }
+    .operation-history-row { display: grid; grid-template-columns: minmax(120px, .7fr) minmax(0, 1.4fr) auto auto; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 11px; }
     .operation-history-row span { min-width: 0; overflow-wrap: anywhere; }
+    .operation-result-action { border: 0; background: transparent; color: var(--accent); padding: 0; font: inherit; cursor: pointer; }
     .office-shell + .section-card { margin-top: 18px; }
     .inbox-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
     .workbench-priority { margin-top: 20px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 15px 0; }
@@ -679,7 +682,11 @@
       const OPERATION_FALLBACKS = [
         { action: "harness-update", label: "更新 Harness", description: "刷新已发布版本和所有已登记项目。" },
         { action: "project-init", label: "注入或升级项目", description: "将一个本机项目接入统一工作台。" },
-        { action: "agent-sync", label: "修复 Agent 接入", description: "重新同步 Agent 加载器与 Hook。" }
+        { action: "agent-sync", label: "修复 Agent 接入", description: "重新同步 Agent 加载器与 Hook。" },
+        { action: "command-plan", group: "command", label: "建立 Plan", description: "扫描项目并建立计划档案。" },
+        { action: "command-goal", group: "command", label: "维护长期目标", description: "维护面向人类的长期项目目标。" },
+        { action: "command-brain", group: "command", label: "配置 Brain", description: "选择本机、私有远端或暂不启用。" },
+        { action: "command-e2e", group: "command", label: "推进单条需求", description: "按真实门禁推进一条需求。" }
       ];
       let operationPollTimer = null;
 
@@ -763,7 +770,7 @@
       }
 
       function operationStatusLabel(status) {
-        return ({ prepared: "等待确认", queued: "等待执行", running: "正在执行", succeeded: "已完成", failed: "失败" })[status] || status || "未知";
+        return ({ prepared: "等待确认", queued: "等待执行", running: "正在执行", succeeded: "已完成", blocked: "已安全停止", cancelled: "已取消", failed: "失败" })[status] || status || "未知";
       }
 
       async function refreshOperations() {
@@ -796,6 +803,9 @@
       async function startHarnessOperation(item) {
         try {
           let parameters = {};
+          const projectOptions = (state.portfolio?.projects || [])
+            .filter(project => project.validation === "valid" && project.path)
+            .map(project => ({ value: project.path, label: project.name }));
           if (item.action === "project-init") {
             const values = await brainDialog({
               title: "注入或升级项目",
@@ -811,21 +821,63 @@
             });
             if (!values) return;
             parameters = { project_path: values.project_path, full: values.mode === "full" };
+          } else if (["command-plan", "command-goal", "command-e2e"].includes(item.action)) {
+            if (!projectOptions.length) {
+              state.notice = "当前没有可执行命令的已连接项目；请先注入或修复项目连接。";
+              render();
+              return;
+            }
+            const fields = [{ name: "project_path", label: "项目", type: "select", options: projectOptions }];
+            if (item.action === "command-plan") fields.push({ name: "title", label: "阶段标题（可选）", placeholder: "例如：0.21 命令工作台" });
+            if (item.action === "command-goal") fields.push({ name: "goal", label: "长期产品目标", type: "textarea", required: true, placeholder: "描述长期为谁解决什么问题，不写版本、任务或技术方案" });
+            if (item.action === "command-e2e") fields.push({ name: "requirement_id", label: "需求 ID", required: true, placeholder: "例如 task-201" });
+            const values = await brainDialog({
+              title: item.label,
+              description: "先生成只读预览；不会在这一步写项目文件或推进需求。",
+              confirmLabel: "生成确认单",
+              fields
+            });
+            if (!values) return;
+            parameters = values;
+          } else if (item.action === "command-brain") {
+            const values = await brainDialog({
+              title: "配置 Brain",
+              description: "配置只决定模式和目标位置；不会自动创建、删除或同步 Brain 数据。远端地址不得包含凭据。",
+              confirmLabel: "生成确认单",
+              fields: [
+                { name: "mode", label: "连接模式", type: "select", options: [
+                  { value: "local", label: "仅保存在本机" },
+                  { value: "remote", label: "连接私有远端" },
+                  { value: "disabled", label: "暂不启用" }
+                ] },
+                { name: "local_path", label: "本地位置（可选）", placeholder: "/Users/you/.mick-brain" },
+                { name: "remote", label: "私有 Git 地址（远端模式必填）", placeholder: "https://github.com/you/private-brain.git" }
+              ]
+            });
+            if (!values) return;
+            parameters = values;
           }
           const preview = await postOperation("/api/operations/preview", { action: item.action, parameters });
           if (!preview.can_execute) {
-            state.notice = `无法执行：${(preview.blockers || []).join("；") || "预检未通过"}`;
+            state.notice = `无法执行：${preview.summary || "预检未通过；未发生写入。"}`;
             await refreshOperations();
             render();
             return;
           }
           const effectText = (preview.effects || []).map(value => `• ${value}`).join("\n");
+          const previewText = preview.preview ? `\n\n命令预览：\n${preview.preview}` : "";
+          const dataBoundary = preview.reads || preview.writes
+            ? `\n\n读取：${preview.reads || "仅预检所需本机状态"}\n写入：${preview.writes || "见上方影响清单"}\n确认：必须由你在本页确认后才执行`
+            : "";
           const confirmation = await brainDialog({
             title: preview.confirmation || preview.label,
-            description: `目标：${preview.target}\n\n将发生：\n${effectText}\n\n恢复：${preview.recovery}`,
+            description: `目标：${preview.target}\n\n将发生：\n${effectText}${dataBoundary}${previewText}\n\n恢复：${preview.recovery}`,
             confirmLabel: "确认执行"
           });
           if (!confirmation) {
+            await postOperation(`/api/operations/${encodeURIComponent(preview.operation_id)}/cancel`, {
+              confirmation_token: preview.confirmation_token
+            });
             state.notice = `${preview.label}已取消，未执行项目或全局配置写入。`;
             await refreshOperations();
             render();
@@ -841,6 +893,18 @@
           state.notice = `Harness 操作失败：${error.message}`;
           render();
         }
+      }
+
+      async function showOperationResult(item) {
+        const lines = [
+          `状态：${operationStatusLabel(item.status)}`,
+          `目标：${item.target || "未记录"}`,
+          item.reads ? `读取：${item.reads}` : "",
+          item.writes ? `写入：${item.writes}` : "",
+          item.preview ? `\n执行前预览：\n${item.preview}` : "",
+          item.result ? `\n执行结果：\n${item.result}` : item.summary ? `\n结果：${item.summary}` : ""
+        ].filter(Boolean);
+        await brainDialog({ title: item.label || "Harness 操作结果", description: lines.join("\n"), confirmLabel: "关闭" });
       }
 
       function brainDialog({ title, description, confirmLabel = "确认", danger = false, fields = [] }) {
@@ -874,7 +938,10 @@
               control.type = field.type || "text";
             }
             control.name = field.name;
-            control.value = field.value || "";
+            const initialValue = field.value ?? (
+              field.type === "select" ? (field.options?.[0]?.value ?? "") : ""
+            );
+            control.value = initialValue;
             control.required = Boolean(field.required);
             if (field.placeholder) control.placeholder = field.placeholder;
             label.append(control);
@@ -1884,7 +1951,7 @@
 
         const sourceLabels = {
           harness_builtin: "Harness 内置", codex_system: "Codex 系统", codex_external: "Codex 外部",
-          agent_external: "通用 Agent", codex_plugin: "Codex 插件", project_skill: "项目专用"
+          claude_external: "Claude 外部", agent_external: "通用 Agent", codex_plugin: "Codex 插件", project_skill: "项目专用"
         };
         const statusLabels = { compatible: "可兼容", review_required: "需要审查", blocked: "禁止接入" };
         const visible = (skills.items || []).filter(item => state.skillFilter === "all" || (state.skillFilter === "attention" ? item.compatibility?.status !== "compatible" : item.compatibility?.status === state.skillFilter));
@@ -2013,18 +2080,24 @@
           );
           operationSection.append(active);
         }
-        const operationGrid = el("div", "operation-grid");
         const catalog = state.operations?.catalog?.length ? state.operations.catalog : OPERATION_FALLBACKS;
-        catalog.forEach(item => {
-          const button = el("button", "operation-action");
-          button.type = "button";
-          button.disabled = Boolean(activeOperation);
-          button.append(el("strong", "", item.label), el("span", "", item.description));
-          button.addEventListener("click", () => startHarnessOperation(item));
-          operationGrid.append(button);
+        [["system", "本机与项目"], ["command", "通用命令"]].forEach(([group, label]) => {
+          const groupItems = catalog.filter(item => (item.group || "system") === group);
+          if (!groupItems.length) return;
+          operationSection.append(el("h3", "operation-group-title", label));
+          const operationGrid = el("div", "operation-grid");
+          operationGrid.dataset.group = group;
+          groupItems.forEach(item => {
+            const button = el("button", "operation-action");
+            button.type = "button";
+            button.disabled = Boolean(activeOperation);
+            button.append(el("strong", "", item.label), el("span", "", item.description));
+            button.addEventListener("click", () => startHarnessOperation(item));
+            operationGrid.append(button);
+          });
+          operationSection.append(operationGrid);
         });
-        operationSection.append(operationGrid);
-        const historyItems = (state.operations?.items || []).filter(item => ["succeeded", "failed"].includes(item.status)).slice(0, 5);
+        const historyItems = (state.operations?.items || []).filter(item => ["succeeded", "blocked", "cancelled", "failed"].includes(item.status)).slice(0, 5);
         const history = el("details", "operation-history");
         history.append(el("summary", "", `最近操作${historyItems.length ? ` · ${historyItems.length}` : ""}`));
         const historyList = el("div", "operation-history-list");
@@ -2036,8 +2109,12 @@
             row.append(
               el("span", "", item.label),
               el("span", "muted", item.summary || item.target),
-              el("span", item.status === "failed" ? "error" : "success", operationStatusLabel(item.status))
+              el("span", item.status === "failed" ? "error" : item.status === "succeeded" ? "success" : "muted", operationStatusLabel(item.status))
             );
+            const inspect = el("button", "operation-result-action", "查看结果");
+            inspect.type = "button";
+            inspect.addEventListener("click", () => showOperationResult(item));
+            row.append(inspect);
             historyList.append(row);
           });
         }

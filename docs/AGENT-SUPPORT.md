@@ -86,7 +86,9 @@ flowchart TD
 | 已分配 | Harness 明确把 Skill 作为某个角色的方法附件 | Harness 内置映射或未来经用户确认的分配记录 |
 | 已验证加载 | 真实 Agent 任务回报了可定位的 Skill 标识与版本 | 运行时事件；静态扫描、文件存在和角色分配都不够 |
 
-当前扫描目录为 Harness `rules/skills/`、`~/.codex/skills/`、`~/.agents/skills/`、Codex 插件缓存中的 Skills，以及已登记项目的 `.harness/skills/`。扫描器不接受前台提供的任意路径，不读取凭据，不返回 Skill 正文，不运行 `scripts/`，也不联网安装。
+当前扫描目录为 Harness `rules/skills/`、`~/.codex/skills/`、`~/.claude/skills/`、`~/.agents/skills/`、Codex 插件缓存中的 Skills，以及已登记项目的 `.harness/skills/`。扫描器不接受前台提供的任意路径，不读取凭据，不返回 Skill 正文，不运行 `scripts/`，也不联网安装。
+
+v0.21 的四个 Harness 命令 Skill 是受管例外：`harness agents sync` 会为 Codex 的 `~/.codex/skills/` 与 Claude Code 的 `~/.claude/skills/` 建立指向当前 Harness 安装的链接。只管理 `harness-plan`、`harness-goal`、`harness-brain`、`harness-e2e`；若用户已经有同名文件或目录则报告冲突并保留原内容。链接存在仍只代表“已安装”，必须在新会话显式调用并回写运行证据后才能显示“已验证加载”。
 
 兼容诊断分为三类：普通能力且未触碰 Harness 所有权边界时显示“可兼容”；包含脚本、联网安装、Hook、角色路由、完成定义、Brain 写入或后台服务时显示“需要审查”；包含破坏命令或覆盖全局 Loader 时显示“禁止接入”。静态结论只用于接入前 Gate，不替代许可证、固定版本、人工审计和真实任务验证。
 

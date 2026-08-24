@@ -181,10 +181,15 @@ class ObserveRuntimeTests(unittest.TestCase):
 
         self.assertEqual(
             [item["action"] for item in catalog],
-            ["harness-update", "project-init", "agent-sync"],
+            [
+                "harness-update", "project-init", "agent-sync",
+                "command-plan", "command-goal", "command-brain", "command-e2e",
+            ],
         )
-        self.assertEqual([item["label"] for item in catalog], ["更新 Harness", "注入或升级项目", "修复 Agent 接入"])
-        self.assertNotIn("command", json.dumps(catalog, ensure_ascii=False))
+        command_items = [item for item in catalog if item.get("group") == "command"]
+        self.assertEqual([item["command_id"] for item in command_items], ["plan", "goal", "brain", "e2e"])
+        self.assertTrue(all(item["contract"]["preview_default"] for item in command_items))
+        self.assertTrue(all("cli" in item["contract"] for item in command_items))
 
     def test_operation_preview_rejects_unknown_actions_and_unsafe_project_paths(self) -> None:
         state_dir = self.project / "state"
@@ -201,6 +206,11 @@ class ObserveRuntimeTests(unittest.TestCase):
                 {"project_path": str(self.project / "missing")},
                 state_root=state_dir,
             )
+        with self.assertRaisesRegex(OBSERVE.ObserveError, "must not contain credentials"):
+            OBSERVE.normalized_operation_parameters(
+                "command-brain",
+                {"mode": "remote", "remote": "https://token@example.com/private.git"},
+            )
 
         preview = OBSERVE.prepare_operation(
             "project-init",
@@ -212,6 +222,28 @@ class ObserveRuntimeTests(unittest.TestCase):
         self.assertTrue(preview["confirmation_token"])
         self.assertEqual(preview["target"], str(target.resolve()))
         self.assertNotIn("confirmation_token", json.dumps(snapshot, ensure_ascii=False))
+
+    def test_command_preflight_conflict_is_recorded_as_recoverable_block(self) -> None:
+        state_dir = self.project / "state"
+        target = self.project / "active-plan"
+        target.mkdir()
+        (target / "plan.md").write_text(
+            "> 🧭 状态：开发中\n\n# Plan: Active\n\n- [ ] 尚未完成\n", encoding="utf-8"
+        )
+
+        preview = OBSERVE.prepare_operation(
+            "command-plan",
+            {"project_path": str(target)},
+            state_root=state_dir,
+            harness_root=ROOT,
+        )
+
+        self.assertEqual(preview["status"], "blocked")
+        self.assertEqual(preview["exit_code"], 2)
+        self.assertFalse(preview["can_execute"])
+        self.assertNotIn("confirmation_token", preview)
+        self.assertIn("活跃计划", preview["summary"])
+        self.assertLessEqual(len(preview["summary"]), 300)
 
     def test_operation_preview_and_confirmation_are_idempotent_and_single_use(self) -> None:
         state_dir = self.project / "state"
@@ -242,6 +274,86 @@ class ObserveRuntimeTests(unittest.TestCase):
                 state_root=state_dir,
                 spawn_worker=False,
             )
+
+    def test_command_operation_uses_cli_preview_then_fixed_apply_arguments(self) -> None:
+        state_dir = self.project / "state"
+        target = self.project / "goal-project"
+        target.mkdir()
+        goal = "让个人开发者持续看清多个项目的真实交付状态。"
+        with mock.patch.object(
+            OBSERVE.subprocess,
+            "run",
+            return_value=subprocess.CompletedProcess([], 0, "预览完成，未发生写入。", ""),
+        ) as preview_run:
+            preview = OBSERVE.prepare_operation(
+                "command-goal",
+                {"project_path": str(target), "goal": goal},
+                state_root=state_dir,
+                harness_root=ROOT,
+            )
+        self.assertTrue(preview["can_execute"])
+        self.assertIn("预览完成", preview["preview"])
+        self.assertNotIn("--apply", preview_run.call_args.args[0])
+
+        OBSERVE.confirm_operation(
+            preview["operation_id"], preview["confirmation_token"], state_root=state_dir, spawn_worker=False
+        )
+        with mock.patch.object(
+            OBSERVE.subprocess,
+            "run",
+            return_value=subprocess.CompletedProcess([], 0, "已更新长期目标。", ""),
+        ) as apply_run:
+            result = OBSERVE.run_operation_worker(
+                preview["operation_id"], state_root=state_dir, harness_root=ROOT
+            )
+        command = apply_run.call_args.args[0]
+        self.assertEqual(command[:2], [str(ROOT / "bin" / "harness"), "goal"])
+        self.assertIn(str(target.resolve()), command)
+        self.assertIn(goal, command)
+        self.assertIn("--apply", command)
+        self.assertEqual(result["status"], "succeeded")
+        self.assertIn("已更新长期目标", result["summary"])
+        self.assertIn("已更新长期目标", result["result"])
+
+    def test_prepared_operation_can_be_cancelled_without_execution(self) -> None:
+        state_dir = self.project / "state"
+        preview = OBSERVE.prepare_operation("agent-sync", {}, state_root=state_dir)
+
+        cancelled = OBSERVE.cancel_operation(
+            preview["operation_id"], preview["confirmation_token"], state_root=state_dir
+        )
+
+        self.assertEqual(cancelled["status"], "cancelled")
+        self.assertIn("未执行写入", cancelled["summary"])
+        with self.assertRaisesRegex(OBSERVE.ObserveError, "unconfirmed"):
+            OBSERVE.cancel_operation(
+                preview["operation_id"], preview["confirmation_token"], state_root=state_dir
+            )
+
+    def test_recoverable_command_stop_is_recorded_as_blocked(self) -> None:
+        state_dir = self.project / "state"
+        preview = OBSERVE.prepare_operation("agent-sync", {}, state_root=state_dir)
+        OBSERVE.confirm_operation(
+            preview["operation_id"], preview["confirmation_token"], state_root=state_dir, spawn_worker=False
+        )
+        with mock.patch.object(
+            OBSERVE.subprocess,
+            "run",
+            return_value=subprocess.CompletedProcess([], 2, "", "等待 Reviewer 完成当前关卡"),
+        ):
+            result = OBSERVE.run_operation_worker(
+                preview["operation_id"], state_root=state_dir, harness_root=ROOT
+            )
+        self.assertEqual(result["status"], "blocked")
+        self.assertEqual(result["exit_code"], 2)
+
+    def test_agent_sync_operation_includes_loader_skills_and_hooks(self) -> None:
+        commands = OBSERVE.operation_commands(
+            {"action": "agent-sync", "parameters": {}}, harness_root=ROOT
+        )
+
+        self.assertEqual(commands[0][1:], ["agents", "sync", "--quiet"])
+        self.assertEqual(commands[1][1:], ["agents", "hooks", "--quiet"])
 
     def test_operation_mutex_rejects_parallel_mutation(self) -> None:
         state_dir = self.project / "state"
@@ -1251,6 +1363,8 @@ class ObserveRuntimeTests(unittest.TestCase):
             self.assertIn(contract, dashboard)
         self.assertNotIn("window.prompt", dashboard)
         self.assertNotIn("window.confirm", dashboard)
+        self.assertIn('field.type === "select" ? (field.options?.[0]?.value ?? "")', dashboard)
+        self.assertIn('preview.summary || "预检未通过；未发生写入。"', dashboard)
         self.assertIn("X-Harness-Action-Token", dashboard)
         self.assertIn("关闭会话不是写入前提", dashboard)
         self.assertIn("Brain 接入状态", dashboard)
@@ -1417,6 +1531,12 @@ class ObserveRuntimeTests(unittest.TestCase):
             "refreshOperations",
             "operation-active",
             "operation-history",
+            "showOperationResult",
+            "command-plan",
+            "command-goal",
+            "command-brain",
+            "command-e2e",
+            "/cancel",
         ):
             self.assertIn(marker, dashboard)
         for label in (
@@ -1426,6 +1546,14 @@ class ObserveRuntimeTests(unittest.TestCase):
             "修复 Agent 接入",
             "确认执行",
             "最近操作",
+            "通用命令",
+            "建立 Plan",
+            "维护长期目标",
+            "配置 Brain",
+            "推进单条需求",
+            "已安全停止",
+            "已取消",
+            "查看结果",
         ):
             self.assertIn(label, dashboard)
         self.assertNotIn("window.prompt", dashboard)
@@ -2725,7 +2853,7 @@ class ObserveRuntimeTests(unittest.TestCase):
 
             with urlopen(f"{base}/api/operations.json", timeout=1) as response:
                 operations = json.loads(response.read())
-            self.assertEqual(len(operations["catalog"]), 3)
+            self.assertEqual(len(operations["catalog"]), 7)
             action_token = operations["action_token"]
             preview_body = json.dumps(
                 {"action": "project-init", "parameters": {"project_path": str(target)}}
@@ -2784,6 +2912,37 @@ class ObserveRuntimeTests(unittest.TestCase):
             self.assertTrue((target / "AGENTS.md").is_file())
             self.assertTrue((state_dir / "operations" / "audit.jsonl").is_file())
             self.assertNotIn("confirmation_token", json.dumps(current))
+
+            cancel_target = self.project / "cancel-project"
+            cancel_target.mkdir()
+            cancel_preview_body = json.dumps(
+                {"action": "project-init", "parameters": {"project_path": str(cancel_target)}}
+            ).encode("utf-8")
+            with urlopen(
+                Request(
+                    f"{base}/api/operations/preview",
+                    data=cancel_preview_body,
+                    headers={"Content-Type": "application/json", "X-Harness-Action-Token": action_token},
+                    method="POST",
+                ),
+                timeout=1,
+            ) as response:
+                cancel_preview = json.loads(response.read())
+            cancel_body = json.dumps(
+                {"confirmation_token": cancel_preview["confirmation_token"]}
+            ).encode("utf-8")
+            with urlopen(
+                Request(
+                    f"{base}/api/operations/{cancel_preview['operation_id']}/cancel",
+                    data=cancel_body,
+                    headers={"Content-Type": "application/json", "X-Harness-Action-Token": action_token},
+                    method="POST",
+                ),
+                timeout=1,
+            ) as response:
+                cancelled = json.loads(response.read())
+            self.assertEqual(cancelled["status"], "cancelled")
+            self.assertFalse((cancel_target / "AGENTS.md").exists())
         finally:
             process.terminate()
             try:

@@ -30,6 +30,10 @@ resolve_brain_dir() {
     local config_dir="${MICK_HARNESS_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/mick-harness}"
     local user_config="$config_dir/brain.json"
     local config_file="${MICK_HARNESS_BRAIN_LEGACY_CONFIG:-$harness_root/config/.brain-config.yaml}"
+    local explicit_legacy="false"
+    if [ -n "${MICK_HARNESS_BRAIN_LEGACY_CONFIG:-}" ]; then
+        explicit_legacy="true"
+    fi
 
     BRAIN_MODE=""
     BRAIN_CONFIG_SOURCE="default"
@@ -65,12 +69,20 @@ PY
         BRAIN_REPO_REMOTE=$(grep '^\s*remote:' "$config_file" 2>/dev/null | head -1 | sed 's/^[^"]*"//;s/"[^"]*$//' | tr -d ' ')
         # Parse brain_repo.local_path
         BRAIN_REPO_LOCAL=$(grep '^\s*local_path:' "$config_file" 2>/dev/null | head -1 | sed 's/^[^"]*"//;s/"[^"]*$//' | tr -d ' ')
-        if [ -n "$BRAIN_REPO_REMOTE" ]; then
+        local legacy_local="${BRAIN_REPO_LOCAL/#\~/$HOME}"
+        if [ "$explicit_legacy" = "true" ] && [ -n "$BRAIN_REPO_REMOTE" ]; then
             BRAIN_MODE="remote"
             BRAIN_CONFIG_SOURCE="legacy"
-        elif [ -n "$BRAIN_REPO_LOCAL" ] && [ -d "${BRAIN_REPO_LOCAL/#\~/$HOME}" ]; then
-            BRAIN_MODE="local"
+        elif [ -d "$legacy_local" ]; then
+            if [ -n "$BRAIN_REPO_REMOTE" ]; then
+                BRAIN_MODE="remote"
+            else
+                BRAIN_MODE="local"
+            fi
             BRAIN_CONFIG_SOURCE="legacy"
+        else
+            BRAIN_REPO_LOCAL=""
+            BRAIN_REPO_REMOTE=""
         fi
     fi
 

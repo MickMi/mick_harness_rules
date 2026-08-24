@@ -65,6 +65,13 @@ class CommandContractTests(unittest.TestCase):
         )
         self.assertEqual(baseline["full_regression_tests"], 142)
 
+    def test_v021_context_budget_and_agent_skill_targets_are_machine_readable(self):
+        budget = self.registry["context_budget"]
+        self.assertLess(budget["combined_loader_bytes"], 32 * 1024)
+        self.assertEqual(budget["checker"], "scripts/harness-context-budget.py")
+        self.assertEqual(self.registry["host_adapters"]["codex"]["managed_skill_target"], "~/.codex/skills")
+        self.assertEqual(self.registry["host_adapters"]["claude-code"]["managed_skill_target"], "~/.claude/skills")
+
     def test_user_document_explains_preview_brain_and_host_boundaries(self):
         for phrase in (
             "先预览，再显式写入",
@@ -153,6 +160,19 @@ class PlanGoalCommandTests(unittest.TestCase):
             self.assertIn("存在尚未完成的活跃计划", result.stdout)
             self.assertEqual(plan.read_text(encoding="utf-8"), original)
 
+    def test_plan_preview_reports_active_plan_as_recoverable_conflict(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project = self.make_project(Path(temporary))
+            (project / "plan.md").write_text(
+                "> 🧭 状态：开发中\n\n# Plan: Existing\n\n- [ ] keep this\n", encoding="utf-8"
+            )
+
+            result = self.run_harness(project, "plan")
+
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("Harness Plan Preview", result.stdout)
+            self.assertIn("存在尚未完成的活跃计划", result.stdout)
+
     def test_plan_apply_appends_after_completed_history(self):
         with tempfile.TemporaryDirectory() as temporary:
             project = self.make_project(Path(temporary))
@@ -230,6 +250,47 @@ class PlanGoalCommandTests(unittest.TestCase):
             self.assertEqual(payload["mode"], "disabled")
             self.assertEqual(payload["state"], "disabled")
             self.assertEqual(payload["sync_scope"], "none")
+            self.assertFalse((root / "home" / ".mick-brain").exists())
+
+    def test_bundled_legacy_remote_does_not_configure_a_new_user(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = self.make_project(root, with_versions=False)
+            env = {
+                "HOME": str(root / "home"),
+                "MICK_HARNESS_CONFIG_DIR": str(root / "config"),
+                "MICK_HARNESS_BRAIN_LEGACY_CONFIG": "",
+            }
+            result = self.run_harness(
+                project, "brain", "status", "--json", extra_env=env, include_project=False
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["mode"], "disabled")
+            self.assertEqual(payload["source"], "default")
+            self.assertFalse((root / "home" / ".mick-brain").exists())
+
+    def test_shell_brain_resolver_ignores_bundled_remote_for_a_new_user(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            env = os.environ.copy()
+            env["HOME"] = str(root / "home")
+            env.pop("MICK_HARNESS_BRAIN_LEGACY_CONFIG", None)
+            script = (
+                f'source "{ROOT / "scripts/brain-resolve.sh"}"; '
+                f'resolve_brain_dir "{ROOT}"; '
+                'printf "%s|%s|%s\\n" "$BRAIN_MODE" "$BRAIN_CONFIG_SOURCE" "$BRAIN_DIR"'
+            )
+            result = subprocess.run(
+                ["bash", "-c", script],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.strip(), "disabled|default|")
             self.assertFalse((root / "home" / ".mick-brain").exists())
 
     def test_brain_local_configuration_previews_then_installs_explicitly(self):

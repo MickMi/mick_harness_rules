@@ -83,7 +83,9 @@ def brain_configuration() -> dict[str, Any]:
             local_match = re.search(r'(?m)^\s*local_path:\s*["\']?([^"\'\n]+)', text)
             remote = remote_match.group(1).strip() if remote_match else None
             local_path = local_match.group(1).strip() if local_match else "~/.mick-brain"
-            if remote or Path(local_path).expanduser().exists():
+            explicit_legacy = bool(os.environ.get("MICK_HARNESS_BRAIN_LEGACY_CONFIG"))
+            local_exists = Path(local_path).expanduser().exists()
+            if (explicit_legacy or local_exists) and (remote or local_exists):
                 return {
                     "mode": "remote" if remote else "local",
                     "local_path": local_path,

@@ -240,6 +240,7 @@ def _root_descriptors(
         (harness_root / "rules" / "skills", "harness_builtin", "harness", None),
         (home / ".codex" / "skills" / ".system", "codex_system", "global", None),
         (home / ".codex" / "skills", "codex_external", "global", None),
+        (home / ".claude" / "skills", "claude_external", "global", None),
         (home / ".agents" / "skills", "agent_external", "global", None),
         (home / ".codex" / "plugins" / "cache", "codex_plugin", "global", None),
     ]

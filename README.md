@@ -160,7 +160,7 @@ harness observe status
 | 操作 | 可能写入的位置 | 目的 | 回滚方式 |
 |---|---|---|---|
 | `harness install` | `~/.mick-harness`、`~/.local/bin/harness` | 安装全局 Harness 和 CLI | 删除目录和 symlink |
-| `harness agents sync/migrate` | `~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md` | 原子注入或迁移 managed loader | 使用同目录 `.mick-harness.bak` 或删除 `MICK-HARNESS-GLOBAL` 标记块 |
+| `harness agents sync/migrate` | `~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`、四个受管命令 Skill 链接 | 原子注入或迁移 managed loader，并让 Codex / Claude Code 发现 Harness 命令薄适配 | 使用同目录 `.mick-harness.bak`、删除 `MICK-HARNESS-GLOBAL` 标记块，或移除指向 Harness 的 `harness-*` Skill 链接 |
 | `harness agents hooks` | `~/.claude/settings.json`、`~/.codex/hooks.json` | 接入 session/turn 生命周期回写 | 使用同目录 `.mick-harness.bak` 或删除命令含 `harness-observe-hook.py` 的 Harness Hook 项 |
 | `harness init` | 项目内 `AGENTS.md`、`.harness/`、`.gitignore` | 项目挂载 Harness | 删除 `.harness`；移除 `AGENTS.md` symlink 或 `HARNESS:BEGIN` 标记块 |
 | `harness init --full` | 项目内 `.harness-config.yaml` | 启用完整配置和检查 | 删除该配置文件 |
@@ -256,7 +256,7 @@ harness update
 | `harness update` | 更新全局 Harness、重新生成规则、刷新注册项目、同步 Agent loader。 |
 | `harness agents scan` | 查看本机可自动管理的 Agent 入口。 |
 | `harness agents doctor [--json]` | 分层诊断发现、注入、Hook 配置和仍缺少的真实证据。 |
-| `harness agents sync` | 原子同步 managed loader；先用 `--dry-run` 预览。 |
+| `harness agents sync` | 原子同步 managed loader 与四个命令 Skill；同名用户 Skill 不覆盖，先用 `--dry-run` 预览。 |
 | `harness agents migrate` | 清理旧 Harness marker 并迁移到当前 Loader；先用 `--dry-run`。 |
 | `harness agents hooks` | 保留原配置并接入 Tier 1 生命周期回写；先用 `--dry-run`。 |
 

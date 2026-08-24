@@ -226,7 +226,11 @@ def legacy_brain_settings() -> dict[str, object] | None:
     local_match = re.search(r'^\s*local_path:\s*["\']?([^"\'\n]+)', text, re.MULTILINE)
     remote = remote_match.group(1).strip() if remote_match else None
     local_path = local_match.group(1).strip() if local_match else "~/.mick-brain"
-    if not remote and not Path(local_path).expanduser().exists():
+    explicit_legacy = bool(os.environ.get("MICK_HARNESS_BRAIN_LEGACY_CONFIG"))
+    local_exists = Path(local_path).expanduser().exists()
+    if not explicit_legacy and not local_exists:
+        return None
+    if not remote and not local_exists:
         return None
     return {
         "version": 1,
@@ -529,7 +533,7 @@ def command_plan(args: argparse.Namespace) -> int:
     if active:
         print("\n停止：存在尚未完成的活跃计划，本命令不会覆盖或并行追加。")
         print("未发生写入。请先完成、归档或由 Planner 裁决现有计划。")
-        return EXIT_CONFLICT if args.apply else 0
+        return EXIT_CONFLICT
 
     stage = plan_stage(facts, title)
     print(f"\n拟建立阶段：{title}")

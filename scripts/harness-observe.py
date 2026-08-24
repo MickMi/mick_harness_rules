@@ -3605,12 +3605,73 @@ OPERATION_DEFINITIONS: tuple[dict[str, Any], ...] = (
         "parameter": None,
         "confirmation": "同步 Agent 接入配置",
     },
+    {
+        "action": "command-plan",
+        "command_id": "plan",
+        "group": "command",
+        "label": "建立 Plan",
+        "description": "扫描项目事实，并在确认后建立或追加计划档案。",
+        "reads_label": "项目规则、当前 plan、版本目标与 Git 工作区事实",
+        "writes_label": "项目 plan.md",
+        "parameter": "project_path",
+        "confirmation": "写入项目 Plan",
+    },
+    {
+        "action": "command-goal",
+        "command_id": "goal",
+        "group": "command",
+        "label": "维护长期目标",
+        "description": "预览一个面向人类的长期项目目标，并在确认后写入。",
+        "reads_label": "docs/PROJECT.md、版本规划与当前 plan",
+        "writes_label": "项目 docs/PROJECT.md",
+        "parameter": "project_path",
+        "confirmation": "更新项目长期目标",
+    },
+    {
+        "action": "command-brain",
+        "command_id": "brain",
+        "group": "command",
+        "label": "配置 Brain",
+        "description": "明确选择仅本机、私有远端或暂不启用，并预览写入位置。",
+        "reads_label": "当前 Brain 模式、配置来源、本地仓库与远端身份",
+        "writes_label": "用户级 Brain 配置；不写记忆数据",
+        "parameter": "mode",
+        "confirmation": "更新 Brain 连接模式",
+    },
+    {
+        "action": "command-e2e",
+        "command_id": "e2e",
+        "group": "command",
+        "label": "推进单条需求",
+        "description": "检查一条需求的真实门禁，并在确认后记录受控推进请求。",
+        "reads_label": "当前版本、单条需求与 PM/Review/开发/QA 证据",
+        "writes_label": "项目内一条需求级 E2E 请求；不执行发布",
+        "parameter": "requirement_id",
+        "confirmation": "推进这一条需求",
+    },
 )
 OPERATION_BY_ACTION = {item["action"]: item for item in OPERATION_DEFINITIONS}
 
 
 def operation_catalog() -> list[dict[str, Any]]:
-    return [dict(item) for item in OPERATION_DEFINITIONS]
+    root = Path(os.environ.get("MICK_HARNESS_ROOT") or Path(__file__).resolve().parents[1]).resolve()
+    registry = load_json(root / "config" / "command-registry.json") or {}
+    contracts = {
+        item.get("id"): item
+        for item in registry.get("commands", [])
+        if isinstance(item, dict) and isinstance(item.get("id"), str)
+    }
+    items: list[dict[str, Any]] = []
+    for definition in OPERATION_DEFINITIONS:
+        item = dict(definition)
+        contract = contracts.get(item.get("command_id"))
+        if contract:
+            item["contract"] = {
+                key: contract.get(key)
+                for key in ("cli", "reads", "writes", "stops_on", "never_does", "preview_default", "write_flag")
+            }
+        items.append(item)
+    return items
 
 
 def operations_root(state_root: Path | None = None) -> Path:
@@ -3666,29 +3727,77 @@ def normalized_operation_parameters(action: str, parameters: dict[str, Any] | No
         parameters = {}
     if not isinstance(parameters, dict):
         raise ObserveError("Operation parameters must be an object", 400)
-    allowed = {"project_path", "full"} if action == "project-init" else set()
+    allowed_by_action = {
+        "project-init": {"project_path", "full"},
+        "command-plan": {"project_path", "title"},
+        "command-goal": {"project_path", "goal"},
+        "command-brain": {"mode", "local_path", "remote"},
+        "command-e2e": {"project_path", "requirement_id"},
+    }
+    allowed = allowed_by_action.get(action, set())
     unknown = set(parameters) - allowed
     if unknown:
         raise ObserveError(f"Unsupported operation parameters: {', '.join(sorted(unknown))}", 400)
-    if action != "project-init":
+    if action not in {"project-init", "command-plan", "command-goal", "command-brain", "command-e2e"}:
         return {}
 
-    raw_path = parameters.get("project_path")
-    if not isinstance(raw_path, str) or not raw_path.strip():
-        raise ObserveError("Project path is required", 400)
-    candidate = Path(raw_path).expanduser()
-    if not candidate.is_absolute():
-        raise ObserveError("Project path must be absolute", 400)
-    try:
-        resolved = candidate.resolve(strict=True)
-    except OSError as error:
-        raise ObserveError(f"Project path does not exist: {candidate}", 400) from error
-    if not resolved.is_dir():
-        raise ObserveError(f"Project path is not a directory: {resolved}", 400)
-    full = parameters.get("full", False)
-    if not isinstance(full, bool):
-        raise ObserveError("Project full mode must be true or false", 400)
-    return {"project_path": str(resolved), "full": full}
+    normalized: dict[str, Any] = {}
+    if action != "command-brain":
+        raw_path = parameters.get("project_path")
+        if not isinstance(raw_path, str) or not raw_path.strip():
+            raise ObserveError("Project path is required", 400)
+        candidate = Path(raw_path).expanduser()
+        if not candidate.is_absolute():
+            raise ObserveError("Project path must be absolute", 400)
+        try:
+            resolved = candidate.resolve(strict=True)
+        except OSError as error:
+            raise ObserveError(f"Project path does not exist: {candidate}", 400) from error
+        if not resolved.is_dir():
+            raise ObserveError(f"Project path is not a directory: {resolved}", 400)
+        normalized["project_path"] = str(resolved)
+    if action == "project-init":
+        full = parameters.get("full", False)
+        if not isinstance(full, bool):
+            raise ObserveError("Project full mode must be true or false", 400)
+        normalized["full"] = full
+    elif action == "command-plan":
+        title = str(parameters.get("title") or "").strip()
+        if len(title) > 120:
+            raise ObserveError("Plan title is too long", 400)
+        if title:
+            normalized["title"] = title
+    elif action == "command-goal":
+        goal = str(parameters.get("goal") or "").strip()
+        if not goal or len(goal) > 500:
+            raise ObserveError("A human project goal between 1 and 500 characters is required", 400)
+        normalized["goal"] = goal
+    elif action == "command-brain":
+        mode = str(parameters.get("mode") or "").strip()
+        if mode not in {"local", "remote", "disabled"}:
+            raise ObserveError("Brain mode must be local, remote, or disabled", 400)
+        normalized["mode"] = mode
+        local_path = str(parameters.get("local_path") or "").strip()
+        if local_path:
+            candidate = Path(local_path).expanduser()
+            if not candidate.is_absolute():
+                raise ObserveError("Brain local path must be absolute", 400)
+            normalized["local_path"] = str(candidate)
+        remote = str(parameters.get("remote") or "").strip()
+        if mode == "remote" and not remote:
+            raise ObserveError("Remote Brain mode requires a private Git URL", 400)
+        if remote:
+            if re.match(r"^https?://[^/@]+@", remote):
+                raise ObserveError("Brain remote URL must not contain credentials", 400)
+            if len(remote) > 500:
+                raise ObserveError("Brain remote URL is too long", 400)
+            normalized["remote"] = remote
+    else:
+        requirement_id = str(parameters.get("requirement_id") or "").strip()
+        if not re.fullmatch(r"[A-Za-z0-9._-]{1,120}", requirement_id):
+            raise ObserveError("A valid requirement id is required", 400)
+        normalized["requirement_id"] = requirement_id
+    return normalized
 
 
 def operation_preflight(
@@ -3723,12 +3832,42 @@ def operation_preflight(
         ]
         if parameters.get("full"):
             effects.append("同时检查 Brain 与扩展配置")
-    else:
+    elif action == "agent-sync":
         target = "本机受支持的 Code Agent"
         effects = ["重新生成 Agent 加载器", "同步受支持的 Hook 配置", "刷新工作台的 Agent 接入诊断"]
         if not (selected_root / "scripts" / "harness-agent-manager.py").is_file():
             can_execute = False
             blockers.append("Agent 管理器不存在")
+    else:
+        target = parameters.get("project_path") or "本机 Brain 配置"
+        effects_by_action = {
+            "command-plan": ["读取项目与 Git 事实", "只写项目 plan.md", "保留已有历史阶段"],
+            "command-goal": ["检查版本/技术污染", "只写 docs/PROJECT.md", "保留其他项目说明"],
+            "command-brain": ["写入用户级 Brain 模式配置", "不创建、删除或同步 Brain 数据"],
+            "command-e2e": ["读取单需求真实门禁", "记录一条受控推进请求", "最远止于发布候选"],
+        }
+        effects = effects_by_action[action]
+        try:
+            preview_command = operation_command_arguments(action, parameters, selected_root, apply=False)
+            environment = os.environ.copy()
+            environment["MICK_HARNESS_ROOT"] = str(selected_root)
+            environment["MICK_HARNESS_ACTIVITY"] = "0"
+            preview = subprocess.run(
+                preview_command,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                env=environment,
+            )
+            preview_summary = redacted_operation_output(preview.stdout or preview.stderr)
+            if preview.returncode != 0:
+                can_execute = False
+                blockers.append(preview_summary or f"命令预览停止（exit {preview.returncode}）")
+        except (OSError, subprocess.TimeoutExpired) as error:
+            can_execute = False
+            preview_summary = redacted_operation_output(str(error))
+            blockers.append(preview_summary or "命令预览不可用")
     return {
         "label": definition["label"],
         "description": definition["description"],
@@ -3738,6 +3877,10 @@ def operation_preflight(
         "effects": effects,
         "blockers": blockers,
         "can_execute": can_execute,
+        "preview": locals().get("preview_summary"),
+        "reads": definition.get("reads_label"),
+        "writes": definition.get("writes_label"),
+        "requires_confirmation": True,
         "recovery": "失败会保留可重试记录；服务更新复用幂等安装与旧配置恢复。",
     }
 
@@ -3765,17 +3908,22 @@ def prepare_operation(
     value = {
         "operation_id": operation_id,
         "action": action,
-        "status": "prepared",
+        "status": "prepared" if preflight["can_execute"] else "blocked",
         "created_at": now_iso(),
         "updated_at": now_iso(),
         "parameters": normalized,
         "fingerprint": fingerprint,
-        "confirmation_token": secrets.token_urlsafe(24),
         "reused": False,
         **preflight,
     }
+    if preflight["can_execute"]:
+        value["confirmation_token"] = secrets.token_urlsafe(24)
+    else:
+        value["exit_code"] = 2
+        value["summary"] = blocked_operation_summary(preflight["blockers"])
+        value["finished_at"] = now_iso()
     atomic_write(operation_path(operation_id, state_root), json_bytes(value))
-    append_operation_audit(value, "prepared", state_root=state_root)
+    append_operation_audit(value, "prepared" if preflight["can_execute"] else "blocked", state_root=state_root)
     return value
 
 
@@ -3835,6 +3983,28 @@ def confirm_operation(
     return public_operation(value)
 
 
+def cancel_operation(
+    operation_id: str,
+    confirmation_token: str,
+    *,
+    state_root: Path | None = None,
+) -> dict[str, Any]:
+    value = load_operation(operation_id, state_root)
+    if value.get("status") != "prepared":
+        raise ObserveError("Only an unconfirmed operation can be cancelled", 409)
+    expected = str(value.get("confirmation_token") or "")
+    if not expected or not hmac.compare_digest(str(confirmation_token), expected):
+        raise ObserveError("Invalid operation cancellation", 403)
+    value.pop("confirmation_token", None)
+    value["status"] = "cancelled"
+    value["summary"] = f"{value.get('label', 'Harness 操作')}已取消，未执行写入。"
+    value["finished_at"] = now_iso()
+    value["updated_at"] = now_iso()
+    atomic_write(operation_path(operation_id, state_root), json_bytes(value))
+    append_operation_audit(value, "cancelled", state_root=state_root)
+    return public_operation(value)
+
+
 @contextlib.contextmanager
 def operation_mutex(*, state_root: Path | None = None) -> Iterable[None]:
     path = operations_root(state_root) / "mutation.lock"
@@ -3855,6 +4025,57 @@ def operation_mutex(*, state_root: Path | None = None) -> Iterable[None]:
             path.unlink()
 
 
+def operation_command_arguments(
+    action: str,
+    parameters: dict[str, Any],
+    selected_root: Path,
+    *,
+    apply: bool,
+) -> list[str]:
+    harness = str(selected_root / "bin" / "harness")
+    if action == "command-plan":
+        command = [harness, "plan", "--project", str(parameters["project_path"])]
+        if parameters.get("title"):
+            command.extend(["--title", str(parameters["title"])])
+        if apply:
+            command.append("--apply")
+        return command
+    if action == "command-goal":
+        command = [
+            harness,
+            "goal",
+            "--project",
+            str(parameters["project_path"]),
+            "--set",
+            str(parameters["goal"]),
+        ]
+        if apply:
+            command.append("--apply")
+        return command
+    if action == "command-brain":
+        command = [harness, "brain", "configure", "--mode", str(parameters["mode"])]
+        if parameters.get("local_path"):
+            command.extend(["--local-path", str(parameters["local_path"])])
+        if parameters.get("remote"):
+            command.extend(["--remote", str(parameters["remote"])])
+        if apply:
+            command.append("--apply")
+        return command
+    if action == "command-e2e":
+        command = [
+            harness,
+            "e2e",
+            "--project",
+            str(parameters["project_path"]),
+            "--requirement",
+            str(parameters["requirement_id"]),
+        ]
+        if apply:
+            command.append("--run")
+        return command
+    raise ObserveError(f"Unsupported command operation: {action}", 400)
+
+
 def operation_commands(value: dict[str, Any], *, harness_root: Path | None = None) -> list[list[str]]:
     configured_root = os.environ.get("MICK_HARNESS_ROOT")
     selected_root = (harness_root or (Path(configured_root) if configured_root else Path(__file__).resolve().parents[1])).resolve()
@@ -3868,14 +4089,35 @@ def operation_commands(value: dict[str, Any], *, harness_root: Path | None = Non
             command.append("--full")
         return [command]
     if action == "agent-sync":
-        return [[harness, "agents", "sync", "--quiet"]]
+        return [
+            [harness, "agents", "sync", "--quiet"],
+            [harness, "agents", "hooks", "--quiet"],
+        ]
+    if action in {"command-plan", "command-goal", "command-brain", "command-e2e"}:
+        return [operation_command_arguments(str(action), value.get("parameters", {}), selected_root, apply=True)]
     raise ObserveError(f"Unsupported operation: {action}", 400)
 
 
+def redacted_operation_output(value: str) -> str:
+    text = value.replace("\x00", " ")
+    text = re.sub(r"(?i)(token|password|secret|authorization)[=: ]+[^\s]+", r"\1=[redacted]", text)
+    text = re.sub(r"(https?://)[^/@\s]+@", r"\1[redacted]@", text)
+    lines = [" ".join(line.split()) for line in text.splitlines() if line.strip()]
+    return "\n".join(lines)[:2000]
+
+
 def redacted_operation_error(value: str) -> str:
-    compact = " ".join(value.split())[:500]
-    compact = re.sub(r"(?i)(token|password|secret|authorization)[=: ]+[^ ]+", r"\1=[redacted]", compact)
+    compact = " ".join(redacted_operation_output(value).split())[:500]
     return compact or "操作失败，未返回可读错误。"
+
+
+def blocked_operation_summary(blockers: list[str]) -> str:
+    for blocker in blockers:
+        for line in blocker.splitlines():
+            compact = line.strip()
+            if compact.startswith(("停止：", "错误：")):
+                return compact[:300]
+    return "预检未通过；未发生写入。"
 
 
 def run_operation_worker(
@@ -3897,6 +4139,7 @@ def run_operation_worker(
             append_operation_audit(value, "started", state_root=state_root)
             environment = os.environ.copy()
             environment["MICK_HARNESS_ACTIVITY"] = "0"
+            last_output = ""
             for command in operation_commands(value, harness_root=harness_root):
                 result = subprocess.run(
                     command,
@@ -3909,12 +4152,17 @@ def run_operation_worker(
                 if result.returncode != 0:
                     detail = redacted_operation_error(result.stderr or result.stdout)
                     raise ObserveError(detail, result.returncode or 1)
+                last_output = redacted_operation_output(result.stdout or result.stderr)
             value["status"] = "succeeded"
             value["exit_code"] = 0
-            value["summary"] = f"{value.get('label', 'Harness 操作')}已完成。"
+            if last_output:
+                value["result"] = last_output
+                value["summary"] = last_output.splitlines()[-1][:300]
+            else:
+                value["summary"] = f"{value.get('label', 'Harness 操作')}已完成。"
     except (OSError, ObserveError, subprocess.TimeoutExpired) as error:
-        value["status"] = "failed"
         value["exit_code"] = getattr(error, "exit_code", 1)
+        value["status"] = "blocked" if value["exit_code"] == 2 else "failed"
         value["summary"] = redacted_operation_error(str(error))
     value["finished_at"] = now_iso()
     value["updated_at"] = now_iso()
@@ -4546,7 +4794,9 @@ def serve_runtime(
                     return
                 self._send_bytes(200, "application/json", json_bytes(result))
                 return
-            operation_execute = re.fullmatch(r"/api/operations/(op_[A-Za-z0-9]{16,40})/execute", parsed.path)
+            operation_execute = re.fullmatch(
+                r"/api/operations/(op_[A-Za-z0-9]{16,40})/(execute|cancel)", parsed.path
+            )
             operation_action = parsed.path == OPERATION_PREVIEW_PATH or operation_execute is not None
             if operation_action:
                 supplied_action_token = self.headers.get("X-Harness-Action-Token", "")
@@ -4571,10 +4821,13 @@ def serve_runtime(
                         raise ObserveError("Operation body must be an object", 400)
                     if parsed.path == OPERATION_PREVIEW_PATH:
                         result = prepare_operation(str(body.get("action") or ""), body.get("parameters"))
-                    else:
+                    elif operation_execute.group(2) == "execute":
                         result = confirm_operation(
-                            operation_execute.group(1),
-                            str(body.get("confirmation_token") or ""),
+                            operation_execute.group(1), str(body.get("confirmation_token") or "")
+                        )
+                    else:
+                        result = cancel_operation(
+                            operation_execute.group(1), str(body.get("confirmation_token") or "")
                         )
                 except (UnicodeDecodeError, json.JSONDecodeError):
                     self._send_bytes(400, "application/json", json_bytes({"error": "invalid-json"}))

@@ -1,4 +1,4 @@
-> 🧭 状态：v0.21.0 开发中 | 进度 201/202 | 当前归属：Executor | 最近交付：常驻上下文已纳入预算并将四类命令迁移为显式 Skill
+> 🧭 状态：v0.21.0 开发完成，等待 Review | 进度 202/202 | 当前归属：Review | 最近交付：四类命令已进入工作台，跨 Agent Skill、Brain 新用户降级与真实浏览器路径均已验证
 
 # Plan: Company Runtime V0 → Portfolio V0.2
 
@@ -2305,17 +2305,17 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 - [x] 199. [Brain] 实现 `status / configure / install / sync` 的统一配置体验，支持仅本机、私有远端、暂不启用三态，并让工作台解释写入位置和同步范围。
 - [x] 200. [E2E] 实现以单条需求为单位的受控编排，复用 v0.20 门禁投影，输出当前关卡、缺失证据、停止原因和发布候选结果。
 - [x] 201. [上下文瘦身] 将常驻 Loader 压缩到可审计预算，把角色详细流程迁移为按需 Skill / reference，并为生成物上限、截断和关键 Kernel 保留建立自动检查。
-- [ ] 202. [工作台与验证] 提供命令发现、预览、执行反馈和历史结果入口；完成跨 Agent 适配、Brain 无远端路径、Token 预算、全仓回归和真实用户路径审查。
+- [x] 202. [工作台与验证] 提供命令发现、预览、执行反馈和历史结果入口；完成跨 Agent 适配、Brain 无远端路径、Token 预算、全仓回归和真实用户路径审查。
 
 ### 完成判定
 
-- [ ] CLI 在不依赖特定 Agent 的情况下可发现和执行四类能力；Codex `/plan`、`/goal` 原生命令不被覆盖或误导。
-- [ ] Plan / Goal 写入前均有预览；不会覆盖不相关的活跃计划，也不会把版本目标写成项目长期目标。
-- [ ] 无 Brain 远端时可选择仅本机或暂不启用，工作台不显示虚假的“待同步”；配置私有远端后能验证真实仓库与同步结果。
-- [ ] E2E 无 `requirement_id` 时拒绝执行；任何门禁缺失都停止在正确角色，只有 QA 证据完整时进入发布候选。
-- [ ] 全局加项目常驻 Loader 明显低于 Codex 默认 32 KiB 指令发现上限，并有自动预算测试；详细 Skill 只在触发时加载。
-- [ ] 工作台能说明命令会读取什么、写到哪里、需要哪些确认，并能展示成功、失败、取消和可恢复状态。
-- [ ] 全量测试、规则生成、脚本语法、安装冒烟、跨 Agent 兼容、Brain 本地降级和真实工作台路径均提供本次证据。
+- [x] CLI 在不依赖特定 Agent 的情况下可发现和执行四类能力；Codex `/plan`、`/goal` 原生命令不被覆盖或误导。
+- [x] Plan / Goal 写入前均有预览；不会覆盖不相关的活跃计划，也不会把版本目标写成项目长期目标。
+- [x] 无 Brain 远端时可选择仅本机或暂不启用，工作台不显示虚假的“待同步”；配置私有远端后能验证真实仓库与同步结果。
+- [x] E2E 无 `requirement_id` 时拒绝执行；任何门禁缺失都停止在正确角色，只有 QA 证据完整时进入发布候选。
+- [x] 全局加项目常驻 Loader 明显低于 Codex 默认 32 KiB 指令发现上限，并有自动预算测试；详细 Skill 只在触发时加载。
+- [x] 工作台能说明命令会读取什么、写到哪里、需要哪些确认，并能展示成功、失败、取消和可恢复状态。
+- [x] 全量测试、规则生成、脚本语法、安装冒烟、跨 Agent 兼容、Brain 本地降级和真实工作台路径均提供本次证据。
 
 ### Preflight 与停止条件
 
@@ -2360,3 +2360,10 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 - files: `rules/core.md`, `generate.sh`, `dist/AGENTS.md`, `scripts/harness-context-budget.py`, `tests/test_context_budget.py`, four `rules/skills/harness-*` adapters, Skill governance docs, `plan.md`
 - verify: 四个新 Skill 经 Skill Creator `quick_validate.py` 均返回 `Skill is valid!`；上下文预算在 4 KiB Capsule 最坏常规输入下仍低于 `28 KiB` 合计上限，关键 Kernel marker 全部保留；全仓 `165 tests / 0 failures`，`generate.sh --check`、Python/Shell/JSON/Skill 校验与 `git diff --check` 通过。
 - notes: 常驻入口相比 v0.20.1 的 `32,640 bytes` 基线显著降低；删去 Core 与生成器中的重复解释但保留 Tripwire、验证 Gate、Debug Card、回合卡片和按需 Extended 链路；个人 Capsule 设为 4 KiB UTF-8 安全上限；四类 Agent 入口是默认禁止隐式触发的薄 Skill，底层事实与写入仍由 CLI 控制，Codex 原生 `/plan`、`/goal` 未被覆盖。
+
+### Step 202 — 2026-08-24
+
+- files: `scripts/harness-observe.py`, `web/observe-dashboard.html`, Agent/Skill/Brain 适配脚本与注册表、命令文档、全套自动测试、`docs/VERSIONS.md`, `plan.md`
+- verify: `178 tests / 0 failures`；发布级 Gate 同时通过全仓回归、`generate.sh --check` 与 `git diff --check`；四个命令 Skill 均通过 `quick_validate.py`，上下文预算为 Core `8,825/10,240`、项目 Loader `15,221/16,384`、全局 Loader `11,076/12,288`、合计 `26,297/28,672 bytes`；隔离项目 `setup.sh --non-interactive` 无警告，隔离 HOME 下 Codex/Claude Loader 与四个 Skill 首次同步、再次幂等同步通过；无用户配置时 Brain 为 `disabled/default` 且未创建目录，现有 Mick Brain 仍核对为 `connected` 且远端一致。
+- interaction: 6246 真实工作台展示 3 个系统操作与 4 个通用命令；已有活跃 Plan 的预检以 `已安全停止` 记录且不写入，长期目标确认单可取消并在历史查看结果；390px 视口下页面 `scrollWidth=390`，弹窗 `scrollWidth=clientWidth=348`，控制台 0 error / 0 warning。
+- notes: 工作台操作全部使用服务端白名单参数和固定 CLI 数组，不执行用户拼接的 Shell；公开仓库的旧 Brain 远端只兼容已经存在本地 Brain 的老用户，新用户不会继承作者远端；跨 Agent 已证明文件与 Skill 适配幂等，宿主真实加载仍应在发布安装后的新 Codex/Claude 会话做最终确认。

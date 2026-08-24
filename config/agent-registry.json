@@ -12,6 +12,7 @@
         "extensions": ["anthropic.claude-code", "anthropic.claude"]
       },
       "loader": {"surface": "agent", "target": ".claude/CLAUDE.md", "managed": true},
+      "skills": {"target": ".claude/skills", "managed": ["harness-plan", "harness-goal", "harness-brain", "harness-e2e"]},
       "lifecycle": {"adapter": "claude-hooks", "events": ["SessionStart", "UserPromptSubmit", "Stop", "SessionEnd"]},
       "limitations": []
     },
@@ -26,6 +27,7 @@
         "extensions": ["openai.chatgpt", "openai.codex"]
       },
       "loader": {"surface": "codex", "target": ".codex/AGENTS.md", "managed": true},
+      "skills": {"target": ".codex/skills", "managed": ["harness-plan", "harness-goal", "harness-brain", "harness-e2e"]},
       "lifecycle": {"adapter": "codex-hooks", "events": ["SessionStart", "UserPromptSubmit", "Stop", "SessionEnd"]},
       "limitations": ["Lifecycle hook configuration depends on the installed Codex surface capability."]
     },

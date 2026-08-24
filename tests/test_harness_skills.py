@@ -32,7 +32,7 @@ class SkillManagerTests(unittest.TestCase):
         self.harness = self.root / "harness"
         self.home = self.root / "home"
         self.project = self.root / "project"
-        for path in (self.harness / "rules" / "skills", self.home / ".codex" / "skills", self.home / ".agents" / "skills", self.project / ".harness" / "skills"):
+        for path in (self.harness / "rules" / "skills", self.home / ".codex" / "skills", self.home / ".claude" / "skills", self.home / ".agents" / "skills", self.project / ".harness" / "skills"):
             path.mkdir(parents=True)
 
     def tearDown(self) -> None:
@@ -117,6 +117,15 @@ class SkillManagerTests(unittest.TestCase):
         item = SKILLS.skill_snapshot(harness_root=self.harness, home=self.home)["items"][0]
 
         self.assertEqual(item["description"], "First sentence. Second sentence.")
+
+    def test_discovers_claude_global_skills_without_executing_them(self) -> None:
+        write_skill(self.home / ".claude" / "skills", "claude-helper", "Summarize a verified result.")
+
+        item = SKILLS.skill_snapshot(harness_root=self.harness, home=self.home)["items"][0]
+
+        self.assertEqual(item["name"], "claude-helper")
+        self.assertEqual(item["source"], "claude_external")
+        self.assertEqual(item["load_status"], "unverified")
 
 
 if __name__ == "__main__":
