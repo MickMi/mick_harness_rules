@@ -2367,3 +2367,41 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 - verify: `178 tests / 0 failures`；发布级 Gate 同时通过全仓回归、`generate.sh --check` 与 `git diff --check`；四个命令 Skill 均通过 `quick_validate.py`，上下文预算为 Core `8,825/10,240`、项目 Loader `15,221/16,384`、全局 Loader `11,076/12,288`、合计 `26,297/28,672 bytes`；隔离项目 `setup.sh --non-interactive` 无警告，隔离 HOME 下 Codex/Claude Loader 与四个 Skill 首次同步、再次幂等同步通过；无用户配置时 Brain 为 `disabled/default` 且未创建目录，现有 Mick Brain 仍核对为 `connected` 且远端一致。
 - interaction: 6246 真实工作台展示 3 个系统操作与 4 个通用命令；已有活跃 Plan 的预检以 `已安全停止` 记录且不写入，长期目标确认单可取消并在历史查看结果；390px 视口下页面 `scrollWidth=390`，弹窗 `scrollWidth=clientWidth=348`，控制台 0 error / 0 warning。
 - notes: 工作台操作全部使用服务端白名单参数和固定 CLI 数组，不执行用户拼接的 Shell；公开仓库的旧 Brain 远端只兼容已经存在本地 Brain 的老用户，新用户不会继承作者远端；跨 Agent 已证明文件与 Skill 适配幂等，宿主真实加载仍应在发布安装后的新 Codex/Claude 会话做最终确认。
+
+## v0.21.0 · 2026-08-24 · 默认轻量执行与可介入流程
+
+### 用户目标
+
+- Harness 默认让明确、低风险、易验证的任务直接完成，不把 Self-Test、角色流转和回合仪式暴露给用户。
+- 完整需求才进入 E2E：第一轮先说明理解、范围、关键假设和验收方式，用户确认后自主执行到发布候选；只有偏离原意或遇到高风险决策时才重新打断。
+- 用户无需记命令；自动判断是默认入口，显式模式只作为覆盖，工作台后续能说明当前模式、升级原因、耗时和是否需要用户决定。
+
+### 已确认产品决策
+
+- 默认模式为 `auto`，优先选择最轻量且足以证明结果的流程。
+- 明确、可恢复、无产品方向判断且验证路径清楚的任务进入 `quick`；不创建 plan、不启动角色流程、不展示 Self-Test 或六槽回合卡片，只在异常、超出原意或需要权限时打断。
+- `standard` 用于普通多文件开发或少量产品判断；`e2e` 用于完整需求，并固定止于发布候选。
+- 模式是交互强度，不降低先读后改、危险操作确认、撞墙熔断和完成验证；安全护栏默认后台运行。
+- 快速路径发现范围扩大时不得静默增加流程，必须说明升级原因；`standard → e2e` 必须由用户确认。
+
+### 实施步骤
+
+- [x] 203. [模式合同] 在机器可读命令合同、用户说明和合同测试中定义 `auto / quick / standard / e2e` 的选择、可见输出、升级与发布边界。
+- [x] 204. [Kernel 轻量路径] 调整 Core / Extended：简单任务静默执行安全检查，Self-Test 与回合卡片只在用户需要导航或真实高风险时可见；生成 Loader 并验证上下文预算。
+- [ ] 205. [运行投影] 让 Agent 适配与本地事件记录当前有效模式、选择原因和升级原因，不以 Prompt 猜测替代结构化状态。
+- [ ] 206. [工作台与验收] 在工作台展示模式、耗时、工具往返和待用户决策；完成快速安装、标准开发与 E2E 发布候选三条真实路径验收。
+
+### 本轮开发边界
+
+- 本轮只执行 Step 203–204，形成可评审的模式合同和 Kernel 行为；不继续实现工作台或部署到用户全局配置。
+- 完成 Step 204 后暂停，由用户检查“简单任务是否足够安静、E2E 是否仍保持可介入”，确认后再进入 Step 205。
+
+### Step 203 — 2026-08-24
+- files: `config/command-registry.json`, `docs/COMMANDS.md`, `docs/VERSIONS.md`, `tests/test_harness_commands.py`, `plan.md`
+- verify: `python3 -m json.tool config/command-registry.json` exit 0；`python3 -B -m unittest tests.test_harness_commands tests.test_context_budget` → 29 passed。
+- notes: 默认 `auto`，Quick 不建 plan/角色流且不展示 Self-Test/回合卡片；E2E 第一轮确认意图后自主到发布候选，方向变化或高风险动作才重新询问。
+
+### Step 204 — 2026-08-24
+- files: `rules/core.md`, `rules/extended.md`, `dist/AGENTS.md`, `tests/test_context_budget.py`, `plan.md`
+- verify: `./generate.sh --check`、`git diff --check` exit 0；上下文预算 Core `9,379/10,240`、项目 Loader `15,775/16,384`、全局 Loader `11,630/12,288`、合计 `27,405/28,672 bytes`，status passed。
+- notes: Self-Test 改为默认内部检查；Quick 交付只给结果与验证，Standard/E2E 才使用可见导航；本轮按约定暂停，不进入 Step 205–206。

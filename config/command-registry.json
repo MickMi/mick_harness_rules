@@ -19,6 +19,53 @@
     "capsule_bytes": 4096,
     "checker": "scripts/harness-context-budget.py"
   },
+  "execution_modes": {
+    "default": "auto",
+    "principle": "use the lightest process that can safely prove the user's result",
+    "modes": {
+      "auto": {
+        "purpose": "select quick, standard, or e2e from the confirmed user intent and actual risk",
+        "user_command_required": false
+      },
+      "quick": {
+        "purpose": "finish a clear, reversible, low-risk task with one sufficient verification path",
+        "creates_plan": false,
+        "starts_role_workflow": false,
+        "shows_self_test": false,
+        "shows_round_card": false,
+        "interrupts_user_on": [
+          "the requested outcome becomes ambiguous",
+          "the scope materially expands beyond the confirmed intent",
+          "a destructive, privileged, costly, or externally visible action is required"
+        ]
+      },
+      "standard": {
+        "purpose": "deliver ordinary multi-file work or work with a small number of product decisions",
+        "initial_confirmation": "only when a material product choice is unresolved",
+        "shows_progress_at": "a meaningful milestone, user decision, blocker, or delivery"
+      },
+      "e2e": {
+        "purpose": "deliver one clear requirement from confirmed intent to a release candidate",
+        "initial_confirmation": "summarize intent, scope, assumptions, acceptance, and path before autonomous execution",
+        "stops_at": "release_candidate",
+        "interrupts_user_on": [
+          "a new product decision falls outside the confirmed intent",
+          "evidence disproves a material assumption or requires a direction change",
+          "a destructive, privileged, costly, or externally visible action is required"
+        ]
+      }
+    },
+    "escalation": {
+      "quick_to_standard": "explain the unexpected complexity before expanding the visible process when user intent may change",
+      "standard_to_e2e": "requires explicit user confirmation",
+      "never_changes": [
+        "read before edit",
+        "dangerous action confirmation",
+        "anti-wall stop",
+        "evidence-backed completion"
+      ]
+    }
+  },
   "host_adapters": {
     "codex": {
       "reserved_commands": [
@@ -159,7 +206,7 @@
     {
       "id": "e2e",
       "cli": "harness e2e",
-      "purpose": "inspect and advance one requirement through the controlled delivery gates",
+      "purpose": "confirm one clear requirement intent and advance it autonomously to a release candidate",
       "preview_default": true,
       "write_flag": "--run",
       "required_inputs": [
@@ -179,12 +226,13 @@
       ],
       "stops_on": [
         "requirement_id is missing or ambiguous",
-        "the next gate lacks its required artifact or independent evidence",
+        "the initial intent, scope, assumptions, or acceptance criteria are not confirmed",
+        "new evidence requires a material direction or scope change outside the confirmed intent",
         "a destructive, privileged, or externally visible action needs user approval"
       ],
       "never_does": [
         "merge, push, tag, deploy, or publish automatically",
-        "skip product review, implementation, or independent QA gates",
+        "continue after a material divergence from confirmed user intent",
         "combine multiple requirements into one hidden execution"
       ]
     }

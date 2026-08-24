@@ -16,6 +16,19 @@ SPEC.loader.exec_module(BUDGET)
 
 
 class ContextBudgetTests(unittest.TestCase):
+    def test_core_keeps_quick_tasks_quiet_without_weakening_safety(self) -> None:
+        core = (ROOT / "rules" / "core.md").read_text(encoding="utf-8")
+
+        for phrase in (
+            "默认 `auto`",
+            "`quick` 不展示 Executor 前缀",
+            "`quick` 交付省略卡片",
+            "Self-Test 是内部安全检查",
+            "不降低先读后改、危险确认、撞墙熔断和完成验证",
+            "`standard → e2e` 必须由用户确认",
+        ):
+            self.assertIn(phrase, core)
+
     def test_current_generated_loaders_fit_budget_and_keep_kernel(self) -> None:
         report = BUDGET.measure(ROOT)
 

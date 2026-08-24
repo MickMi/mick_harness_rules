@@ -50,6 +50,25 @@ class CommandContractTests(unittest.TestCase):
         for operation in ("merge", "push", "tag", "deploy", "publish"):
             self.assertIn(operation, prohibited)
 
+    def test_execution_modes_default_to_the_lightest_safe_process(self):
+        contract = self.registry["execution_modes"]
+        self.assertEqual(contract["default"], "auto")
+        self.assertEqual(set(contract["modes"]), {"auto", "quick", "standard", "e2e"})
+
+        quick = contract["modes"]["quick"]
+        self.assertFalse(quick["creates_plan"])
+        self.assertFalse(quick["starts_role_workflow"])
+        self.assertFalse(quick["shows_self_test"])
+        self.assertFalse(quick["shows_round_card"])
+
+        e2e = contract["modes"]["e2e"]
+        self.assertEqual(e2e["stops_at"], "release_candidate")
+        self.assertIn("intent", e2e["initial_confirmation"])
+        self.assertEqual(
+            contract["escalation"]["standard_to_e2e"],
+            "requires explicit user confirmation",
+        )
+
     def test_exit_codes_are_stable_and_documented(self):
         self.assertEqual(set(self.registry["exit_codes"]), {"0", "2", "64", "69", "74"})
         for code in self.registry["exit_codes"]:
