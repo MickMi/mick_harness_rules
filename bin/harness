@@ -928,6 +928,10 @@ case "${1:-}" in
         shift
         cmd_structured_workflow goal "$@"
         ;;
+    e2e)
+        shift
+        cmd_structured_workflow e2e "$@"
+        ;;
     brain)
         shift
         cmd_brain "$@"
@@ -965,6 +969,7 @@ case "${1:-}" in
         echo "  harness check [dir]      验证当前项目脚手架完整性"
         echo "  harness plan [options]   扫描项目并预览/建立 plan.md（默认只预览）"
         echo "  harness goal [options]   查看/维护长期项目目标（默认只预览）"
+        echo "  harness e2e --requirement <id>  查看/请求单条需求的受控交付门禁"
         echo "  harness report [dir]     查看当前任务计划与执行状态"
         echo "  harness metrics [dir]    聚合任务质量指标"
         echo "  harness observe [cmd]    汇总项目进度并向本地工作服务器回写 Agent 事件"

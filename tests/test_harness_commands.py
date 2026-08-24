@@ -337,6 +337,96 @@ class PlanGoalCommandTests(unittest.TestCase):
             self.assertIn("Brain is disabled", result.stdout)
             self.assertFalse((root / "home" / ".mick-brain").exists())
 
+    def make_e2e_project(self, root: Path, rounds: dict[str, dict] | None = None) -> Path:
+        project = self.make_project(root, with_versions=False)
+        (project / "docs" / "VERSIONS.md").write_text(
+            "# Versions\n\n"
+            "## 0.21.0\n\n"
+            "- Status: in_progress\n"
+            "- Branch: main\n"
+            "- Goal: 建立安全的命令入口。\n\n"
+            "### Requirements\n\n"
+            "- [ ] `task-200` 单需求端到端交付\n",
+            encoding="utf-8",
+        )
+        if rounds is not None:
+            run_dir = project / ".harness-runtime" / "runs" / "run-test"
+            run_dir.mkdir(parents=True)
+            snapshot = {
+                "schema_version": "0",
+                "run": {"run_id": "run-test", "name": project.name, "status": "observing"},
+                "plan": None,
+                "workflows": {},
+                "tasks": {},
+                "artifacts": {},
+                "verifications": [],
+                "blocks": {},
+                "approvals": {},
+                "audit_findings": [],
+                "agent_sessions": {},
+                "agent_turns": {},
+                "harness_commands": {},
+                "work_rounds": rounds,
+                "decisions": {},
+                "handoffs": {},
+                "collector_warnings": [],
+                "last_sequence": len(rounds),
+                "updated_at": "2026-08-24T00:00:00+00:00",
+            }
+            (run_dir / "snapshot.json").write_text(json.dumps(snapshot), encoding="utf-8")
+            (project / ".harness-runtime" / "index.json").write_text(
+                json.dumps({"runs": [{"run_id": "run-test", "snapshot": "runs/run-test/snapshot.json"}]}),
+                encoding="utf-8",
+            )
+        return project
+
+    def test_e2e_preview_requires_one_current_requirement_and_writes_nothing(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project = self.make_e2e_project(Path(temporary))
+            missing = self.run_harness(project, "e2e")
+            self.assertEqual(missing.returncode, 64)
+            self.assertIn("必须提供 --requirement", missing.stderr)
+
+            preview = self.run_harness(project, "e2e", "--requirement", "task-200")
+            self.assertEqual(preview.returncode, 0, preview.stderr)
+            self.assertIn("当前角色：PM", preview.stdout)
+            self.assertIn("不会自动 merge、push、tag、deploy 或 publish", preview.stdout)
+            self.assertFalse((project / ".harness-runtime").exists())
+
+            unknown = self.run_harness(project, "e2e", "--requirement", "task-999")
+            self.assertEqual(unknown.returncode, 2)
+            self.assertIn("当前版本 v0.21.0 不包含需求", unknown.stderr)
+            self.assertFalse((project / ".harness-runtime").exists())
+
+    def test_e2e_run_records_waiting_request_without_claiming_role_completion(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project = self.make_e2e_project(Path(temporary))
+            result = self.run_harness(project, "e2e", "--requirement", "task-200", "--run")
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("Harness 未伪造角色工作或自动启动 Agent", result.stdout)
+            requests = list((project / ".harness-runtime" / "command-requests" / "e2e").glob("*.json"))
+            self.assertEqual(len(requests), 1)
+            payload = json.loads(requests[0].read_text(encoding="utf-8"))
+            self.assertEqual(payload["status"], "waiting_for_role")
+            self.assertEqual(payload["current_role"], "PM")
+
+    def test_e2e_only_marks_release_candidate_after_all_gate_evidence(self):
+        rounds = {
+            "pm": {"round_id": "pm", "requirement_id": "task-200", "role": "PM", "status": "completed", "gate_result": "ready_for_review", "derived_from_sequence": 1},
+            "review": {"round_id": "review", "requirement_id": "task-200", "role": "Reviewer", "status": "completed", "review_mode": "product_review", "gate_result": "approved", "next_role": "Executor", "derived_from_sequence": 2},
+            "dev": {"round_id": "dev", "requirement_id": "task-200", "role": "Executor", "status": "completed", "gate_result": "delivered", "artifact_refs": ["src/change.py"], "verification_refs": ["dev:test"], "derived_from_sequence": 3},
+            "qa": {"round_id": "qa", "requirement_id": "task-200", "role": "QA", "status": "completed", "gate_result": "passed", "verification_refs": ["qa:test"], "derived_from_sequence": 4},
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            project = self.make_e2e_project(Path(temporary), rounds=rounds)
+            result = self.run_harness(project, "e2e", "--requirement", "task-200", "--run")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("已形成发布候选", result.stdout)
+            request = next((project / ".harness-runtime" / "command-requests" / "e2e").glob("*.json"))
+            payload = json.loads(request.read_text(encoding="utf-8"))
+            self.assertTrue(payload["release_candidate"])
+            self.assertEqual(payload["status"], "release_candidate")
+
 
 if __name__ == "__main__":
     unittest.main()

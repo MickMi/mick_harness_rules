@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import importlib.util
 import json
 import os
 import re
@@ -378,6 +379,125 @@ def command_brain(args: argparse.Namespace) -> int:
     return 0
 
 
+def load_observer_module():
+    path = Path(__file__).resolve().with_name("harness-observe.py")
+    spec = importlib.util.spec_from_file_location("harness_command_observer", path)
+    if spec is None or spec.loader is None:
+        raise CommandError("无法加载 Harness 需求状态机", 69)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def readonly_runtime_snapshot(project: Path, observer) -> dict[str, object]:
+    index = observer.load_json(observer.runtime_root(project) / "index.json", {}) or {}
+    for run in index.get("runs", []):
+        snapshot_value = run.get("snapshot")
+        if not snapshot_value:
+            continue
+        snapshot = observer.load_json(observer.runtime_root(project) / str(snapshot_value))
+        if isinstance(snapshot, dict):
+            return snapshot
+    return observer.project_events([])
+
+
+def e2e_request_path(project: Path, requirement_id: str) -> Path:
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    safe_requirement = re.sub(r"[^A-Za-z0-9._-]+", "-", requirement_id).strip("-.")
+    if not safe_requirement:
+        raise CommandError("requirement_id 规范化后为空", EXIT_USAGE)
+    return project / ".harness-runtime" / "command-requests" / "e2e" / f"{stamp}-{safe_requirement}.json"
+
+
+def command_e2e(args: argparse.Namespace) -> int:
+    if not args.requirement:
+        raise CommandError("e2e 必须提供 --requirement <requirement_id>", EXIT_USAGE)
+    project = resolve_project(args.project)
+    observer = load_observer_module()
+    snapshot = readonly_runtime_snapshot(project, observer)
+    git = observer.git_workspace_snapshot(project)
+    versions = observer.version_plan_snapshot(project, snapshot, git)
+    current = observer.current_version_snapshot(snapshot, versions)
+    if not current:
+        raise CommandError("当前项目没有可识别的版本与需求，先运行 harness plan", EXIT_CONFLICT)
+    requirement = next(
+        (item for item in current.get("requirements", []) if item.get("requirement_id") == args.requirement),
+        None,
+    )
+    if requirement is None:
+        historical = [
+            item.get("version")
+            for version in versions.get("items", [])
+            for item in version.get("requirements", [])
+            if item.get("requirement_id") == args.requirement
+        ]
+        available = ", ".join(
+            str(item.get("requirement_id")) for item in current.get("requirements", [])[:8]
+        ) or "无"
+        detail = f"；该 ID 只出现在历史版本 {', '.join(historical)}" if historical else ""
+        raise CommandError(
+            f"当前版本 v{current.get('version')} 不包含需求 {args.requirement}{detail}。可选：{available}",
+            EXIT_CONFLICT,
+        )
+    workflow = requirement.get("workflow")
+    if not workflow:
+        raise CommandError("当前版本尚未启用结构化需求门禁，不能运行 E2E", EXIT_CONFLICT)
+
+    stage = str(workflow.get("stage") or "unknown")
+    release_candidate = stage in {"release_ready", "completed"}
+    current_role = workflow.get("current_role")
+    payload = {
+        "schema_version": "1",
+        "command": "e2e",
+        "project": str(project),
+        "version": current.get("version"),
+        "requirement_id": args.requirement,
+        "title": requirement.get("title"),
+        "stage": stage,
+        "stage_label": workflow.get("stage_label"),
+        "gate_status": workflow.get("gate_status"),
+        "gate_reason": workflow.get("gate_reason"),
+        "current_role": current_role,
+        "allowed_next_roles": workflow.get("allowed_next_roles") or [],
+        "release_candidate": release_candidate,
+        "status": "release_candidate" if release_candidate else "waiting_for_role",
+        "created_at": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat(),
+    }
+
+    if args.json_output and not args.run:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print("Harness E2E Preview")
+        print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        print(f"项目：{project}")
+        print(f"版本：v{current.get('version')}")
+        print(f"需求：{args.requirement} · {requirement.get('title') or '未命名'}")
+        print(f"当前关卡：{workflow.get('stage_label')}（{workflow.get('gate_status')}）")
+        print(f"当前角色：{current_role or '无'}")
+        print(f"停止/推进依据：{workflow.get('gate_reason')}")
+        rejected = workflow.get("rejected_transitions") or []
+        if rejected:
+            print(f"已拒绝的非法跳转：{len(rejected)} 条")
+        print("最远边界：发布候选；不会自动 merge、push、tag、deploy 或 publish。")
+
+    if not args.run:
+        if not args.json_output:
+            print("\n预览完成，未发生写入。确认后增加 --run。")
+        return 0
+
+    request_path = e2e_request_path(project, args.requirement)
+    atomic_write(request_path, json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+    if args.json_output:
+        print(json.dumps({**payload, "request_path": str(request_path.relative_to(project))}, ensure_ascii=False, indent=2))
+    else:
+        print(f"\n已记录 E2E 请求：{request_path.relative_to(project)}")
+        if release_candidate:
+            print("结果：需求门禁证据完整，已形成发布候选；正式发布仍需用户确认。")
+        else:
+            print(f"结果：等待 {current_role or '下一角色'} 完成当前关卡；Harness 未伪造角色工作或自动启动 Agent。")
+    return 0 if release_candidate else EXIT_CONFLICT
+
+
 def default_plan_title(facts: ProjectFacts) -> str:
     if facts.active_version:
         return f"v{facts.active_version} 交付计划"
@@ -542,6 +662,13 @@ def build_parser() -> argparse.ArgumentParser:
     brain.add_argument("--apply", action="store_true")
     brain.add_argument("--json", dest="json_output", action="store_true")
     brain.set_defaults(handler=command_brain)
+
+    e2e = subparsers.add_parser("e2e", help="inspect one requirement through deterministic delivery gates")
+    e2e.add_argument("--project")
+    e2e.add_argument("--requirement")
+    e2e.add_argument("--run", action="store_true")
+    e2e.add_argument("--json", dest="json_output", action="store_true")
+    e2e.set_defaults(handler=command_e2e)
     return parser
 
 
