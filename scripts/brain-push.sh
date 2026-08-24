@@ -27,7 +27,10 @@ HARNESS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # --- Source shared brain resolver ---
 source "$HARNESS_ROOT/scripts/brain-resolve.sh"
-ensure_brain_available "$HARNESS_ROOT" >/dev/null 2>&1 || true
+if ! ensure_brain_available "$HARNESS_ROOT" >/dev/null 2>&1; then
+    fail "Brain is disabled. Configure local or remote mode before writing."
+    exit 2
+fi
 
 # --- Default values ---
 LAYER="session"

@@ -544,7 +544,7 @@ cmd_agents() {
 }
 
 # ============================================================
-# harness brain — Brain workflow commands (status/install/sync/daily/evolve)
+# harness brain — Brain workflow commands (status/configure/install/sync/daily/evolve)
 # ============================================================
 cmd_brain() {
     local sub="${1:-status}"
@@ -552,49 +552,26 @@ cmd_brain() {
 
     case "$sub" in
         status)
-            echo ""
-            echo -e "${BOLD}Brain Status${NC}"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            if [ -f "$HARNESS_GLOBAL/scripts/brain-resolve.sh" ]; then
-                source "$HARNESS_GLOBAL/scripts/brain-resolve.sh"
-                resolve_brain_dir "$HARNESS_GLOBAL" 2>/dev/null || true
-                if [ -d "${BRAIN_DIR:-}" ]; then
-                    if [ "${BRAIN_REMOTE_STATUS:-none}" = "connected" ]; then
-                        echo -e "  Brain repo  : ${GREEN}connected${NC} ($BRAIN_DIR)"
-                    elif [ -d "$BRAIN_DIR/.git" ]; then
-                        echo -e "  Brain repo  : ${YELLOW}local fallback${NC} ($BRAIN_DIR)"
-                    else
-                        echo -e "  Brain repo  : ${YELLOW}directory only${NC} ($BRAIN_DIR)"
-                    fi
-                else
-                    echo -e "  Brain repo  : ${YELLOW}not initialized — run 'harness brain install'${NC}"
-                fi
-            else
-                echo -e "  Brain repo  : ${RED}resolver missing${NC}"
-            fi
-            if [ -f "$HARNESS_GLOBAL/scripts/hook-adapters.sh" ]; then
-                source "$HARNESS_GLOBAL/scripts/hook-adapters.sh"
-                hook_adapters_status
-            fi
-            # Check evolution data
-            local trail="${BRAIN_DIR:-$HOME/.mick-brain}/global/evolution/audit-trail.md"
-            if [ -f "$trail" ]; then
-                local entries
-                entries=$(grep -c "^## " "$trail" 2>/dev/null || true)
-                entries="${entries:-0}"
-                echo -e "  Audit data  : ${GREEN}$entries sessions${NC}"
-            else
-                echo -e "  Audit data  : ${YELLOW}empty — run 'harness-audit.sh --log' to start${NC}"
-            fi
-            echo ""
+            cmd_structured_workflow brain status "$@"
+            ;;
+        configure)
+            cmd_structured_workflow brain configure "$@"
             ;;
         install)
             echo ""
             echo -e "${BOLD}Brain Install${NC}"
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            if [ -f "$HARNESS_GLOBAL/scripts/brain-resolve.sh" ]; then
+                source "$HARNESS_GLOBAL/scripts/brain-resolve.sh"
+                resolve_brain_dir "$HARNESS_GLOBAL"
+                if [ "${BRAIN_MODE:-disabled}" = "disabled" ]; then
+                    fail "Brain is disabled. First run: harness brain configure --mode local|remote --apply"
+                    exit 2
+                fi
+            fi
             if [ -f "$HARNESS_GLOBAL/scripts/hook-adapters.sh" ]; then
                 source "$HARNESS_GLOBAL/scripts/hook-adapters.sh"
-                hook_adapters_install
+                hook_adapters_install || { fail "Brain installation stopped."; exit 2; }
                 echo -e "  ${GREEN}Brain directory and enabled hook adapters are ready.${NC}"
                 hook_adapters_status
             else
@@ -631,10 +608,11 @@ cmd_brain() {
             fi
             ;;
         *)
-            echo "Usage: harness brain [status|install|sync|daily|evolve]"
+            echo "Usage: harness brain [status|configure|install|sync|daily|evolve]"
             echo ""
-            echo "  status   Check hook/launchd/audit state"
-            echo "  install  Set up SessionEnd hook + daily launchd sync"
+            echo "  status      Show mode, write path, configured repository and real connection"
+            echo "  configure   Preview/apply local, remote or disabled mode"
+            echo "  install     Create/connect the configured Brain and enabled adapters"
             echo "  sync     Run session distillation manually"
             echo "  daily    Run batch daily sync manually"
             echo "  evolve   Generate rule evolution proposals"

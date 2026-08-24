@@ -86,6 +86,11 @@ info "Phase 0.5: Brain Repo — Setting up external brain repository..."
 # Resolve brain config
 resolve_brain_dir "$HARNESS_ROOT"
 
+if [ "${BRAIN_MODE:-disabled}" = "disabled" ]; then
+    fail "Brain is disabled. Run 'harness brain configure --mode local|remote --apply' first."
+    exit 2
+fi
+
 if [ -n "$BRAIN_REPO_REMOTE" ]; then
     if [ -d "$BRAIN_REPO_LOCAL/.git" ]; then
         ok "Brain repo already cloned at: $BRAIN_REPO_LOCAL"

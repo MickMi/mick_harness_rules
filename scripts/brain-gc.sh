@@ -41,6 +41,11 @@ HARNESS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$HARNESS_ROOT/scripts/brain-resolve.sh"
 resolve_brain_dir "$HARNESS_ROOT"
 
+if [ "${BRAIN_MODE:-disabled}" = "disabled" ]; then
+    fail "Brain is disabled; garbage collection did not run."
+    exit 2
+fi
+
 ARCHIVE_DIR="$BRAIN_DIR/.archive"
 
 # --- Configuration defaults (can be overridden by .brain-config.yaml) ---

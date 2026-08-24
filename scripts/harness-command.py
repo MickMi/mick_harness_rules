@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import json
 import os
 import re
 import subprocess
@@ -196,6 +197,187 @@ def atomic_write(path: Path, content: str) -> None:
         raise CommandError(f"无法安全写入 {path}：{exc}", EXIT_IO) from exc
 
 
+def brain_config_path() -> Path:
+    configured = os.environ.get("MICK_HARNESS_CONFIG_DIR")
+    root = Path(configured).expanduser() if configured else Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "mick-harness"
+    return root / "brain.json"
+
+
+def legacy_brain_config_path() -> Path:
+    configured = os.environ.get("MICK_HARNESS_BRAIN_LEGACY_CONFIG")
+    if configured:
+        return Path(configured).expanduser()
+    return Path(__file__).resolve().parents[1] / "config" / ".brain-config.yaml"
+
+
+def sanitize_remote(value: str | None) -> str | None:
+    if not value:
+        return None
+    return re.sub(r"^(https?://)[^/@]+@", r"\1", value.strip())
+
+
+def legacy_brain_settings() -> dict[str, object] | None:
+    path = legacy_brain_config_path()
+    text = read_text(path)
+    if not text:
+        return None
+    remote_match = re.search(r'^\s*remote:\s*["\']?([^"\'\n]+)', text, re.MULTILINE)
+    local_match = re.search(r'^\s*local_path:\s*["\']?([^"\'\n]+)', text, re.MULTILINE)
+    remote = remote_match.group(1).strip() if remote_match else None
+    local_path = local_match.group(1).strip() if local_match else "~/.mick-brain"
+    if not remote and not Path(local_path).expanduser().exists():
+        return None
+    return {
+        "version": 1,
+        "mode": "remote" if remote else "local",
+        "local_path": local_path,
+        "remote": remote,
+        "source": "legacy",
+        "config_path": str(path),
+    }
+
+
+def load_brain_settings() -> dict[str, object]:
+    path = brain_config_path()
+    if path.is_file():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise CommandError(f"Brain 配置不可读：{path}（{exc}）", EXIT_IO) from exc
+        mode = data.get("mode")
+        if mode not in {"local", "remote", "disabled"}:
+            raise CommandError(f"Brain 配置包含无效模式：{mode}", EXIT_CONFLICT)
+        return {
+            "version": 1,
+            "mode": mode,
+            "local_path": str(data.get("local_path") or "~/.mick-brain"),
+            "remote": data.get("remote") or None,
+            "source": "user",
+            "config_path": str(path),
+        }
+    legacy = legacy_brain_settings()
+    if legacy:
+        return legacy
+    return {
+        "version": 1,
+        "mode": "disabled",
+        "local_path": "~/.mick-brain",
+        "remote": None,
+        "source": "default",
+        "config_path": str(path),
+    }
+
+
+def actual_git_remote(root: Path) -> str | None:
+    value = git_output(root, "remote", "get-url", "origin") if (root / ".git").is_dir() else ""
+    return value or None
+
+
+def brain_status_payload() -> dict[str, object]:
+    settings = load_brain_settings()
+    local_path = Path(str(settings["local_path"])).expanduser().resolve()
+    actual_remote = actual_git_remote(local_path)
+    configured_remote = str(settings["remote"]) if settings.get("remote") else None
+    mode = str(settings["mode"])
+    configured_identity = (sanitize_remote(configured_remote) or "").rstrip("/").removesuffix(".git")
+    actual_identity = (sanitize_remote(actual_remote) or "").rstrip("/").removesuffix(".git")
+    remote_matches = bool(configured_identity and actual_identity and configured_identity == actual_identity)
+    if mode == "disabled":
+        state = "disabled"
+    elif not (local_path / ".git").is_dir():
+        state = "not_installed"
+    elif mode == "local":
+        state = "local_ready"
+    elif remote_matches:
+        state = "connected"
+    elif actual_remote:
+        state = "remote_mismatch"
+    else:
+        state = "remote_not_connected"
+    return {
+        **settings,
+        "config_path": str(settings.get("config_path") or brain_config_path()),
+        "preferred_config_path": str(brain_config_path()),
+        "local_path": str(local_path),
+        "configured_remote": sanitize_remote(configured_remote),
+        "actual_remote": sanitize_remote(actual_remote),
+        "remote_matches": remote_matches,
+        "state": state,
+        "writes": "none" if mode == "disabled" else "local-first",
+        "sync_scope": "none" if mode in {"disabled", "local"} else "project records plus approved global/profile records",
+    }
+
+
+def print_brain_status(payload: dict[str, object]) -> None:
+    labels = {
+        "disabled": "暂不启用",
+        "not_installed": "已配置，尚未建立本地 Brain",
+        "local_ready": "仅本机可用",
+        "connected": "私有远端已连接",
+        "remote_mismatch": "配置仓库与实际 origin 不一致",
+        "remote_not_connected": "已配置远端，本地仓库尚未连接",
+    }
+    print("Brain Status")
+    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    print(f"模式：{payload['mode']}（{labels.get(str(payload['state']), payload['state'])}）")
+    print(f"配置：{payload['config_path']}（来源：{payload['source']}）")
+    print(f"本地写入：{payload['local_path'] if payload['writes'] != 'none' else '关闭'}")
+    print(f"配置远端：{payload['configured_remote'] or '无'}")
+    print(f"实际 origin：{payload['actual_remote'] or '无'}")
+    print(f"同步范围：{payload['sync_scope']}")
+    if payload["state"] == "remote_mismatch":
+        print("停止：配置仓库与实际 origin 不一致；不会自动选择或同步任一仓库。")
+
+
+def command_brain(args: argparse.Namespace) -> int:
+    if args.action == "status":
+        payload = brain_status_payload()
+        if args.json_output:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print_brain_status(payload)
+        return EXIT_CONFLICT if payload["state"] == "remote_mismatch" else 0
+
+    if args.action != "configure":
+        raise CommandError(f"不支持的 Brain 动作：{args.action}", EXIT_USAGE)
+    if not args.mode:
+        raise CommandError("configure 需要 --mode local|remote|disabled", EXIT_USAGE)
+    if args.mode == "remote" and not args.remote:
+        raise CommandError("remote 模式需要 --remote <private Git URL>", EXIT_USAGE)
+    if args.mode != "remote" and args.remote:
+        raise CommandError("只有 remote 模式可以设置 --remote", EXIT_USAGE)
+    if args.remote and re.match(r"^https?://[^/@]+@", args.remote):
+        raise CommandError("远端 URL 不得包含用户名、Token 或密码；请使用系统凭据管理", EXIT_CONFLICT)
+
+    current = load_brain_settings()
+    local_path = str(Path(args.local_path or current.get("local_path") or "~/.mick-brain").expanduser())
+    proposed = {
+        "version": 1,
+        "mode": args.mode,
+        "local_path": local_path,
+        "remote": args.remote if args.mode == "remote" else None,
+        "updated_at": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat(),
+    }
+    print("Brain Configure Preview")
+    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    print(f"当前模式：{current['mode']}（来源：{current['source']}）")
+    print(f"拟议模式：{proposed['mode']}")
+    print(f"本地路径：{proposed['local_path'] if proposed['mode'] != 'disabled' else '不写入'}")
+    print(f"私有远端：{sanitize_remote(proposed['remote']) or '无'}")
+    print(f"配置位置：{brain_config_path()}")
+    print("本次不会删除已有 Brain 数据，也不会自动克隆、推送或安装 Hook。")
+    if not args.apply:
+        print("\n预览完成，未发生写入。确认后增加 --apply。")
+        return 0
+    atomic_write(brain_config_path(), json.dumps(proposed, ensure_ascii=False, indent=2) + "\n")
+    print(f"\n已写入 Brain 配置：{brain_config_path()}")
+    if args.mode == "disabled":
+        print("Brain 已停用；已有本地数据保持原样。")
+    else:
+        print("下一步：运行 harness brain install 建立或连接本地 Brain。")
+    return 0
+
+
 def default_plan_title(facts: ProjectFacts) -> str:
     if facts.active_version:
         return f"v{facts.active_version} 交付计划"
@@ -351,6 +533,15 @@ def build_parser() -> argparse.ArgumentParser:
     goal.add_argument("--set", dest="set_value")
     goal.add_argument("--apply", action="store_true")
     goal.set_defaults(handler=command_goal)
+
+    brain = subparsers.add_parser("brain", help="inspect or configure optional Brain memory")
+    brain.add_argument("action", nargs="?", default="status", choices=("status", "configure"))
+    brain.add_argument("--mode", choices=("local", "remote", "disabled"))
+    brain.add_argument("--local-path")
+    brain.add_argument("--remote")
+    brain.add_argument("--apply", action="store_true")
+    brain.add_argument("--json", dest="json_output", action="store_true")
+    brain.set_defaults(handler=command_brain)
     return parser
 
 

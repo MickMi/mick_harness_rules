@@ -41,6 +41,11 @@ HARNESS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$HARNESS_ROOT/scripts/brain-resolve.sh"
 resolve_brain_dir "$HARNESS_ROOT"
 
+if [ "${BRAIN_MODE:-disabled}" = "disabled" ]; then
+    fail "Brain is disabled; compounding did not run."
+    exit 2
+fi
+
 # --- Configuration defaults ---
 SESSION_ENTRY_THRESHOLD=5       # Min entries in session to trigger daily compound
 SESSION_AGE_THRESHOLD_DAYS=1    # Min age of session (days) before distilling

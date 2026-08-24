@@ -56,9 +56,55 @@ def state_root() -> Path:
     return Path(configured).expanduser() if configured else Path.home() / ".local" / "state" / "mick-harness"
 
 
+def brain_config_path() -> Path:
+    configured = os.environ.get("MICK_HARNESS_CONFIG_DIR")
+    root = Path(configured).expanduser() if configured else Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "mick-harness"
+    return root / "brain.json"
+
+
+def brain_configuration() -> dict[str, Any]:
+    path = brain_config_path()
+    if path.is_file():
+        with contextlib.suppress(OSError, json.JSONDecodeError):
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if data.get("mode") in {"local", "remote", "disabled"}:
+                return {
+                    "mode": data["mode"],
+                    "local_path": str(data.get("local_path") or "~/.mick-brain"),
+                    "remote": data.get("remote") or None,
+                    "source": "user",
+                    "config_path": display_path(path),
+                }
+    legacy = Path(os.environ.get("MICK_HARNESS_BRAIN_LEGACY_CONFIG") or Path(__file__).resolve().parents[1] / "config" / ".brain-config.yaml")
+    if legacy.is_file():
+        with contextlib.suppress(OSError):
+            text = legacy.read_text(encoding="utf-8")
+            remote_match = re.search(r'(?m)^\s*remote:\s*["\']?([^"\'\n]+)', text)
+            local_match = re.search(r'(?m)^\s*local_path:\s*["\']?([^"\'\n]+)', text)
+            remote = remote_match.group(1).strip() if remote_match else None
+            local_path = local_match.group(1).strip() if local_match else "~/.mick-brain"
+            if remote or Path(local_path).expanduser().exists():
+                return {
+                    "mode": "remote" if remote else "local",
+                    "local_path": local_path,
+                    "remote": remote,
+                    "source": "legacy",
+                    "config_path": display_path(legacy),
+                }
+    return {
+        "mode": "disabled",
+        "local_path": "~/.mick-brain",
+        "remote": None,
+        "source": "default",
+        "config_path": display_path(path),
+    }
+
+
 def brain_root() -> Path:
     configured = os.environ.get("MICK_BRAIN_ROOT") or os.environ.get("BRAIN_DIR")
-    return Path(configured).expanduser() if configured else Path.home() / ".mick-brain"
+    if configured:
+        return Path(configured).expanduser()
+    return Path(str(brain_configuration()["local_path"])).expanduser()
 
 
 def candidate_root() -> Path:
@@ -1102,6 +1148,9 @@ def sanitize_remote_url(value: str | None) -> str | None:
 
 
 def configured_brain_remote() -> str | None:
+    settings = brain_configuration()
+    if settings["source"] == "user":
+        return sanitize_remote_url(str(settings["remote"])) if settings.get("remote") else None
     config = Path(__file__).resolve().parents[1] / "config" / ".brain-config.yaml"
     if not config.is_file():
         return None
@@ -1113,6 +1162,7 @@ def configured_brain_remote() -> str | None:
 
 
 def repository_snapshot(root: Path) -> dict[str, Any]:
+    settings = brain_configuration()
     is_git = (root / ".git").exists()
     actual_remote = sanitize_remote_url(git_value(root, "remote", "get-url", "origin")) if is_git else None
     configured_remote = configured_brain_remote()
@@ -1120,6 +1170,10 @@ def repository_snapshot(root: Path) -> dict[str, Any]:
     upstream = git_value(root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}") if is_git else None
     status = git_value(root, "status", "--porcelain") if is_git else None
     return {
+        "mode": settings["mode"],
+        "enabled": settings["mode"] != "disabled",
+        "config_source": settings["source"],
+        "config_path": settings["config_path"],
         "exists": root.is_dir(),
         "path": display_path(root),
         "git": is_git,
@@ -1232,6 +1286,11 @@ def save_sync_state(value: dict[str, Any]) -> None:
 
 
 def sync_pending(*, confirmed: bool, dry_run: bool = False, brain: Path | None = None) -> dict[str, Any]:
+    mode = str(brain_configuration()["mode"])
+    if mode == "disabled":
+        raise BrainBoundaryError("Brain 当前为暂不启用，没有可执行的同步。")
+    if mode == "local":
+        raise BrainBoundaryError("Brain 当前为仅本机模式；记录会保留在本机，不产生待同步任务。")
     root = brain or brain_root()
     repository = repository_snapshot(root)
     if not repository["git"]:
@@ -1436,6 +1495,7 @@ def health_snapshot(*, brain: Path | None = None) -> dict[str, Any]:
     ahead, behind, git_error = git_counts(root)
     repository = repository_snapshot(root)
     repository_exists = repository["exists"]
+    brain_enabled = repository.get("enabled", True)
     pending_sync = sum(item.get("sync_status") == "pending" for item in memory_records)
     sync_state = {}
     with contextlib.suppress(OSError, json.JSONDecodeError):
@@ -1446,16 +1506,17 @@ def health_snapshot(*, brain: Path | None = None) -> dict[str, Any]:
         "generated_at": now_iso(),
         "repository": repository,
         "local_write": {
-            "status": "ready" if repository_exists else "unavailable",
+            "status": "disabled" if not brain_enabled else ("ready" if repository_exists else "unavailable"),
             "project_memory_count": len(unique_memories),
             "project_memory_record_count": len(memory_records),
             "last_write_at": latest_write_at,
         },
         "remote_sync": {
-            "status": "error" if git_error or sync_error else ("pending" if ahead or pending_sync else ("synced" if ahead is not None else "not_configured")),
+            "status": "not_configured" if not brain_enabled or repository.get("mode") == "local" else ("error" if git_error or sync_error else ("pending" if ahead or pending_sync else ("synced" if ahead is not None else "not_configured"))),
             "ahead": ahead,
             "behind": behind,
-            "pending_local_records": pending_sync,
+            "pending_local_records": pending_sync if brain_enabled and repository.get("mode") == "remote" else 0,
+            "local_only_records": pending_sync if not brain_enabled or repository.get("mode") == "local" else 0,
             "last_attempt_at": sync_state.get("last_attempt_at"),
             "last_success_at": sync_state.get("last_success_at"),
             "last_error": git_error or sync_error,

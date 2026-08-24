@@ -37,6 +37,11 @@ echo ""
 # --- Step 1: Read config ---
 resolve_brain_dir "$HARNESS_ROOT"
 
+if [ "${BRAIN_MODE:-disabled}" = "disabled" ]; then
+    fail "Brain is disabled; configure remote mode before migration."
+    exit 2
+fi
+
 if [ -z "$BRAIN_REPO_REMOTE" ]; then
     fail "No brain_repo.remote configured in .brain-config.yaml"
     echo "  Please add brain_repo configuration first."

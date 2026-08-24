@@ -78,12 +78,23 @@ class CommandContractTests(unittest.TestCase):
 
 
 class PlanGoalCommandTests(unittest.TestCase):
-    def run_harness(self, project: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    def run_harness(
+        self,
+        project: Path,
+        *args: str,
+        extra_env: dict[str, str] | None = None,
+        include_project: bool = True,
+    ) -> subprocess.CompletedProcess[str]:
         env = os.environ.copy()
         env["MICK_HARNESS_ROOT"] = str(ROOT)
         env["MICK_HARNESS_ACTIVITY"] = "0"
+        if extra_env:
+            env.update(extra_env)
+        command = [str(CLI_PATH), *args]
+        if include_project:
+            command.extend(("--project", str(project)))
         return subprocess.run(
-            [str(CLI_PATH), *args, "--project", str(project)],
+            command,
             cwd=project,
             env=env,
             text=True,
@@ -198,6 +209,133 @@ class PlanGoalCommandTests(unittest.TestCase):
             result = self.run_harness(project, "plan", "--unknown")
             self.assertEqual(result.returncode, 64)
             self.assertIn("输入无效", result.stderr)
+
+    def brain_env(self, root: Path) -> dict[str, str]:
+        return {
+            "HOME": str(root / "home"),
+            "MICK_HARNESS_CONFIG_DIR": str(root / "config"),
+            "MICK_HARNESS_BRAIN_LEGACY_CONFIG": str(root / "missing-legacy.yaml"),
+        }
+
+    def test_brain_without_configuration_is_disabled_and_creates_nothing(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = self.make_project(root, with_versions=False)
+            env = self.brain_env(root)
+            result = self.run_harness(
+                project, "brain", "status", "--json", extra_env=env, include_project=False
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["mode"], "disabled")
+            self.assertEqual(payload["state"], "disabled")
+            self.assertEqual(payload["sync_scope"], "none")
+            self.assertFalse((root / "home" / ".mick-brain").exists())
+
+    def test_brain_local_configuration_previews_then_installs_explicitly(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = self.make_project(root, with_versions=False)
+            env = self.brain_env(root)
+            local_brain = root / "private-brain"
+            preview = self.run_harness(
+                project,
+                "brain",
+                "configure",
+                "--mode",
+                "local",
+                "--local-path",
+                str(local_brain),
+                extra_env=env,
+                include_project=False,
+            )
+            self.assertEqual(preview.returncode, 0, preview.stderr)
+            self.assertIn("预览完成，未发生写入", preview.stdout)
+            self.assertFalse((root / "config" / "brain.json").exists())
+            self.assertFalse(local_brain.exists())
+
+            applied = self.run_harness(
+                project,
+                "brain",
+                "configure",
+                "--mode",
+                "local",
+                "--local-path",
+                str(local_brain),
+                "--apply",
+                extra_env=env,
+                include_project=False,
+            )
+            self.assertEqual(applied.returncode, 0, applied.stderr)
+            self.assertTrue((root / "config" / "brain.json").is_file())
+            self.assertFalse(local_brain.exists())
+
+            installed = self.run_harness(
+                project, "brain", "install", extra_env=env, include_project=False
+            )
+            self.assertEqual(installed.returncode, 0, installed.stderr)
+            self.assertTrue((local_brain / ".git").is_dir())
+            self.assertTrue((local_brain / "projects").is_dir())
+
+            status = self.run_harness(
+                project, "brain", "status", "--json", extra_env=env, include_project=False
+            )
+            payload = json.loads(status.stdout)
+            self.assertEqual(payload["state"], "local_ready")
+            self.assertEqual(payload["actual_remote"], None)
+            self.assertEqual(payload["sync_scope"], "none")
+
+    def test_brain_remote_mode_requires_a_credential_free_remote(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = self.make_project(root, with_versions=False)
+            env = self.brain_env(root)
+            missing = self.run_harness(
+                project,
+                "brain",
+                "configure",
+                "--mode",
+                "remote",
+                "--apply",
+                extra_env=env,
+                include_project=False,
+            )
+            self.assertEqual(missing.returncode, 64)
+            self.assertIn("需要 --remote", missing.stderr)
+
+            secret = self.run_harness(
+                project,
+                "brain",
+                "configure",
+                "--mode",
+                "remote",
+                "--remote",
+                "https://token@example.com/private/brain.git",
+                "--apply",
+                extra_env=env,
+                include_project=False,
+            )
+            self.assertEqual(secret.returncode, 2)
+            self.assertIn("不得包含用户名、Token 或密码", secret.stderr)
+            self.assertFalse((root / "config" / "brain.json").exists())
+
+    def test_disabled_brain_blocks_direct_memory_writes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = self.make_project(root, with_versions=False)
+            env = self.brain_env(root)
+            env["MICK_HARNESS_ROOT"] = str(ROOT)
+            result = subprocess.run(
+                [str(ROOT / "scripts" / "brain-push.sh"), "private memory"],
+                cwd=project,
+                env={**os.environ, **env},
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("Brain is disabled", result.stdout)
+            self.assertFalse((root / "home" / ".mick-brain").exists())
 
 
 if __name__ == "__main__":

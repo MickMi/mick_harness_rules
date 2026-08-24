@@ -1256,7 +1256,7 @@ class ObserveRuntimeTests(unittest.TestCase):
         self.assertIn("Brain 接入状态", dashboard)
         self.assertIn("查看项目记录", dashboard)
         for label in (
-            "Brain 仓库", "配置仓库", "已生效", "本地写入路径",
+            "Brain 连接", "配置来源", "配置仓库", "已生效", "本地写入路径",
             "项目记录待同步", "全局/Profile 待审批", "当前无需审批",
             "跨项目稳定偏好与可复用经验", "Profile 规则或风格的版本变化",
             "本机服务自动记录", "Hook 只负责采集事件", "查看同步清单", "确认并同步", "取消同步",

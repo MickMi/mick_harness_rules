@@ -1,4 +1,4 @@
-> 🧭 状态：v0.21.0 开发中 | 进度 198/202 | 当前归属：Executor | 最近交付：Plan / Goal 已具备事实扫描、默认预览、冲突停止与原子写入
+> 🧭 状态：v0.21.0 开发中 | 进度 199/202 | 当前归属：Executor | 最近交付：Brain 三态配置、旧配置兼容、禁用写入保护与工作台解释已完成
 
 # Plan: Company Runtime V0 → Portfolio V0.2
 
@@ -2302,7 +2302,7 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 
 - [x] 197. [合同与基线] 固定四类命令的输入、预览、确认、产物、错误和宿主兼容合同；记录当前 CLI、Brain 降级路径、Loader 字节预算及回归基线。
 - [x] 198. [Plan / Goal] 实现项目事实扫描、冲突预览、计划档案写入与长期目标维护；已有活跃计划、缺少稳定目标和历史文件迁移均有明确处理。
-- [ ] 199. [Brain] 实现 `status / configure / install / sync` 的统一配置体验，支持仅本机、私有远端、暂不启用三态，并让工作台解释写入位置和同步范围。
+- [x] 199. [Brain] 实现 `status / configure / install / sync` 的统一配置体验，支持仅本机、私有远端、暂不启用三态，并让工作台解释写入位置和同步范围。
 - [ ] 200. [E2E] 实现以单条需求为单位的受控编排，复用 v0.20 门禁投影，输出当前关卡、缺失证据、停止原因和发布候选结果。
 - [ ] 201. [上下文瘦身] 将常驻 Loader 压缩到可审计预算，把角色详细流程迁移为按需 Skill / reference，并为生成物上限、截断和关键 Kernel 保留建立自动检查。
 - [ ] 202. [工作台与验证] 提供命令发现、预览、执行反馈和历史结果入口；完成跨 Agent 适配、Brain 无远端路径、Token 预算、全仓回归和真实用户路径审查。
@@ -2342,3 +2342,9 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 - files: `bin/harness`, `scripts/harness-command.py`, `tests/test_harness_commands.py`, `plan.md`
 - verify: `python3 -B -m unittest tests.test_harness_commands` → 14 passed；无缓存 Python compile、`bash -n bin/harness`、`git diff --check` 通过；允许 localhost 后运行 `python3 -B -m unittest` → 156 passed。
 - notes: `harness plan` 默认扫描并预览，显式 `--apply` 才创建或追加计划档案，活跃计划冲突以 exit 2 停止；`harness goal` 只维护 `docs/PROJECT.md` 的人类长期目标，版本号、需求编号、实施任务与技术细节会被拒绝，写入采用同目录原子替换。
+
+### Step 199 — 2026-08-24
+
+- files: `bin/harness`, `scripts/harness-command.py`, `scripts/brain-resolve.sh`, Brain 写入/同步/维护脚本，`scripts/harness-brain-boundary.py`, `web/observe-dashboard.html`, 命令与工作台测试，`plan.md`
+- verify: Brain 定向测试初次因测试夹具错误追加项目参数出现 3 条同因失败，按 Debug Card 只修夹具后 `python3 -B -m unittest tests.test_harness_commands` → 18 passed；工作台合同定向测试通过；无缓存 Python compile、12 个 Shell `bash -n`、`git diff --check` 通过；允许 localhost 后 `python3 -B -m unittest` → 160 passed；真实只读 `harness brain status --json` 确认旧配置远端与实际 origin 一致。
+- notes: 新用户配置位于 `~/.config/mick-harness/brain.json`（支持 XDG / 测试覆盖），默认无配置时不创建 Brain；`local` 不产生虚假待同步，`remote` 核对配置仓库与实际 origin，`disabled` 阻止直接写入、采集、压缩和 Hook 安装且不删除旧数据；旧 `.brain-config.yaml` 继续只读兼容，只有用户显式 `configure --apply` 才迁移到新配置。

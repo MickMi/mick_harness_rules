@@ -1208,7 +1208,9 @@
         const health = state.brainHealth || {};
         const repository = health.repository || {};
         const pendingSync = Number(health.remote_sync?.pending_local_records || 0);
-        const repositoryEffective = Boolean(repository.git && repository.remote_matches_config && repository.branch && repository.upstream);
+        const brainMode = repository.mode || "disabled";
+        const repositoryEffective = brainMode === "disabled" || (brainMode === "local" ? Boolean(repository.git) : Boolean(repository.git && repository.remote_matches_config));
+        const canSyncRemote = brainMode === "remote" && Boolean(repository.git && repository.remote_matches_config);
         const top = el("div", "topline");
         const titleWrap = el("div", "");
         titleWrap.append(el("div", "eyebrow", "设置 · 本机记忆服务"), el("h1", "", "记忆与同步"));
@@ -1240,6 +1242,8 @@
         syncCopy.append(syncStatus);
         const previewButton = el("button", "brain-sync-button", state.brainSyncPreview ? "重新读取清单" : "查看同步清单");
         previewButton.type = "button";
+        previewButton.disabled = !canSyncRemote;
+        if (!canSyncRemote) previewButton.title = brainMode === "local" ? "仅本机模式不会产生远端同步任务" : "请先启用并连接私有远端";
         previewButton.addEventListener("click", async () => {
           previewButton.disabled = true;
           state.notice = null;
@@ -1501,11 +1505,16 @@
         connectionDetails.append(el("summary", "brain-summary", "连接与高级设置"));
         const connectionBody = el("div", "brain-details-body");
         const repositoryCard = el("section", "brain-repository-line");
-        repositoryCard.append(el("h2", "", "Brain 仓库"));
+        repositoryCard.append(el("h2", "", "Brain 连接"));
         const repositoryTarget = el("div", "brain-repository-target");
-        repositoryTarget.append(el("span", "", "配置仓库 "), el("strong", "", repository.configured_remote || "未配置"));
+        const modeLabels = { local: "仅本机", remote: "私有远端", disabled: "暂不启用" };
+        repositoryTarget.append(
+          el("span", "", `模式 ${modeLabels[brainMode] || brainMode} · 配置来源 ${repository.config_path || "未发现"} · 配置仓库 `),
+          el("strong", "", repository.configured_remote || (brainMode === "local" ? repository.path || "本机路径未建立" : "无远端"))
+        );
         repositoryCard.append(repositoryTarget);
-        const repositoryStatus = el("span", "brain-repository-status", repositoryEffective ? "● 已生效" : "● 未生效");
+        const effectiveLabel = brainMode === "disabled" ? "● 已停用" : brainMode === "local" && repositoryEffective ? "● 本机可用" : repositoryEffective ? "● 已生效" : "● 未生效";
+        const repositoryStatus = el("span", "brain-repository-status", effectiveLabel);
         repositoryStatus.dataset.effective = String(repositoryEffective);
         repositoryCard.append(repositoryStatus);
         if (!repositoryEffective) repositoryStatus.title = `配置尚未生效；${repository.remote ? `实际 origin：${repository.remote}` : "尚未读取到实际 origin"}。同步已停止。`;

@@ -40,6 +40,11 @@ fi
 source "$HARNESS_ROOT/scripts/brain-resolve.sh"
 resolve_brain_dir "$HARNESS_ROOT"
 
+if [ "${BRAIN_MODE:-disabled}" = "disabled" ]; then
+    fail "Brain is disabled; there is no active memory source to search."
+    exit 2
+fi
+
 # --- Default values ---
 LAYER=""
 PROJECT_SLUG=""

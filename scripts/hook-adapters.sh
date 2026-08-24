@@ -308,7 +308,10 @@ EOF
 }
 
 hook_adapters_install() {
-    ensure_brain_available "$HARNESS_ROOT" >/dev/null 2>&1 || true
+    if ! ensure_brain_available "$HARNESS_ROOT" >/dev/null 2>&1; then
+        echo "  Brain is disabled; no hooks or inboxes were installed."
+        return 2
+    fi
 
     local claude_enabled codex_enabled generic_enabled
     claude_enabled="$(hook_adapter_enabled claude_code true)"
@@ -327,6 +330,11 @@ hook_adapters_install() {
 
 hook_adapters_status() {
     resolve_brain_dir "$HARNESS_ROOT"
+
+    if [ "${BRAIN_MODE:-disabled}" = "disabled" ]; then
+        echo "  Hook adapters: inactive because Brain is disabled"
+        return 0
+    fi
 
     echo "  Hook adapters:"
     local claude_enabled codex_enabled generic_enabled

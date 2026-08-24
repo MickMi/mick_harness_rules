@@ -36,7 +36,12 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"; }
 
 # --- Resolve brain ---
 source "$HARNESS_ROOT/scripts/brain-resolve.sh"
-ensure_brain_available "$HARNESS_ROOT" >/dev/null 2>&1 || true
+resolve_brain_dir "$HARNESS_ROOT"
+if [ "${BRAIN_MODE:-disabled}" = "disabled" ]; then
+    log "Brain disabled; daily sync skipped"
+    exit 0
+fi
+ensure_brain_available "$HARNESS_ROOT" >/dev/null 2>&1 || exit 0
 BRAIN_REPO="${BRAIN_DIR:-$HOME/.mick-brain}"
 
 # --- Lock ---

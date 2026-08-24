@@ -12,7 +12,10 @@ HARNESS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # shellcheck disable=SC1091
 source "$HARNESS_ROOT/scripts/brain-resolve.sh"
-ensure_brain_available "$HARNESS_ROOT" >/dev/null 2>&1 || true
+if ! ensure_brain_available "$HARNESS_ROOT" >/dev/null 2>&1; then
+    echo "Brain is disabled; ingestion skipped." >&2
+    exit 2
+fi
 
 SOURCE="generic"
 PROJECT=""

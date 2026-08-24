@@ -11,9 +11,11 @@
 # After sourcing, the following variables are available:
 #   BRAIN_DIR       — absolute path to the brain data root
 #   BRAIN_IS_EXTERNAL — "true" if using a configured external brain repo
-#   BRAIN_REMOTE_STATUS — connected | local | unavailable | none
+#   BRAIN_MODE       — local | remote | disabled
+#   BRAIN_REMOTE_STATUS — connected | local | unavailable | none | disabled
 #   BRAIN_REPO_LOCAL — local clone path of brain repo (if external)
 #   BRAIN_REPO_REMOTE — remote URL of brain repo (if configured)
+#   BRAIN_CONFIG_SOURCE — user | legacy | default
 # ============================================================
 
 # Prevent double-sourcing (guard against set -u: default to empty if unset)
@@ -25,18 +27,51 @@ BRAIN_RESOLVE_LOADED=true
 # --- Resolve brain repo configuration from .brain-config.yaml ---
 resolve_brain_dir() {
     local harness_root="$1"
-    local config_file="$harness_root/config/.brain-config.yaml"
+    local config_dir="${MICK_HARNESS_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/mick-harness}"
+    local user_config="$config_dir/brain.json"
+    local config_file="${MICK_HARNESS_BRAIN_LEGACY_CONFIG:-$harness_root/config/.brain-config.yaml}"
 
+    BRAIN_MODE=""
+    BRAIN_CONFIG_SOURCE="default"
     BRAIN_IS_EXTERNAL="false"
     BRAIN_REMOTE_STATUS="none"
     BRAIN_REPO_LOCAL=""
     BRAIN_REPO_REMOTE=""
 
-    if [ -f "$config_file" ]; then
+    if [ -f "$user_config" ] && command -v python3 >/dev/null 2>&1; then
+        local resolved_config
+        resolved_config=$(python3 - "$user_config" <<'PY' 2>/dev/null || true
+import json, sys
+try:
+    data = json.load(open(sys.argv[1], encoding="utf-8"))
+except (OSError, ValueError):
+    raise SystemExit(1)
+mode = data.get("mode", "")
+if mode not in {"local", "remote", "disabled"}:
+    raise SystemExit(1)
+local_path = str(data.get("local_path") or "~/.mick-brain").replace("\t", "")
+remote = str(data.get("remote") or "").replace("\t", "")
+print("\t".join((mode, local_path, remote)))
+PY
+)
+        if [ -n "$resolved_config" ]; then
+            IFS=$'\t' read -r BRAIN_MODE BRAIN_REPO_LOCAL BRAIN_REPO_REMOTE <<< "$resolved_config"
+            BRAIN_CONFIG_SOURCE="user"
+        fi
+    fi
+
+    if [ -z "$BRAIN_MODE" ] && [ -f "$config_file" ]; then
         # Parse brain_repo.remote
         BRAIN_REPO_REMOTE=$(grep '^\s*remote:' "$config_file" 2>/dev/null | head -1 | sed 's/^[^"]*"//;s/"[^"]*$//' | tr -d ' ')
         # Parse brain_repo.local_path
         BRAIN_REPO_LOCAL=$(grep '^\s*local_path:' "$config_file" 2>/dev/null | head -1 | sed 's/^[^"]*"//;s/"[^"]*$//' | tr -d ' ')
+        if [ -n "$BRAIN_REPO_REMOTE" ]; then
+            BRAIN_MODE="remote"
+            BRAIN_CONFIG_SOURCE="legacy"
+        elif [ -n "$BRAIN_REPO_LOCAL" ] && [ -d "${BRAIN_REPO_LOCAL/#\~/$HOME}" ]; then
+            BRAIN_MODE="local"
+            BRAIN_CONFIG_SOURCE="legacy"
+        fi
     fi
 
     # Expand ~ to $HOME
@@ -47,12 +82,31 @@ resolve_brain_dir() {
         BRAIN_REPO_LOCAL="$HOME/.mick-brain"
     fi
 
+    if [ -z "$BRAIN_MODE" ]; then
+        if [ -d "$BRAIN_REPO_LOCAL/.git" ]; then
+            BRAIN_MODE="local"
+        else
+            BRAIN_MODE="disabled"
+        fi
+    fi
+
+    if [ "$BRAIN_MODE" = "disabled" ]; then
+        BRAIN_DIR=""
+        BRAIN_REPO_REMOTE=""
+        BRAIN_REMOTE_STATUS="disabled"
+        return 0
+    fi
+
+    if [ "$BRAIN_MODE" = "local" ]; then
+        BRAIN_REPO_REMOTE=""
+    fi
+
     # Prefer the configured/private brain path when it already exists.
     # Remote connectivity is tracked separately so a local-only brain does not
     # block the Harness main flow.
     if [ -d "$BRAIN_REPO_LOCAL/.git" ]; then
         BRAIN_DIR="$BRAIN_REPO_LOCAL"
-        if [ -n "$BRAIN_REPO_REMOTE" ] && git -C "$BRAIN_REPO_LOCAL" remote get-url origin >/dev/null 2>&1; then
+        if [ "$BRAIN_MODE" = "remote" ] && [ -n "$BRAIN_REPO_REMOTE" ] && git -C "$BRAIN_REPO_LOCAL" remote get-url origin >/dev/null 2>&1; then
             BRAIN_IS_EXTERNAL="true"
             BRAIN_REMOTE_STATUS="connected"
         else
@@ -121,6 +175,10 @@ ensure_brain_available() {
 
     resolve_brain_dir "$harness_root"
 
+    if [ "${BRAIN_MODE:-disabled}" = "disabled" ]; then
+        return 2
+    fi
+
     if [ -d "$BRAIN_DIR" ]; then
         init_brain_skeleton "$BRAIN_DIR"
         if [ ! -d "$BRAIN_DIR/.git" ]; then
@@ -159,6 +217,8 @@ clone_brain_repo() {
     # Re-resolve to get config
     resolve_brain_dir "$harness_root"
 
+    [ "${BRAIN_MODE:-disabled}" != "disabled" ] || return 2
+
     if [ -z "$BRAIN_REPO_REMOTE" ]; then
         return 1  # No remote configured
     fi
@@ -184,6 +244,7 @@ clone_brain_repo() {
 
 # --- Sync brain repo (pull latest) ---
 sync_brain_repo() {
+    [ "${BRAIN_MODE:-disabled}" != "disabled" ] || return 2
     if [ "$BRAIN_IS_EXTERNAL" = "true" ] && [ -d "$BRAIN_REPO_LOCAL/.git" ]; then
         git -C "$BRAIN_REPO_LOCAL" pull --rebase --autostash --quiet 2>/dev/null || true
     fi
@@ -193,6 +254,8 @@ sync_brain_repo() {
 commit_brain_changes() {
     local commit_msg="$1"
     local no_sync="${2:-false}"
+
+    [ "${BRAIN_MODE:-disabled}" != "disabled" ] || return 2
 
     if [ "$BRAIN_IS_EXTERNAL" = "true" ] && [ -d "$BRAIN_REPO_LOCAL/.git" ]; then
         cd "$BRAIN_REPO_LOCAL"
