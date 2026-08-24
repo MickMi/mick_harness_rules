@@ -1,4 +1,4 @@
-> 🧭 状态：v0.21.0 已立项（locked）| 进度 196/202 | 当前归属：Planner | 最近决策：采用“统一 CLI + 宿主薄适配 + 按需 Skill”，`/e2e` 默认止于发布候选
+> 🧭 状态：v0.21.0 开发中 | 进度 197/202 | 当前归属：Executor | 最近交付：命令合同、宿主保留边界与 v0.20.1 上下文基线已固化
 
 # Plan: Company Runtime V0 → Portfolio V0.2
 
@@ -2300,7 +2300,7 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 
 ### 实施步骤
 
-- [ ] 197. [合同与基线] 固定四类命令的输入、预览、确认、产物、错误和宿主兼容合同；记录当前 CLI、Brain 降级路径、Loader 字节预算及回归基线。
+- [x] 197. [合同与基线] 固定四类命令的输入、预览、确认、产物、错误和宿主兼容合同；记录当前 CLI、Brain 降级路径、Loader 字节预算及回归基线。
 - [ ] 198. [Plan / Goal] 实现项目事实扫描、冲突预览、计划档案写入与长期目标维护；已有活跃计划、缺少稳定目标和历史文件迁移均有明确处理。
 - [ ] 199. [Brain] 实现 `status / configure / install / sync` 的统一配置体验，支持仅本机、私有远端、暂不启用三态，并让工作台解释写入位置和同步范围。
 - [ ] 200. [E2E] 实现以单条需求为单位的受控编排，复用 v0.20 门禁投影，输出当前关卡、缺失证据、停止原因和发布候选结果。
@@ -2330,3 +2330,9 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 - files: `docs/VERSIONS.md`, `plan.md`
 - verify: 用户已确认采用统一 CLI、Agent 薄适配、Brain 三态、`/e2e` 默认止于发布候选和常驻上下文瘦身，并明确要求“立项”。
 - notes: 本轮只建立版本目标、边界和六步计划；未修改 `VERSION`、发布记录、运行代码、用户 Agent 配置或 Brain 数据。
+
+### Step 197 — 2026-08-24
+
+- files: `config/command-registry.json`, `docs/COMMANDS.md`, `tests/test_harness_commands.py`, `plan.md`
+- verify: `python3 -B -m unittest tests.test_harness_commands` → 7 passed；`python3 -m json.tool config/command-registry.json`、`git diff --check` 通过；允许 localhost 后运行 `python3 -B -m unittest` → 149 passed。
+- notes: 固定 `harness plan|goal|brain|e2e` 的预览、显式写入、停止原因和错误码；Codex `/plan`、`/goal` 明确列为宿主保留命令，E2E 默认止于发布候选；记录瘦身前 32,640 bytes 常驻 Loader 基线。

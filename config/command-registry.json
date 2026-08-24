@@ -1,0 +1,182 @@
+{
+  "schema_version": "1",
+  "product_version": "0.21.0",
+  "canonical_interface": "harness <command>",
+  "context_baseline": {
+    "captured_at": "2026-08-24",
+    "codex_global_loader_bytes": 13646,
+    "project_loader_bytes": 18994,
+    "combined_loader_bytes": 32640,
+    "codex_default_discovery_limit_bytes": 32768,
+    "remaining_headroom_bytes": 128,
+    "full_regression_tests": 142
+  },
+  "host_adapters": {
+    "codex": {
+      "reserved_commands": [
+        "/plan",
+        "/goal"
+      ],
+      "invocation": "$<skill-name>",
+      "skills": {
+        "plan": "harness-plan",
+        "goal": "harness-goal",
+        "brain": "harness-brain",
+        "e2e": "harness-e2e"
+      }
+    },
+    "claude-code": {
+      "reserved_commands": [],
+      "invocation": "host-supported command or skill adapter",
+      "skills": {
+        "plan": "harness-plan",
+        "goal": "harness-goal",
+        "brain": "harness-brain",
+        "e2e": "harness-e2e"
+      }
+    }
+  },
+  "exit_codes": {
+    "0": "requested preview or operation completed",
+    "2": "a recoverable conflict or unmet precondition stopped the operation",
+    "64": "invalid or missing user input",
+    "69": "a required local service, host capability, or remote endpoint is unavailable",
+    "74": "a required file could not be read or written safely"
+  },
+  "commands": [
+    {
+      "id": "plan",
+      "cli": "harness plan",
+      "purpose": "scan project facts and create or update the active plan archive",
+      "preview_default": true,
+      "write_flag": "--apply",
+      "required_inputs": [],
+      "optional_inputs": [
+        "--project <path>",
+        "--title <user-facing title>"
+      ],
+      "reads": [
+        "project manifest and Harness rules",
+        "plan.md when present",
+        "docs/PROJECT.md and docs/VERSIONS.md when present",
+        "Git branch and working-tree metadata"
+      ],
+      "writes": [
+        "plan.md"
+      ],
+      "stops_on": [
+        "an unrelated active plan would be overwritten",
+        "the project path cannot be resolved",
+        "the preview cannot identify a safe plan destination"
+      ],
+      "never_does": [
+        "replace the host's native /plan command",
+        "edit project source code",
+        "change Git history or publish a release"
+      ]
+    },
+    {
+      "id": "goal",
+      "cli": "harness goal",
+      "purpose": "inspect and maintain the stable long-term project goal",
+      "preview_default": true,
+      "write_flag": "--apply",
+      "required_inputs": [
+        "--set <human project goal> when applying a change"
+      ],
+      "optional_inputs": [
+        "--project <path>"
+      ],
+      "reads": [
+        "docs/PROJECT.md when present",
+        "plan.md and docs/VERSIONS.md for conflict detection"
+      ],
+      "writes": [
+        "docs/PROJECT.md"
+      ],
+      "stops_on": [
+        "the proposed goal is a version objective, implementation plan, or technical task",
+        "the project path cannot be resolved",
+        "an existing human goal would be replaced without an explicit preview"
+      ],
+      "never_does": [
+        "replace the host's native /goal command",
+        "turn a current version plan into the long-term goal",
+        "edit project source code or publish a release"
+      ]
+    },
+    {
+      "id": "brain",
+      "cli": "harness brain",
+      "purpose": "explain, configure, install, and synchronize the optional Brain memory service",
+      "preview_default": true,
+      "write_flag": "configure --apply or an explicit install/sync action",
+      "required_inputs": [
+        "configure --mode local|remote|disabled when changing mode"
+      ],
+      "optional_inputs": [
+        "status",
+        "configure --remote <private Git URL>",
+        "install",
+        "sync"
+      ],
+      "reads": [
+        "Harness Brain configuration",
+        "local Brain repository state",
+        "configured remote identity without credentials"
+      ],
+      "writes": [
+        "Harness Brain configuration",
+        "local Brain skeleton only after explicit local or remote setup",
+        "approved or project-scoped Brain records during explicit synchronization"
+      ],
+      "modes": [
+        "local",
+        "remote",
+        "disabled"
+      ],
+      "stops_on": [
+        "remote mode has no remote URL",
+        "the configured repository identity conflicts with the actual Git remote",
+        "synchronization would expose credentials or an unapproved global candidate"
+      ],
+      "never_does": [
+        "create Brain during ordinary harness init",
+        "report local-only mode as a synchronization failure",
+        "put prompts, chat transcripts, secrets, or environment variables into Brain events"
+      ]
+    },
+    {
+      "id": "e2e",
+      "cli": "harness e2e",
+      "purpose": "inspect and advance one requirement through the controlled delivery gates",
+      "preview_default": true,
+      "write_flag": "--run",
+      "required_inputs": [
+        "--requirement <requirement_id>"
+      ],
+      "optional_inputs": [
+        "--project <path>"
+      ],
+      "reads": [
+        "the selected requirement and active version",
+        "product-review, implementation, QA, and release-readiness evidence",
+        "current Git branch and working-tree metadata"
+      ],
+      "writes": [
+        "requirement-scoped workflow events and artifact references",
+        "release-candidate state only when every required gate is satisfied"
+      ],
+      "stops_on": [
+        "requirement_id is missing or ambiguous",
+        "the next gate lacks its required artifact or independent evidence",
+        "a destructive, privileged, or externally visible action needs user approval"
+      ],
+      "never_does": [
+        "merge, push, tag, deploy, or publish automatically",
+        "skip product review, implementation, or independent QA gates",
+        "combine multiple requirements into one hidden execution"
+      ]
+    }
+  ]
+}
