@@ -163,14 +163,15 @@
 
 ## 0.20.1
 
-- Status: in_progress
-- Branch: fix/v0.20.1-overview-task-restore
-- Tag: not released
+- Status: released
+- Branch: main
+- Tag: v0.20.1
+- Work Branches: fix/v0.20.1-overview-task-restore
 - Goal: 修复项目首页刷新后丢失当前需求选择的问题，让 URL、任务办公室和角色详情始终指向同一条当前版本需求。
 
 ### Requirements
 
-- [ ] `task-194` 当前版本需求通过 URL 选中后，刷新仍保持同一需求；无有效选择时只在当前版本需求内回落，并提供自动回归与真实 6425 证据
+- [x] `task-194` 当前版本需求通过 URL 选中后，刷新仍保持同一需求；无有效选择时只在当前版本需求内回落，并提供自动回归与真实 6425 证据
 
 ## 0.20.0
 
