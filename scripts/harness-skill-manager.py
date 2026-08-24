@@ -18,7 +18,12 @@ MAX_SKILL_BYTES = 256 * 1024
 MAX_SKILLS = 500
 ROLE_ASSIGNMENTS = {
     "designer-craft": ["Designer"],
+    "harness-brain": ["PM"],
+    "harness-e2e": ["PM", "Reviewer", "Executor", "QA"],
+    "harness-goal": ["PM"],
+    "harness-plan": ["PM"],
     "prd-for-humans": ["PM"],
+    "product-logic-review": ["Reviewer"],
 }
 NEGATION_MARKERS = ("do not", "don't", "never", "must not", "禁止", "不得", "不要", "不会")
 

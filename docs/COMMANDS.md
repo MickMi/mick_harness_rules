@@ -80,6 +80,14 @@ v0.21 开工前的可复现基线：
 
 这些数字是瘦身前基线，不是未来目标。v0.21 会增加自动预算检查，确保 Kernel 仍可发现的同时显著留出空间。
 
+## v0.21 常驻上下文预算
+
+`scripts/harness-context-budget.py` 对四个边界做确定性检查：Core 不超过 10 KiB、项目 Loader 不超过 16 KiB、Codex 全局导出不超过 12 KiB、两份常驻入口合计不超过 28 KiB。同时逐项确认“先读后改、plan 检查、验证 Gate、Debug Card、回合卡片、按需 Extended”仍存在，避免只追求文件变小。
+
+当前 v0.21 预算以“4 KiB 个人 Capsule 已用满”的最坏常规输入生成项目 Loader，再与 Codex 全局导出合并测量；结果由检查器实时给出，不依赖仓库里预先存在的 `dist/`。相比 v0.20.1 的 32,640 bytes 基线显著降低。近似 Token 统一按 4 bytes/token 展示；实际模型 Token 会受中英文、分词器和宿主额外指令影响，因此工作台只把它显示为估算，不冒充账单数据。
+
+个人 Agent Capsule 最多注入 4 KiB；超过时按 UTF-8 安全截断，并保留源文件按需读取提示。角色细节、产品逻辑、PRD、设计与四类命令操作均留在 Skill / reference 中，需要时再加载，不并入日常 Loader。
+
 ## 事实源
 
 机器可读合同位于 `config/command-registry.json`。CLI、Skill、工作台和测试都应读取或验证这一合同；本文是给用户阅读的解释，不是第二套实现。

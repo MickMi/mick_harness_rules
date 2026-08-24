@@ -19,14 +19,14 @@ Skill 不是"文档"，而是能被 Rule 引用、被 Executor 调用的可复�
 
 编译、测试、事后验证、发布、签名、Preflight 检查——这些是 Skill 的典型选民。**"帮我优化下这段代码"不是 Skill**，那是任务。
 
-## Harness 只提供框架，不提供内容
+## Harness 提供框架与少量产品级通用 Skill
 
-harness 仓库里**只放**：
+harness 仓库里只放：
 - 本 README（Skill 是什么、怎么写、怎么被引用）
 - `_template.md`（骨架）
-- 按需的极少量通用 Skill（例如 secret-scan）
+- 已经形成稳定产品合同、需要跨项目复用的少量通用 Skill（例如 PRD、设计审查、产品逻辑审查和 Harness 命令薄适配）
 
-**具体 Skill（编译什么、测试什么、部署到哪）由项目自己在 `.harness/skills/` 或项目内 `rules/skills/` 里补**。技术栈差异太大，硬塞会变成噪音。
+**项目专属 Skill（编译什么、测试什么、部署到哪）仍由项目自己在 `.harness/skills/` 中补**。技术栈差异太大，不能作为 Harness 全局常驻内容。
 
 ## 什么时候写 Skill
 

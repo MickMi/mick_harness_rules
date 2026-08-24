@@ -1,4 +1,4 @@
-> 🧭 状态：v0.21.0 开发中 | 进度 200/202 | 当前归属：Executor | 最近交付：单需求 E2E 已复用真实门禁并安全止于发布候选
+> 🧭 状态：v0.21.0 开发中 | 进度 201/202 | 当前归属：Executor | 最近交付：常驻上下文已纳入预算并将四类命令迁移为显式 Skill
 
 # Plan: Company Runtime V0 → Portfolio V0.2
 
@@ -2304,7 +2304,7 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 - [x] 198. [Plan / Goal] 实现项目事实扫描、冲突预览、计划档案写入与长期目标维护；已有活跃计划、缺少稳定目标和历史文件迁移均有明确处理。
 - [x] 199. [Brain] 实现 `status / configure / install / sync` 的统一配置体验，支持仅本机、私有远端、暂不启用三态，并让工作台解释写入位置和同步范围。
 - [x] 200. [E2E] 实现以单条需求为单位的受控编排，复用 v0.20 门禁投影，输出当前关卡、缺失证据、停止原因和发布候选结果。
-- [ ] 201. [上下文瘦身] 将常驻 Loader 压缩到可审计预算，把角色详细流程迁移为按需 Skill / reference，并为生成物上限、截断和关键 Kernel 保留建立自动检查。
+- [x] 201. [上下文瘦身] 将常驻 Loader 压缩到可审计预算，把角色详细流程迁移为按需 Skill / reference，并为生成物上限、截断和关键 Kernel 保留建立自动检查。
 - [ ] 202. [工作台与验证] 提供命令发现、预览、执行反馈和历史结果入口；完成跨 Agent 适配、Brain 无远端路径、Token 预算、全仓回归和真实用户路径审查。
 
 ### 完成判定
@@ -2354,3 +2354,9 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 - files: `bin/harness`, `scripts/harness-command.py`, `tests/test_harness_commands.py`, `plan.md`
 - verify: `python3 -B -m unittest tests.test_harness_commands` → 21 passed；无缓存 Python compile、`bash -n bin/harness`、`git diff --check` 通过；允许 localhost 后 `python3 -B -m unittest` → 163 passed。
 - notes: `harness e2e` 必须绑定当前版本的一条 requirement，默认只读已有 runtime 并复用 v0.20 `requirement_workflow_snapshot`；`--run` 只追加一条最小命令请求，未满足门禁时以 exit 2 等待真实角色，绝不伪造角色完成或自动 spawn Agent；只有产品审查、开发产物与自检、独立 QA 证据齐全时记录 `release_candidate`，正式发布仍需用户确认。
+
+### Step 201 — 2026-08-24
+
+- files: `rules/core.md`, `generate.sh`, `dist/AGENTS.md`, `scripts/harness-context-budget.py`, `tests/test_context_budget.py`, four `rules/skills/harness-*` adapters, Skill governance docs, `plan.md`
+- verify: 四个新 Skill 经 Skill Creator `quick_validate.py` 均返回 `Skill is valid!`；上下文预算在 4 KiB Capsule 最坏常规输入下仍低于 `28 KiB` 合计上限，关键 Kernel marker 全部保留；全仓 `165 tests / 0 failures`，`generate.sh --check`、Python/Shell/JSON/Skill 校验与 `git diff --check` 通过。
+- notes: 常驻入口相比 v0.20.1 的 `32,640 bytes` 基线显著降低；删去 Core 与生成器中的重复解释但保留 Tripwire、验证 Gate、Debug Card、回合卡片和按需 Extended 链路；个人 Capsule 设为 4 KiB UTF-8 安全上限；四类 Agent 入口是默认禁止隐式触发的薄 Skill，底层事实与写入仍由 CLI 控制，Codex 原生 `/plan`、`/goal` 未被覆盖。

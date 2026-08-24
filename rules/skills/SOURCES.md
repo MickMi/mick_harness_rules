@@ -4,6 +4,14 @@
 
 ## 已引入
 
+### v0.21 通用命令适配（Harness 原生 Skill）
+
+- 路径：`rules/skills/harness-plan/`、`harness-goal/`、`harness-brain/`、`harness-e2e/`。
+- 用途：把四个确定性 CLI 入口暴露为可发现、可显式调用的 Agent Skill；Skill 只负责收集意图、展示预览和调用 CLI，不复制扫描、写入、状态迁移或完成判断。
+- 调用：统一事实源始终是 `harness plan|goal|brain|e2e`。Codex 的 `/plan`、`/goal` 是宿主保留能力，不覆盖；在支持 Skill 的宿主中显式使用 `$harness-plan`、`$harness-goal`、`$harness-brain`、`$harness-e2e`。
+- 安全边界：四个 Skill 默认禁止隐式触发；任何写入仍由 CLI 的 `--apply`、`--run` 或显式操作确认控制。`harness e2e` 最多形成发布候选，不自动合并、推送、打 Tag、部署或发布。
+- 维护方式：CLI 合同、错误码和状态机是唯一实现；Skill 只保留薄适配说明，避免把确定性逻辑重复塞进常驻上下文。
+
 ### prd-for-humans（Harness 原生 Skill）
 
 - 路径：`rules/skills/prd-for-humans/`。

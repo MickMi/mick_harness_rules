@@ -35,6 +35,7 @@ HARNESS_ROOT="$(cd "$(dirname "$0")" && pwd)"
 CORE="$HARNESS_ROOT/rules/core.md"
 EXTENDED="$HARNESS_ROOT/rules/extended.md"
 DIST="$HARNESS_ROOT/dist"
+CAPSULE_MAX_BYTES="${MICK_HARNESS_CAPSULE_MAX_BYTES:-4096}"
 
 CHECK_MODE=false
 GEN_ALL=false
@@ -95,8 +96,12 @@ resolve_capsule_brain_dir() {
     if [ -f "$HARNESS_ROOT/scripts/brain-resolve.sh" ]; then
         # shellcheck disable=SC1091
         source "$HARNESS_ROOT/scripts/brain-resolve.sh"
-        if resolve_brain_dir "$HARNESS_ROOT" >/dev/null 2>&1 && [ -n "${BRAIN_DIR:-}" ]; then
-            resolved="$BRAIN_DIR"
+        if resolve_brain_dir "$HARNESS_ROOT" >/dev/null 2>&1; then
+            if [ "${BRAIN_MODE:-disabled}" = "disabled" ]; then
+                echo ""
+                return 0
+            fi
+            [ -n "${BRAIN_DIR:-}" ] && resolved="$BRAIN_DIR"
         fi
     fi
 
@@ -105,6 +110,23 @@ resolve_capsule_brain_dir() {
     fi
 
     echo "$resolved"
+}
+
+emit_bounded_capsule() {
+    local file="$1"
+    python3 - "$file" "$CAPSULE_MAX_BYTES" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+limit = int(sys.argv[2])
+raw = path.read_bytes()
+if len(raw) <= limit:
+    sys.stdout.write(raw.decode("utf-8"))
+else:
+    body = raw[:limit].decode("utf-8", errors="ignore").rstrip()
+    sys.stdout.write(body + "\n\n> Capsule 已按常驻上下文预算截断；完整内容请按需读取 Brain 源文件。\n")
+PY
 }
 
 agent_capsule_inject() {
@@ -161,7 +183,7 @@ INJECT_HEADER
     if [ -f "$capsule" ]; then
         echo "> Capsule source: \`${capsule/#$HOME/~}\`"
         echo ""
-        cat "$capsule"
+        emit_bounded_capsule "$capsule"
     else
         cat <<'DEFAULT_CAPSULE'
 ### 0. Identity
@@ -274,47 +296,6 @@ render() {
         echo "> 本项目使用 Mick Harness 单源规则体系。下面的「Mick Agent Kernel」是最高优先级，任何情况不可违反。"
         echo ""
         cat "$CORE"
-        echo ""
-        echo "---"
-        echo ""
-        echo "## Harness Self-Test（理解校验）"
-        echo ""
-        echo "以下情况**必须**触发 Self-Test："
-        echo ""
-        echo "1. 新项目第一次启用 Harness"
-        echo "2. 用户说"先自检 / self-test / 你理解一下规则 / 你是不是读懂了""
-        echo "3. 任务涉及高风险外部系统、复杂交互、跨多文件改动、重复 Bug 熔断"
-        echo "4. 你刚刚违反过 core.md 铁律，或用户指出"你又在撞墙 / 你没按 Harness 做""
-        echo ""
-        echo "触发后，用 5 句话以内回答（必须绑定当前任务，不能泛泛复述规则）："
-        echo ""
-        echo '```markdown'
-        echo "### Harness Self-Test"
-        echo "1. 我的当前模式：<无 plan / Executor / Planner / Reviewer / Solo>"
-        echo "2. 本任务最高风险：<需求不清 / 外部系统 / 交互状态 / 重复 Bug / 破坏性改动 / 其他>"
-        echo "3. 我会如何证明完成：<测试 / dry-run / 端到端 / 截图 / 日志 / 无法验证则说明待验证>"
-        echo "4. 如果撞墙我会怎么停：<错误指纹阈值 + Debug Card / 回 Planner>"
-        echo "5. 我不会做什么：<不脑补 / 不顺手优化 / 不改技术栈 / 不跳过验证中的一项>"
-        echo '```'
-        echo ""
-        echo "若无法判断当前模式或风险，先读 \`plan.md\`、\`rules/core.md\`、相关角色文件再回答。完整协议见 \`.harness/rules/extended.md\` §1.1。"
-        echo ""
-        echo "---"
-        echo ""
-        echo "## Executor 纪律（plan.md 存在时强制生效）"
-        echo ""
-        echo "当 \`plan.md\` 存在且含 \`- [ ]\` 未完成步骤时，本轮要改动文件时，按 plan 步骤执行，以下红线不可逾越："
-        echo ""
-        echo "1. **🚫 不做架构决策** — plan 没写的不发明。缺什么写 \`## 阻塞\` 停下，不硬猜。"
-        echo "2. **🚫 不改 plan 的目标/约束/步骤/验收标准** — 你只能标完成 \`[x]\`、加执行备注、写沟通区。"
-        echo "3. **🚫 不引入 plan 没列的依赖** — 只用 plan 里出现过的包/模块。"
-        echo "4. **🚫 不"顺手优化"** — 不加 plan 没要求的缓存/重试/降级/抽象/清理。多做 = 越权。"
-        echo "5. **🚫 不跳步** — 必须按顺序执行，不许并行或跳过。"
-        echo "6. **🚫 不在 plan 范围外做额外改动** — 看到项目里有"脏数据/配置遗漏"不要自动清理，plan 决定你干什么。"
-        echo "7. **✅ 遇到 plan 没说清的地方** → 停下写阻塞报告（带证据），不要自己猜实现。"
-        echo "8. **✅ 完成后按结构化格式追加自检日志** — 每步必须有 \`### Step N\` + \`files:\` + \`verify:\` 行。\`scripts/harness-audit.sh\` 会自动扫描。"
-        echo ""
-        echo "违反以上任何一条 = 越权。完整 Executor 协议见 \`.harness/rules/roles/executor.md\` 和 \`extended.md\` §10.3。"
         echo ""
         if [ "$profile" = "full" ]; then
             echo "---"

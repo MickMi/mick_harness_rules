@@ -1,0 +1,6 @@
+interface:
+  display_name: "Harness Brain"
+  short_description: "Inspect or configure local/private memory"
+  default_prompt: "Use $harness-brain to inspect Brain mode, write path, repository and sync scope before changing anything."
+policy:
+  allow_implicit_invocation: false
