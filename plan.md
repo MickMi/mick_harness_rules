@@ -1,4 +1,4 @@
-> 🧭 状态：v0.20.0 发布执行中 | 进度 190/193 | 当前归属：Release | 最近决策：版本事实与最终 Release Gate 已通过，进入提交、合并和部署
+> 🧭 状态：v0.20.0 发布执行中 | 进度 191/193 | 当前归属：Release | 最近决策：发布候选已快进合并本地 main，并在合并后的代码上通过全仓复验
 
 # Plan: Company Runtime V0 → Portfolio V0.2
 
@@ -2210,7 +2210,7 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 
 - [x] 189. [发布事实] `VERSION`、中英文 Changelog、`docs/VERSIONS.md` 与计划统一为 v0.20.0，并写明兼容性和迁移方式。
 - [x] 190. [Release Gate] 重跑全仓测试、规则生成、脚本/JSON/Skill 校验、安装冒烟、敏感信息与 diff 检查。
-- [ ] 191. [提交与合并] 提交 `feat/v0.20-requirement-gates`，fast-forward 合并本地 main，并在合并后的真实代码上复验。
+- [x] 191. [提交与合并] 提交 `feat/v0.20-requirement-gates`，fast-forward 合并本地 main，并在合并后的真实代码上复验。
 - [ ] 192. [本机部署] 更新 `~/.mick-harness`、Agent Loader 和唯一 6425 服务，并用真实浏览器验收需求级任务办公室。
 - [ ] 193. [远端发布] 原子推送 main 与 annotated `v0.20.0`，核对远端分支、标签和本机安装提交一致。
 
@@ -2227,3 +2227,7 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 - files: `generate.sh`, `setup.sh`, `scripts/`, `rules/skills/product-logic-review/`, `tests/`, `web/observe-dashboard.html`, `plan.md`
 - verify: `python3 -B -m unittest` → 141 tests / 0 failures / exit 0；`generate.sh` 与 `--check`、Python/JavaScript/Shell/JSON 语法、Skill Creator 校验、`git diff --check` 全部 exit 0；临时项目非交互 setup smoke 通过并已清理。
 - notes: 敏感信息扫描仅命中 `tests/test_harness_agents.py:301` 的脱敏测试假密钥，未发现其他匹配；首轮安装断言误把生成标题限定为 Loader 文案，读取真实软链接和生成文件后改为项目实际合同并复验通过，未修改安装实现。
+
+### Step 191 — 2026-08-24
+- files: Git branch `feat/v0.20-requirement-gates`, Git branch `main`, `plan.md`
+- verify: 发布候选提交 `17e0217` 创建成功；合并前本地 main 与 `origin/main` 均为 `64a64f1`；`git merge --ff-only feat/v0.20-requirement-gates` 成功，main 指向同一提交；合并后再次运行 141 tests / 0 failures、`generate.sh --check` 和 `git diff --check`，全部 exit 0。
