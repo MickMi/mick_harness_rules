@@ -1,4 +1,4 @@
-> 🧭 状态：v0.21.0 开发完成，等待 Review | 进度 202/202 | 当前归属：Review | 最近交付：四类命令已进入工作台，跨 Agent Skill、Brain 新用户降级与真实浏览器路径均已验证
+> 🧭 状态：v0.21.0 轻量执行开发中 | 进度 205/206 | 当前归属：Executor | 最近交付：执行模式、选择原因与升级原因已进入结构化事件链
 
 # Plan: Company Runtime V0 → Portfolio V0.2
 
@@ -2405,3 +2405,8 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 - files: `rules/core.md`, `rules/extended.md`, `dist/AGENTS.md`, `tests/test_context_budget.py`, `plan.md`
 - verify: `./generate.sh --check`、`git diff --check` exit 0；上下文预算 Core `9,379/10,240`、项目 Loader `15,775/16,384`、全局 Loader `11,630/12,288`、合计 `27,405/28,672 bytes`，status passed。
 - notes: Self-Test 改为默认内部检查；Quick 交付只给结果与验证，Standard/E2E 才使用可见导航；本轮按约定暂停，不进入 Step 205–206。
+
+### Step 205 — 2026-08-25
+- files: `scripts/harness-observe.py`, `docs/runtime-event-v0.schema.json`, `docs/OBSERVE.md`, `rules/core.md`, `tests/test_harness_observe.py`, `docs/VERSIONS.md`, `plan.md`
+- verify: `python3 -B -m unittest tests.test_harness_observe tests.test_context_budget` → 100 passed；`./generate.sh --check`、JSON 语法与 `git diff --check` exit 0；上下文预算 Core `9,558/10,240`、项目 Loader `15,954/16,384`、全局 Loader `11,809/12,288`、合计 `27,763/28,672 bytes`，status passed。
+- notes: 新事件显式记录请求模式、有效模式和选择原因；升级必须记录原模式与事实原因，需要用户裁决可单独标记。旧事件保持兼容，服务端不读取 Prompt 推断模式；本轮暂停，不进入 Step 206 工作台改造。

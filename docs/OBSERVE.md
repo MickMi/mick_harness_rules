@@ -155,11 +155,15 @@ Collector 只读扫描这些来源：
 
 ```bash
 harness observe emit work.round_started --ref task-3-turn-1 --role Executor \
-  --requirement task-3 --objective "实现本地事件接收"
+  --requirement task-3 --objective "实现本地事件接收" \
+  --requested-mode auto --effective-mode standard \
+  --mode-reason "需要修改代码并独立验证"
 
 harness observe emit work.round_completed --ref task-3-turn-1 --role Executor \
   --requirement task-3 --objective "实现本地事件接收" \
   --summary "接收、鉴权和持久化已验证" --next-role QA \
+  --requested-mode auto --effective-mode standard \
+  --mode-reason "需要修改代码并独立验证" \
   --gate-result delivered \
   --artifact docs/OBSERVE.md --artifact scripts/harness-observe.py \
   --verification "python-unittest:event-ingest"
@@ -169,6 +173,8 @@ harness observe emit work.round_completed --ref task-3-qa --role QA \
   --summary "鉴权、幂等和离线恢复通过" --gate-result passed \
   --verification "qa-report:event-ingest"
 ```
+
+执行模式必须由 Agent 在事件中明确写入，不由服务端读取 Prompt 猜测。任务从 `quick` 升级时，额外写 `--escalated-from quick --escalation-reason "<触发升级的事实>"`；需要用户裁决时写 `--needs-user-decision`。
 
 发生关键取舍时使用 `decision.recorded`，角色工作转交时使用 `handoff.created`。同一个事件引用默认形成稳定幂等键，重复提交不会重复写入。
 

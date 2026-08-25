@@ -360,7 +360,13 @@
         "review_mode": {"enum": ["product_review", "release_review"]},
         "gate_result": {"enum": ["ready_for_review", "approved", "changes_requested", "delivered", "passed", "failed"]},
         "workflow_exception": {"enum": ["technical_only"]},
-        "exception_reason": {"type": "string", "minLength": 1, "maxLength": 2000}
+        "exception_reason": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "requested_mode": {"enum": ["auto", "quick", "standard", "e2e"]},
+        "effective_mode": {"enum": ["quick", "standard", "e2e"]},
+        "mode_reason": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "escalated_from": {"enum": ["quick", "standard"]},
+        "escalation_reason": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "needs_user_decision": {"type": "boolean"}
       }
     },
     "decisionPayload": {

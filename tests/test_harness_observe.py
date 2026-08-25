@@ -2271,6 +2271,9 @@ class ObserveRuntimeTests(unittest.TestCase):
             next_role="Executor",
             review_mode="product_review",
             gate_result="approved",
+            requested_mode="auto",
+            effective_mode="standard",
+            mode_reason="普通开发任务需要实现与独立验证",
             idempotency_key="review-product",
         )
         self.assertEqual(envelope["payload"]["review_mode"], "product_review")
@@ -2281,6 +2284,69 @@ class ObserveRuntimeTests(unittest.TestCase):
         invalid["source"]["role"] = "QA"
         with self.assertRaisesRegex(OBSERVE.ObserveError, "review_mode"):
             OBSERVE.validate_ingest_envelope(invalid, OBSERVE.project_id(self.project))
+
+    def test_work_round_records_effective_mode_and_valid_escalation(self) -> None:
+        envelope = OBSERVE.build_work_envelope(
+            self.project,
+            event_type="work.round_started",
+            role="Executor",
+            round_ref="mode-escalation",
+            requirement_id="task-205",
+            objective="记录真实执行模式",
+            status="active",
+            requested_mode="auto",
+            effective_mode="standard",
+            mode_reason="任务需要修改多个相关文件",
+            escalated_from="quick",
+            escalation_reason="发现跨文件契约变更",
+            needs_user_decision=False,
+            idempotency_key="mode-escalation",
+        )
+        OBSERVE.ingest_envelope(self.project, envelope)
+
+        work_round = self.snapshot()["work_rounds"]["mode-escalation"]
+        self.assertEqual(work_round["requested_mode"], "auto")
+        self.assertEqual(work_round["effective_mode"], "standard")
+        self.assertEqual(work_round["escalated_from"], "quick")
+        self.assertEqual(work_round["escalation_reason"], "发现跨文件契约变更")
+        self.assertFalse(work_round["needs_user_decision"])
+
+        invalid = json.loads(json.dumps(envelope))
+        invalid["payload"]["effective_mode"] = "quick"
+        with self.assertRaisesRegex(OBSERVE.ObserveError, "mode escalation"):
+            OBSERVE.validate_ingest_envelope(invalid, OBSERVE.project_id(self.project))
+
+    def test_work_round_rejects_incomplete_mode_metadata(self) -> None:
+        with self.assertRaisesRegex(OBSERVE.ObserveError, "effective_mode"):
+            OBSERVE.build_work_envelope(
+                self.project,
+                event_type="work.round_started",
+                role="Executor",
+                round_ref="mode-incomplete",
+                objective="拒绝靠 Prompt 猜测模式",
+                status="active",
+                requested_mode="auto",
+                idempotency_key="mode-incomplete",
+            )
+
+    def test_emit_cli_forwards_structured_mode_metadata(self) -> None:
+        (self.project / "AGENTS.md").write_text("# Harness\n", encoding="utf-8")
+        result = {"transport": "local-fallback", "appended": 1}
+        with mock.patch.object(OBSERVE, "submit_envelope", return_value=result) as submit:
+            exit_code = OBSERVE.main([
+                "emit", "work.round_started", "--project", str(self.project),
+                "--ref", "mode-cli", "--role", "Executor",
+                "--objective", "验证命令适配", "--requested-mode", "auto",
+                "--effective-mode", "e2e", "--mode-reason", "用户要求端到端交付",
+                "--escalated-from", "standard", "--escalation-reason", "目标扩展到发布候选",
+                "--needs-user-decision",
+            ])
+
+        self.assertEqual(exit_code, 0)
+        payload = submit.call_args.args[1]["payload"]
+        self.assertEqual(payload["effective_mode"], "e2e")
+        self.assertEqual(payload["escalated_from"], "standard")
+        self.assertTrue(payload["needs_user_decision"])
 
     def test_dashboard_uses_current_version_requirement_command_center(self) -> None:
         dashboard = DASHBOARD.read_text(encoding="utf-8")

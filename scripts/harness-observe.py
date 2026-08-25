@@ -99,6 +99,13 @@ EVENT_TYPES = {
     "handoff.created",
     "collector.warning",
 }
+REQUESTED_EXECUTION_MODES = {"auto", "quick", "standard", "e2e"}
+EFFECTIVE_EXECUTION_MODES = {"quick", "standard", "e2e"}
+VALID_MODE_ESCALATIONS = {
+    ("quick", "standard"),
+    ("quick", "e2e"),
+    ("standard", "e2e"),
+}
 
 
 def load_brain_boundary() -> Any:
@@ -595,6 +602,8 @@ def validate_ingest_envelope(envelope: dict[str, Any], expected_project_id: str 
                 "role", "objective", "summary", "status", "requirement_id", "next_role", "blocker",
                 "platform", "session_ref", "turn_ref", "artifact_refs", "verification_refs",
                 "review_mode", "gate_result", "workflow_exception", "exception_reason",
+                "requested_mode", "effective_mode", "mode_reason", "escalated_from",
+                "escalation_reason", "needs_user_decision",
             },
             required={"role", "objective", "status"},
             label="Work round payload",
@@ -630,6 +639,25 @@ def validate_ingest_envelope(envelope: dict[str, Any], expected_project_id: str 
             raise ObserveError("Work round workflow_exception requires exception_reason", 422)
         if payload.get("exception_reason") is not None:
             require_text(payload, "exception_reason", maximum=2000)
+        mode_fields = {
+            "requested_mode", "effective_mode", "mode_reason", "escalated_from",
+            "escalation_reason", "needs_user_decision",
+        }
+        if any(key in payload for key in mode_fields):
+            if payload.get("requested_mode") not in REQUESTED_EXECUTION_MODES:
+                raise ObserveError("Work round requested_mode is invalid", 422)
+            if payload.get("effective_mode") not in EFFECTIVE_EXECUTION_MODES:
+                raise ObserveError("Work round effective_mode is invalid", 422)
+            require_text(payload, "mode_reason", maximum=1000)
+        if payload.get("escalated_from") is not None:
+            transition = (payload["escalated_from"], payload.get("effective_mode"))
+            if transition not in VALID_MODE_ESCALATIONS:
+                raise ObserveError("Work round mode escalation is invalid", 422)
+            require_text(payload, "escalation_reason", maximum=1000)
+        elif payload.get("escalation_reason") is not None:
+            raise ObserveError("Work round escalation_reason requires escalated_from", 422)
+        if payload.get("needs_user_decision") is not None and not isinstance(payload["needs_user_decision"], bool):
+            raise ObserveError("Work round needs_user_decision must be boolean", 422)
         for key in ("artifact_refs", "verification_refs"):
             if payload.get(key) is not None and (
                 not isinstance(payload[key], list)
@@ -786,6 +814,12 @@ def build_work_envelope(
     gate_result: str | None = None,
     workflow_exception: str | None = None,
     exception_reason: str | None = None,
+    requested_mode: str | None = None,
+    effective_mode: str | None = None,
+    mode_reason: str | None = None,
+    escalated_from: str | None = None,
+    escalation_reason: str | None = None,
+    needs_user_decision: bool | None = None,
     producer: str = "harness-agent",
 ) -> dict[str, Any]:
     payload = {
@@ -805,6 +839,12 @@ def build_work_envelope(
         **({"gate_result": gate_result} if gate_result else {}),
         **({"workflow_exception": workflow_exception} if workflow_exception else {}),
         **({"exception_reason": exception_reason} if exception_reason else {}),
+        **({"requested_mode": requested_mode} if requested_mode else {}),
+        **({"effective_mode": effective_mode} if effective_mode else {}),
+        **({"mode_reason": mode_reason} if mode_reason else {}),
+        **({"escalated_from": escalated_from} if escalated_from else {}),
+        **({"escalation_reason": escalation_reason} if escalation_reason else {}),
+        **({"needs_user_decision": needs_user_decision} if needs_user_decision is not None else {}),
     }
     envelope = {
         "schema_version": INGEST_SCHEMA_VERSION,
@@ -5092,6 +5132,12 @@ def build_parser() -> argparse.ArgumentParser:
     emit.add_argument("--gate-result", choices=sorted(set().union(*GATE_RESULTS_BY_ROLE.values())))
     emit.add_argument("--workflow-exception", choices=sorted(WORKFLOW_EXCEPTIONS))
     emit.add_argument("--exception-reason")
+    emit.add_argument("--requested-mode", choices=sorted(REQUESTED_EXECUTION_MODES))
+    emit.add_argument("--effective-mode", choices=sorted(EFFECTIVE_EXECUTION_MODES))
+    emit.add_argument("--mode-reason")
+    emit.add_argument("--escalated-from", choices=("quick", "standard"))
+    emit.add_argument("--escalation-reason")
+    emit.add_argument("--needs-user-decision", action="store_true")
     hook_config = subparsers.add_parser("hook-config")
     hook_config.add_argument("platform", choices=("codex", "claude"), help="Agent platform to configure")
     return parser
@@ -5178,6 +5224,12 @@ def main(argv: list[str] | None = None) -> int:
                     gate_result=args.gate_result,
                     workflow_exception=args.workflow_exception,
                     exception_reason=args.exception_reason,
+                    requested_mode=args.requested_mode,
+                    effective_mode=args.effective_mode,
+                    mode_reason=args.mode_reason,
+                    escalated_from=args.escalated_from,
+                    escalation_reason=args.escalation_reason,
+                    needs_user_decision=True if args.needs_user_decision else None,
                     idempotency_key=idempotency_key,
                 )
             elif args.event_type == "decision.recorded":
