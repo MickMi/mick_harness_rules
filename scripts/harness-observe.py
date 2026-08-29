@@ -106,6 +106,15 @@ VALID_MODE_ESCALATIONS = {
     ("quick", "e2e"),
     ("standard", "e2e"),
 }
+CHATGPT_PROJECT_TITLE_RE = re.compile(
+    r'local mirror of the ChatGPT project\s+[“\"]([^”\"]+)[”\"]',
+    re.IGNORECASE,
+)
+NESTED_REPOSITORY_MAX_DEPTH = 2
+NESTED_REPOSITORY_IGNORES = {
+    ".git", ".harness", ".harness-runtime", ".next", "build", "dist",
+    "node_modules", "vendor", "venv", ".venv", "__pycache__",
+}
 
 
 def load_brain_boundary() -> Any:
@@ -345,7 +354,126 @@ def ensure_ingest_token(state_root: Path | None = None) -> str:
 
 
 def has_harness_entry(project: Path) -> bool:
-    return (project / "AGENTS.md").exists() or (project / ".harness").exists()
+    if (project / ".harness").exists():
+        return True
+    agents = project / "AGENTS.md"
+    if not agents.is_file():
+        return False
+    try:
+        header = agents.read_text(encoding="utf-8", errors="replace")[:8192]
+    except OSError:
+        return False
+    return "MICK-HARNESS" in header or "Mick Agent Harness" in header or "# Harness" in header
+
+
+def normalized_project_label(value: str) -> str:
+    return "".join(character for character in value.casefold() if character.isalnum())
+
+
+def chatgpt_project_title(project: Path) -> str | None:
+    source = project / "AGENTS.md"
+    if not source.is_file():
+        return None
+    try:
+        value = source.read_text(encoding="utf-8", errors="replace")[:8192]
+    except OSError:
+        return None
+    match = CHATGPT_PROJECT_TITLE_RE.search(value)
+    return match.group(1).strip() if match else None
+
+
+def nested_git_roots(project: Path, *, max_depth: int = NESTED_REPOSITORY_MAX_DEPTH) -> list[Path]:
+    """Find shallow child repositories without crawling generated dependency trees."""
+    project = project.resolve(strict=False)
+    roots: list[Path] = []
+    if not project.is_dir():
+        return roots
+    for current, directory_names, _ in os.walk(project):
+        current_path = Path(current)
+        try:
+            depth = len(current_path.relative_to(project).parts)
+        except ValueError:
+            continue
+        directory_names[:] = [
+            name for name in directory_names
+            if name not in NESTED_REPOSITORY_IGNORES and not name.startswith(".")
+        ]
+        if depth >= max_depth:
+            directory_names[:] = []
+        if current_path != project and (current_path / ".git").exists():
+            roots.append(current_path.resolve())
+            directory_names[:] = []
+    return sorted(set(roots), key=str)
+
+
+def project_workspace_path(project: Path) -> tuple[Path, str, list[str]]:
+    """Resolve the real code workspace while keeping the registered root stable."""
+    project = project.resolve(strict=False)
+    try:
+        inside = run_git(project, ["rev-parse", "--show-toplevel"])
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        inside = None
+    if inside is not None and inside.returncode == 0 and inside.stdout.strip():
+        return Path(inside.stdout.strip()).resolve(), "direct", []
+    candidates = nested_git_roots(project)
+    if len(candidates) == 1:
+        return candidates[0], "nested_repository", []
+    if len(candidates) > 1:
+        return project, "ambiguous_nested_repositories", [str(item) for item in candidates]
+    return project, "no_git_repository", []
+
+
+def project_identity_snapshot(project: Path) -> dict[str, Any]:
+    registered = project.resolve(strict=False)
+    workspace, relationship, candidates = project_workspace_path(registered)
+    return {
+        "project_id": project_id(registered),
+        "registered_path": str(registered),
+        "workspace_path": str(workspace),
+        "relationship": relationship,
+        "aligned": relationship == "direct",
+        "candidates": candidates,
+        "message": {
+            "direct": "监控目录与 Git 工作区一致。",
+            "nested_repository": "已将唯一的子 Git 仓库作为代码工作区，运行记录继续归入同一项目。",
+            "ambiguous_nested_repositories": "发现多个子 Git 仓库，需由用户选择代码工作区。",
+            "no_git_repository": "尚未发现 Git 工作区。",
+        }[relationship],
+    }
+
+
+def resolve_agent_project(cwd: Path, registry_path: Path | None = None) -> Path | None:
+    """Map a vendor session directory to one registered Harness project without guessing."""
+    cwd = cwd.resolve(strict=False)
+    descriptors = [item for item in load_registered_projects(registry_path) if item["validation"] == "valid"]
+    path_matches: list[tuple[int, Path]] = []
+    for descriptor in descriptors:
+        registered = Path(descriptor["path"]).resolve(strict=False)
+        workspace = Path(descriptor.get("workspace_path") or registered).resolve(strict=False)
+        for candidate in {registered, workspace}:
+            try:
+                cwd.relative_to(candidate)
+            except ValueError:
+                continue
+            path_matches.append((len(candidate.parts), registered))
+    if path_matches:
+        return max(path_matches, key=lambda item: item[0])[1]
+
+    mirror_title = chatgpt_project_title(cwd)
+    if mirror_title:
+        wanted = normalized_project_label(mirror_title)
+        named = [
+            Path(item["path"]).resolve(strict=False)
+            for item in descriptors
+            if wanted in {
+                normalized_project_label(str(item.get("name") or "")),
+                normalized_project_label(Path(str(item.get("workspace_path") or item["path"])).name),
+            }
+        ]
+        if len(named) == 1:
+            return named[0]
+        return None
+    return cwd if has_harness_entry(cwd) else None
 
 
 def load_registered_projects(registry_path: Path | None = None) -> list[dict[str, Any]]:
@@ -383,6 +511,7 @@ def load_registered_projects(registry_path: Path | None = None) -> list[dict[str
                 "project_id": project_id(project),
                 "name": project.name or normalized,
                 "path": normalized,
+                "workspace_path": str(project_workspace_path(project)[0]) if validation == "valid" else None,
                 "validation": validation,
                 "reason": reason,
             }
@@ -1288,10 +1417,14 @@ def project_events(events: list[dict[str, Any]]) -> dict[str, Any]:
                 "updated_at": event["occurred_at"],
             }
         elif event_type in {"work.round_started", "work.round_completed"}:
+            previous_round = snapshot["work_rounds"].get(subject["id"], {})
             snapshot["work_rounds"][subject["id"]] = {
+                **previous_round,
                 "round_id": subject["id"],
                 "task_id": payload.get("requirement_id") or subject.get("parent_id"),
                 **payload,
+                **({"started_at": event["occurred_at"]} if event_type == "work.round_started" else {}),
+                **({"completed_at": event["occurred_at"]} if event_type == "work.round_completed" else {}),
                 "derived_from_sequence": event["sequence"],
                 "updated_at": event["occurred_at"],
             }
@@ -2666,6 +2799,87 @@ def git_workspace_snapshot(project: Path) -> dict[str, Any]:
         "worktrees": worktrees,
         "branches": branches,
         "tags": tags,
+        "commit_count": int(run_git(project, ["rev-list", "--count", "HEAD"]).stdout.strip() or 0),
+    }
+
+
+def matched_agent_mirrors(project: Path) -> list[Path]:
+    root_value = os.environ.get("MICK_HARNESS_CODEX_PROJECTS_DIR")
+    root = Path(root_value).expanduser() if root_value else Path.home() / ".codex" / ".chatgpt-projects"
+    if not root.is_dir():
+        return []
+    labels = {normalized_project_label(project.name)}
+    workspace, _, _ = project_workspace_path(project)
+    labels.add(normalized_project_label(workspace.name))
+    matches: list[Path] = []
+    for candidate in root.iterdir():
+        if not candidate.is_dir() or candidate.resolve(strict=False) == project.resolve(strict=False):
+            continue
+        title = chatgpt_project_title(candidate)
+        if title and normalized_project_label(title) in labels and runtime_root(candidate).is_dir():
+            matches.append(candidate.resolve())
+    return sorted(matches, key=str)
+
+
+def detected_activity_snapshot(project: Path, snapshot: dict[str, Any], git: dict[str, Any]) -> dict[str, Any]:
+    agent_sessions = len(snapshot.get("agent_sessions", {}))
+    agent_turns = len(snapshot.get("agent_turns", {}))
+    aliases: list[dict[str, Any]] = []
+    for mirror in matched_agent_mirrors(project):
+        try:
+            mirror_snapshot = status_runtime(mirror)["snapshot"]
+        except ObserveError:
+            continue
+        mirror_sessions = len(mirror_snapshot.get("agent_sessions", {}))
+        mirror_turns = len(mirror_snapshot.get("agent_turns", {}))
+        agent_sessions += mirror_sessions
+        agent_turns += mirror_turns
+        aliases.append({
+            "kind": "chatgpt_project_mirror",
+            "path": str(mirror),
+            "session_count": mirror_sessions,
+            "turn_count": mirror_turns,
+        })
+    return {
+        "agent_session_count": agent_sessions,
+        "agent_turn_count": agent_turns,
+        "git_commit_count": git.get("commit_count", 0) if git.get("available") else 0,
+        "git_head": git.get("head") if git.get("available") else None,
+        "git_head_subject": git.get("head_subject") if git.get("available") else None,
+        "aliases": aliases,
+        "has_unstructured_progress": bool(agent_turns or (git.get("commit_count", 0) if git.get("available") else 0)),
+    }
+
+
+def execution_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
+    rounds = sorted(
+        snapshot.get("work_rounds", {}).values(),
+        key=lambda item: item.get("derived_from_sequence", 0),
+    )
+    latest = rounds[-1] if rounds else None
+    duration_ms: int | None = None
+    if latest and latest.get("started_at") and latest.get("updated_at"):
+        try:
+            started = dt.datetime.fromisoformat(str(latest["started_at"]))
+            updated = dt.datetime.fromisoformat(str(latest["updated_at"]))
+            duration_ms = max(0, int((updated - started).total_seconds() * 1000))
+        except ValueError:
+            duration_ms = None
+    return {
+        "recorded": latest is not None,
+        "round_id": latest.get("round_id") if latest else None,
+        "role": latest.get("role") if latest else None,
+        "status": latest.get("status") if latest else None,
+        "requested_mode": latest.get("requested_mode") if latest else None,
+        "effective_mode": latest.get("effective_mode") if latest else None,
+        "mode_reason": latest.get("mode_reason") if latest else None,
+        "escalated_from": latest.get("escalated_from") if latest else None,
+        "escalation_reason": latest.get("escalation_reason") if latest else None,
+        "needs_user_decision": bool(latest and latest.get("needs_user_decision")),
+        "duration_ms": duration_ms,
+        "agent_turn_count": len(snapshot.get("agent_turns", {})),
+        "harness_command_count": len(snapshot.get("harness_commands", {})),
+        "tool_roundtrip_status": "not_recorded",
     }
 
 
@@ -3324,12 +3538,20 @@ def current_version_snapshot(snapshot: dict[str, Any], versions: dict[str, Any])
 def project_workspace_snapshot(project: Path, snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
     if snapshot is None:
         snapshot = status_runtime(project)["snapshot"]
-    git = git_workspace_snapshot(project)
+    identity = project_identity_snapshot(project)
+    workspace = Path(identity["workspace_path"])
+    git = git_workspace_snapshot(workspace)
     versions = version_plan_snapshot(project, snapshot, git)
+    profile = project_profile_snapshot(project)
+    if not profile.get("source") and workspace != project.resolve(strict=False):
+        profile = project_profile_snapshot(workspace)
     return {
         "project_id": project_id(project),
         "generated_at": now_iso(),
-        "project": project_profile_snapshot(project),
+        "project": profile,
+        "identity": identity,
+        "activity": detected_activity_snapshot(project, snapshot, git),
+        "execution": execution_snapshot(snapshot),
         "organization": organization_snapshot(snapshot),
         "artifacts": artifact_metadata(project, snapshot, versions),
         "git": git,
@@ -3355,6 +3577,9 @@ def portfolio_project_record(descriptor: dict[str, Any], *, sync: bool = True) -
             },
             "runs": [],
             "recent_work": None,
+            "activity": {"agent_turn_count": 0, "git_commit_count": 0, "has_unstructured_progress": False},
+            "identity": None,
+            "execution": {"recorded": False, "needs_user_decision": False},
         }
     )
     if descriptor["validation"] != "valid":
@@ -3366,6 +3591,12 @@ def portfolio_project_record(descriptor: dict[str, Any], *, sync: bool = True) -
         status = status_runtime(project)
         index = load_json(runtime_root(project) / "index.json", {}) or {}
         stage, owner_role = snapshot_stage(status["snapshot"])
+        identity = project_identity_snapshot(project)
+        git = git_workspace_snapshot(Path(identity["workspace_path"]))
+        activity = detected_activity_snapshot(project, status["snapshot"], git)
+        execution = execution_snapshot(status["snapshot"])
+        if stage == "观察中" and activity["has_unstructured_progress"]:
+            stage = "检测到活动 · 尚未立项"
         record.update(
             {
                 "stage": stage,
@@ -3384,6 +3615,9 @@ def portfolio_project_record(descriptor: dict[str, Any], *, sync: bool = True) -
                     ),
                     None,
                 ),
+                "activity": activity,
+                "identity": identity,
+                "execution": execution,
             }
         )
     except ObserveError as error:

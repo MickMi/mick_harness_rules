@@ -64,9 +64,10 @@ def main(argv: list[str] | None = None) -> int:
         stop_response(event_name)
         return 0
     try:
-        project = Path(cwd).expanduser().resolve(strict=True)
+        session_directory = Path(cwd).expanduser().resolve(strict=True)
         observer = load_observer()
-        if project.is_dir() and observer.has_harness_entry(project):
+        project = observer.resolve_agent_project(session_directory)
+        if project is not None:
             observer.submit_agent_activity(
                 project,
                 platform=args.platform,

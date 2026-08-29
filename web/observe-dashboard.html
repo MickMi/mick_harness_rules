@@ -2139,11 +2139,13 @@
             row.append(identity);
             const work = project.recent_work;
             const projectSummary = project.summary || {};
+            const detectedActivity = project.activity || {};
             const blockCount = projectSummary.active_blocks || 0;
             let nextText = "等待明确下一步";
             if (blockCount) nextText = `先处理 ${blockCount} 项阻塞`;
             else if (work?.status === "active") nextText = `${roleLabel(work.role)} 正在推进：${compactText(work.objective || work.summary)}`;
             else if (work?.next_role) nextText = `${roleLabel(work.next_role)} 接手${work.objective ? `：${compactText(work.objective)}` : ""}`;
+            else if (detectedActivity.has_unstructured_progress) nextText = "PM 将已检测活动归入版本需求";
             const nextWrap = el("span", "project-next-wrap");
             nextWrap.append(el("span", "project-next-label", "下一步"));
             const next = el("span", "project-next", nextText);
@@ -2156,7 +2158,11 @@
             const verifyCount = projectSummary.verification_pending || 0;
             const ratio = total ? Math.min(100, Math.round(done / total * 100)) : 0;
             const progress = el("span", "project-progress");
-            progress.append(el("span", "", total ? `${done}/${total} 已完成` : "尚无计划"));
+            progress.append(el("span", "", total
+              ? `${done}/${total} 已完成`
+              : detectedActivity.has_unstructured_progress
+                ? `${detectedActivity.git_commit_count || 0} 个提交 · ${detectedActivity.agent_turn_count || 0} 个回合`
+                : "尚无计划"));
             if (blockCount || verifyCount) {
               const attentionText = [blockCount ? `${blockCount} 项阻塞` : "", verifyCount ? `${verifyCount} 项待验证` : ""].filter(Boolean).join(" · ");
               const attention = el("span", "project-attention", attentionText);
@@ -2439,27 +2445,7 @@
         const snapshot = state.snapshot;
         const organization = state.workspace?.organization || { roles: [], transitions: [], current_transition: null, current_role: null };
         const project = state.workspace?.project || {};
-        const plannedVersion = currentVersion();
-        const version = state.workspace?.current_version || {
-          version: plannedVersion?.version,
-          status: plannedVersion?.status,
-          goal: plannedVersion?.goal,
-          total: plannedVersion?.requirements?.length || 0,
-          counts: {
-            completed: (plannedVersion?.requirements || []).filter(item => item.status === "completed").length,
-            in_progress: 0,
-            planned: (plannedVersion?.requirements || []).filter(item => item.status !== "completed").length,
-            blocked: 0,
-          },
-          requirements: (plannedVersion?.requirements || []).map(item => ({
-            ...item,
-            effective_status: item.status,
-            role_path: [],
-            test: { status: "not_started", message: "尚未进入独立测试", evidence_count: 0 },
-            blocks: [],
-            next_step: item.status === "completed" ? "需求已完成" : "等待开始",
-          })),
-        };
+        const version = state.workspace?.current_version || null;
         const versionRequirements = version?.requirements || [];
         const counts = version?.counts || { completed: 0, in_progress: 0, planned: 0, blocked: 0 };
         const completed = counts.completed || 0;
@@ -2487,7 +2473,7 @@
         const currentRole = selectedRequirement?.current_role || null;
         const blockCount = versionRequirements.reduce((total, item) => total + (item.blocks || []).length, 0);
         const nextStep = selectedRequirement?.next_step || "等待 PM 规划";
-        const completionRatio = version.total ? Math.round(completed / version.total * 100) : 0;
+        const completionRatio = version?.total ? Math.round(completed / version.total * 100) : 0;
         const requirementStatusNames = { completed: "已完成", in_progress: "进行中", planned: "待开始", blocked: "已阻塞", skipped: "已移出" };
         const requirementRoleMap = new Map((selectedRequirement?.role_path || []).map(item => [item.role, item]));
         const officeRoles = (organization.roles || []).map(role => {
@@ -2511,7 +2497,7 @@
         const hero = el("section", "project-overview-hero");
         const heroGrid = el("div", "overview-hero-grid");
         const story = el("div", "overview-story");
-        story.append(el("div", "version-kicker", version ? `当前版本 · v${version.version}` : "当前版本 · 尚未规划"));
+        story.append(el("div", "version-kicker", version?.version ? `当前版本 · v${version.version}` : "当前版本 · 尚未规划"));
         story.append(el("p", "overview-version-goal", version?.goal || "PM 尚未建立这个版本的目标。"));
         const progress = el("div", "overview-progress");
         const progressLine = el("div", "progress-line");
@@ -2538,6 +2524,54 @@
         });
         heroGrid.append(story, command); hero.append(heroGrid); root.append(hero);
 
+        const identity = state.workspace?.identity || {};
+        const activity = state.workspace?.activity || {};
+        if (identity.relationship !== "direct" || (!version && activity.has_unstructured_progress)) {
+          const evidence = el("section", "section-card");
+          evidence.append(el("h2", "", "检测到的真实活动"));
+          const evidenceCopy = activity.has_unstructured_progress
+            ? `已检测到 ${activity.agent_turn_count || 0} 个 Agent 回合和 ${activity.git_commit_count || 0} 个 Git 提交；这些是实际活动证据，但尚未被 PM 确认为版本需求。`
+            : "尚未检测到可归属的 Agent 回合或 Git 提交。";
+          evidence.append(el("p", "section-help", evidenceCopy));
+          if (identity.message) evidence.append(el("div", "attention-item", identity.message));
+          if (identity.registered_path) evidence.append(el("p", "muted", `监控目录：${identity.registered_path}`));
+          if (identity.workspace_path && identity.workspace_path !== identity.registered_path) {
+            evidence.append(el("p", "muted", `代码仓库：${identity.workspace_path}`));
+          }
+          if (activity.git_head) evidence.append(el("p", "muted", `最近提交：${activity.git_head} · ${activity.git_head_subject || "未记录说明"}`));
+          evidence.append(el("p", "muted", "工作台不会把提交或对话自动伪造成已确认需求；请由 PM 建立版本目标后再进入正式进度。"));
+          root.append(evidence);
+        }
+
+        const execution = state.workspace?.execution || {};
+        if (execution.recorded) {
+          const runtime = el("section", "section-card");
+          runtime.append(el("h2", "", "本轮执行透明度"));
+          const modeNames = { quick: "快速", standard: "标准", e2e: "端到端", auto: "自动选择" };
+          const durationText = execution.duration_ms == null
+            ? "尚无完整起止时间"
+            : execution.duration_ms < 60000
+              ? `${Math.round(execution.duration_ms / 1000)} 秒`
+              : `${Math.round(execution.duration_ms / 60000)} 分钟`;
+          const facts = el("div", "overview-status-strip");
+          [
+            ["执行模式", modeNames[execution.effective_mode] || "旧记录未声明"],
+            ["本轮耗时", durationText],
+            ["Agent 回合", String(execution.agent_turn_count || 0)],
+            ["Harness 命令", String(execution.harness_command_count || 0)],
+          ].forEach(([label, value]) => {
+            const item = el("span", "overview-status-item", label);
+            item.append(el("strong", "", value));
+            facts.append(item);
+          });
+          runtime.append(facts);
+          if (execution.mode_reason) runtime.append(el("p", "muted", `选择原因：${execution.mode_reason}`));
+          if (execution.escalation_reason) runtime.append(el("p", "warning-line", `升级原因：${execution.escalation_reason}`));
+          if (execution.needs_user_decision) runtime.append(el("div", "attention-item error", "当前执行等待你的决策。"));
+          runtime.append(el("p", "muted", "普通工具调用尚未由宿主提供结构化计数；这里不会把 Agent 回合或 Harness 命令冒充成工具往返。"));
+          root.append(runtime);
+        }
+
         const requirementsSection = el("section", "section-card current-version-requirements");
         const requirementsHead = el("div", "requirement-command-head");
         const requirementsCopy = el("div", "");
@@ -2545,7 +2579,7 @@
           el("h2", "", "当前版本需求"),
           el("p", "section-help", "每条需求都有自己的任务小队；点击后在卡片内展开角色办公室、交付历史和门禁状态。")
         );
-        requirementsHead.append(requirementsCopy, el("span", "requirement-command-summary", version.total ? `${completed}/${version.total} 已完成` : "尚无需求"));
+        requirementsHead.append(requirementsCopy, el("span", "requirement-command-summary", version?.total ? `${completed}/${version.total} 已完成` : "尚无需求"));
         requirementsSection.append(requirementsHead);
         const requirementList = el("div", "requirement-card-list");
         versionRequirements.forEach(requirement => {

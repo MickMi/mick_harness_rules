@@ -789,6 +789,103 @@ class ObserveRuntimeTests(unittest.TestCase):
         self.assertEqual([item["validation"] for item in projects], ["valid", "missing_harness", "missing"])
         self.assertEqual(projects[0]["project_id"], OBSERVE.project_id(valid))
 
+    def test_registered_parent_uses_its_only_nested_git_repository_as_workspace(self) -> None:
+        registered = self.project / "hiring-system"
+        registered.mkdir()
+        (registered / ".harness").mkdir()
+        workspace = registered / "site"
+        workspace.mkdir()
+        subprocess.run(["git", "init", "-q"], cwd=workspace, check=True)
+        subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=workspace, check=True)
+        subprocess.run(["git", "config", "user.name", "Harness Test"], cwd=workspace, check=True)
+        (workspace / "README.md").write_text("# Hiring\n", encoding="utf-8")
+        subprocess.run(["git", "add", "README.md"], cwd=workspace, check=True)
+        subprocess.run(["git", "commit", "-qm", "feat: create hiring flow"], cwd=workspace, check=True)
+        registry = self.project / "registered-projects"
+        registry.write_text(f"{registered}\n", encoding="utf-8")
+
+        descriptor = OBSERVE.load_registered_projects(registry)[0]
+        OBSERVE.init_runtime(registered)
+        workspace_snapshot = OBSERVE.project_workspace_snapshot(registered)
+
+        self.assertEqual(descriptor["project_id"], OBSERVE.project_id(registered))
+        self.assertEqual(descriptor["workspace_path"], str(workspace.resolve()))
+        self.assertEqual(workspace_snapshot["identity"]["relationship"], "nested_repository")
+        self.assertEqual(workspace_snapshot["git"]["commit_count"], 1)
+        self.assertTrue(workspace_snapshot["activity"]["has_unstructured_progress"])
+
+    def test_chatgpt_project_mirror_routes_hook_activity_to_unique_registered_project(self) -> None:
+        registered = self.project / "hiring-system"
+        registered.mkdir()
+        (registered / ".harness").mkdir()
+        state_dir = self.project / "state"
+        state_dir.mkdir()
+        (state_dir / "registered-projects").write_text(f"{registered}\n", encoding="utf-8")
+        mirror_root = self.project / "chatgpt-projects"
+        mirror = mirror_root / "g-hiring"
+        mirror.mkdir(parents=True)
+        (mirror / "AGENTS.md").write_text(
+            '# ChatGPT project context\n\nThis directory is a local mirror of the ChatGPT project “hiring system”.\n',
+            encoding="utf-8",
+        )
+        environment = os.environ.copy()
+        environment.update({
+            "MICK_HARNESS_STATE_DIR": str(state_dir),
+            "MICK_HARNESS_CODEX_PROJECTS_DIR": str(mirror_root),
+            "MICK_HARNESS_OBSERVER_PORT": "1",
+            "PYTHONDONTWRITEBYTECODE": "1",
+        })
+        payload = {
+            "session_id": "thr_hiring",
+            "turn_id": "turn_hiring",
+            "cwd": str(mirror),
+            "hook_event_name": "UserPromptSubmit",
+        }
+
+        result = subprocess.run(
+            [sys.executable, str(HOOK_SCRIPT)],
+            input=json.dumps(payload),
+            check=False,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        registered_snapshot = OBSERVE.status_runtime(registered)["snapshot"]
+        recorded_turn = next(iter(registered_snapshot["agent_turns"].values()))
+        self.assertEqual(recorded_turn["session_ref"], "thr_hiring")
+        self.assertEqual(recorded_turn["turn_ref"], "turn_hiring")
+        self.assertFalse((mirror / ".harness-runtime").exists())
+
+    def test_chatgpt_project_mirror_activity_is_visible_without_fabricating_requirements(self) -> None:
+        registered = self.project / "hiring-system"
+        registered.mkdir()
+        (registered / ".harness").mkdir()
+        OBSERVE.init_runtime(registered)
+        mirror_root = self.project / "chatgpt-projects"
+        mirror = mirror_root / "g-hiring"
+        mirror.mkdir(parents=True)
+        (mirror / "AGENTS.md").write_text(
+            'This directory is a local mirror of the ChatGPT project “hiring system”.\n',
+            encoding="utf-8",
+        )
+        OBSERVE.init_runtime(mirror)
+        OBSERVE.record_agent_activity(
+            mirror,
+            platform="codex",
+            state="turn_started",
+            session_ref="thr_old",
+            turn_ref="turn_old",
+        )
+
+        with mock.patch.dict(os.environ, {"MICK_HARNESS_CODEX_PROJECTS_DIR": str(mirror_root)}):
+            workspace_snapshot = OBSERVE.project_workspace_snapshot(registered)
+
+        self.assertEqual(workspace_snapshot["activity"]["agent_turn_count"], 1)
+        self.assertEqual(workspace_snapshot["current_version"], None)
+        self.assertEqual(workspace_snapshot["versions"]["items"], [])
+
     def test_portfolio_prefers_state_stage_over_plan_stage(self) -> None:
         (self.project / "AGENTS.md").write_text("# Harness\n", encoding="utf-8")
         self.write_plan(plan_text())
@@ -2316,6 +2413,35 @@ class ObserveRuntimeTests(unittest.TestCase):
         with self.assertRaisesRegex(OBSERVE.ObserveError, "mode escalation"):
             OBSERVE.validate_ingest_envelope(invalid, OBSERVE.project_id(self.project))
 
+    def test_execution_snapshot_preserves_round_start_and_explains_unavailable_tool_count(self) -> None:
+        started = OBSERVE.build_work_envelope(
+            self.project, event_type="work.round_started", role="Executor",
+            round_ref="transparent-round", requirement_id="task-206",
+            objective="展示执行透明度", status="active", requested_mode="auto",
+            effective_mode="standard", mode_reason="项目身份修复需要跨文件验证",
+            needs_user_decision=True, idempotency_key="transparent-round-start",
+        )
+        completed = OBSERVE.build_work_envelope(
+            self.project, event_type="work.round_completed", role="Executor",
+            round_ref="transparent-round", requirement_id="task-206",
+            objective="展示执行透明度", summary="已交付", status="completed",
+            gate_result="delivered", artifact_refs=["scripts/harness-observe.py"],
+            verification_refs=["unit:identity"], requested_mode="auto",
+            effective_mode="standard", mode_reason="项目身份修复需要跨文件验证",
+            needs_user_decision=False, idempotency_key="transparent-round-complete",
+        )
+        OBSERVE.ingest_envelope(self.project, started)
+        OBSERVE.ingest_envelope(self.project, completed)
+
+        projected = OBSERVE.execution_snapshot(self.snapshot())
+
+        self.assertTrue(projected["recorded"])
+        self.assertEqual(projected["effective_mode"], "standard")
+        self.assertEqual(projected["mode_reason"], "项目身份修复需要跨文件验证")
+        self.assertIsNotNone(projected["duration_ms"])
+        self.assertFalse(projected["needs_user_decision"])
+        self.assertEqual(projected["tool_roundtrip_status"], "not_recorded")
+
     def test_work_round_rejects_incomplete_mode_metadata(self) -> None:
         with self.assertRaisesRegex(OBSERVE.ObserveError, "effective_mode"):
             OBSERVE.build_work_envelope(
@@ -2362,6 +2488,10 @@ class ObserveRuntimeTests(unittest.TestCase):
             self.assertIn(marker, dashboard)
         for label in ("当前版本需求", "测试范围未记录", "尚未进入独立测试", "版本记录"):
             self.assertIn(label, dashboard)
+        self.assertIn("检测到的真实活动", dashboard)
+        self.assertIn("本轮执行透明度", dashboard)
+        self.assertIn('version?.version ? `当前版本 · v${version.version}` : "当前版本 · 尚未规划"', dashboard)
+        self.assertNotIn("当前版本 · vundefined", dashboard)
         self.assertNotIn('["versions", "版本与需求"]', dashboard)
 
     def test_dashboard_explains_requirement_gate_and_rejected_transitions(self) -> None:
