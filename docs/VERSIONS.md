@@ -100,7 +100,7 @@
 - [x] `task-70` 用阶段目录替换无效的事件筛选和阶段卡
 - [x] `task-71` 记录产出、解析、展示和历史正文边界
 - [x] `task-74` 生成并验证规则分发文件
-- [x] `task-75` 完成安装同步、服务重启和 RaliTennis 真实验收
+- [x] `task-75` 完成安装同步、服务重启和 sample application 真实验收
 
 ## 0.17.0
 
@@ -163,8 +163,10 @@
 
 ## 0.21.0
 
-- Status: in_progress
-- Branch: feat/v0.21-command-surface
+- Status: released
+- Branch: main
+- Tag: v0.21.0
+- Work Branches: feat/v0.21-command-surface
 - Goal: 让 Harness 默认用最轻流程完成明确任务，只有复杂需求才展开可见流程；用户无需记命令，也能看见、介入并通过跨 Agent 统一入口管理计划、目标、Brain 和端到端交付。
 
 ### Requirements
@@ -178,7 +180,21 @@
 - [x] `task-203` 建立 `auto / quick / standard / e2e` 机器合同：默认选择足以证明结果的最轻流程，用户不需要先输入模式命令
 - [x] `task-204` 将 Quick 变成 Kernel 默认轻量路径：不创建 plan、不启动角色流、不展示 Self-Test 或回合卡片，同时保留危险确认、撞墙熔断和完成验证
 - [x] `task-205` 让 Agent 和本地事件记录有效模式、选择原因与升级原因，避免工作台只能从 Prompt 或角色摘要猜测
-- [ ] `task-206` 在工作台展示模式、耗时、工具往返和待用户决策，并验证快速任务、标准开发、E2E 发布候选三条真实路径
+- [x] `task-206` 在工作台展示模式、耗时、可结构化证明的往返和待用户决策；同时把嵌套代码仓库与 ChatGPT/Codex 项目镜像的真实活动归入同一登记项目
+
+## 0.20.2
+
+- Status: released
+- Branch: main
+- Tag: v0.20.2
+- Goal: 让公开 Harness 使用通用 Brain 身份与 `~/.brain` 默认目录，不携带维护者的私有 Brain 配置，同时兼容既有旧目录数据。
+
+### Requirements
+
+- [x] `task-197` 审计 v0.20.1 安装面与发布包中的个人路径、身份、Brain remote 和密钥形态
+- [x] `task-198` 新安装默认使用 `~/.brain`，旧安装继续发现已有旧目录且不搬移、不删除记忆
+- [x] `task-199` 移除公开实例 owner 和个人 Brain remote，并加入公共发布污染检查器
+- [x] `task-200` 完成版本事实、全量 Release Gate、main 合并和 v0.20.2 发布
 
 ## 0.20.1
 

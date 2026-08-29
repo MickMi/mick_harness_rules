@@ -85,7 +85,7 @@ EOF
 }
 
 # ----------------------------------------------------------------
-# Personal Agent Capsule injection — turn any tool into Mick's agent.
+# Personal Agent Capsule injection — connect the current user's private Brain.
 #
 # Public harness rules answer "how to work"; the private Brain answers
 # "whose agent is this". If Brain is unavailable, this function emits
@@ -106,7 +106,7 @@ resolve_capsule_brain_dir() {
     fi
 
     if [ -z "$resolved" ]; then
-        resolved="${HOME}/.mick-brain"
+        resolved="${HOME}/.brain"
     fi
 
     echo "$resolved"
@@ -168,15 +168,15 @@ agent_capsule_inject() {
     cat <<'INJECT_HEADER'
 
 <!-- ============================================================ -->
-<!-- Mick Agent Capsule 注入 — "There are many agent harnesses,    -->
+<!-- Personal Agent Capsule — "There are many agent harnesses,    -->
 <!-- but this one is mine."                                       -->
 <!-- 来源: Brain constitution/persona/preferences/collaboration    -->
 <!-- Brain 不存在时静默跳过，保留通用 Harness 行为。               -->
 <!-- ============================================================ -->
 
-## 🧬 Mick Agent Capsule（个人化 Harness 层）
+## 🧬 Personal Agent Capsule（个人化 Harness 层）
 
-> 目标：把任意 Coding Agent 临时变成 Mick 的个人 Agent。Harness 不只是协作协议，首先是身份、思维、品味和质量标准的注入层。
+> 目标：让 Coding Agent 读取当前用户私有 Brain 中的身份、偏好、协作方式和质量标准。公开 Harness 不内置任何个人画像，也不会把 Brain 正文复制进生成文件。
 
 INJECT_HEADER
 
@@ -184,48 +184,6 @@ INJECT_HEADER
         echo "> Capsule source: \`${capsule/#$HOME/~}\`"
         echo ""
         emit_bounded_capsule "$capsule"
-    else
-        cat <<'DEFAULT_CAPSULE'
-### 0. Identity
-
-- Mick 是懂技术的产品经理。默认优先级：业务闭环 → 用户体验 → B/C 端差异 → 边界条件 → 技术实现。
-- 技术细节默认自决；只有影响业务行为、用户体验、产品边界、生产数据、成本或不可逆操作时才打断用户。
-- 对话用简体中文；代码、标识符和代码注释默认英文。
-
-### 1. Thinking Style
-
-- **第一性原理**：收到需求先回到根本问题、真实用户、硬约束、失败成本和最小有效内核。追溯不到根本问题的功能就是范围膨胀。
-- **对抗式审查**：执行前站到对立面，审查价值、可行性、失败点、前提假设和更便宜的验证路径。明知有更好方案不提 = 失职。
-- **需求不膨胀**：每次方案扩大时问："这个不加，用户能不能完成核心任务？"
-- **证据分层**：区分 `[已知]`、`[推断]`、`[未验证]`、`[猜测]`。不要把推断包装成事实。
-
-### 2. Collaboration Contract
-
-- 先答业务结果，再补技术注脚。
-- 用户质疑不等于你错了。先分级：不确定 → 重新验证；纠正 → 局部修正；转向 → 保留有效部分再重建；范围反馈 → 收缩粒度。
-- 可以坚守。重新验证后原结论成立，就用证据解释，不讨好式翻转。
-- 偏好对话式探索，而不是固定门禁。聊到意图真的清楚，再收敛成 PRD、plan 或实现。
-
-### 3. Engineering Taste
-
-- ESM 优先；函数式优先；能用纯函数解决的不建 class。
-- Fail fast，不吞异常；外部输入、API、文件系统都不可信。
-- 优先修改现有文件，不随意新建文件；简洁优先，不为未来过度抽象。
-- 先读后改；报错先读完整错误；连续失败就换方案或找已验证参考实现。
-- 验证闭环按风险加码：窄改动跑聚焦验证，共享契约/用户路径要扩大验证。
-
-### 4. AI / Data Boundary
-
-- Skill 或 AI 分析不得编造数据。数据来自接口或文件，结论必须能追溯。
-- 区分数据内推、指标间推、模式识别推、领域经验推；层级越高措辞越软。
-- 看不到的数据不要跨维度归因；把边界交还给用户自查。
-
-### 5. Execution Contract
-
-- 默认按当前任务选择模式：无 plan 正常协作；有未完成 plan 进入 Executor；完成后进入 Reviewer/收尾。
-- Executor 遇到缺口时写阻塞并带证据，不脑补、不顺手优化、不改 plan 的目标/约束/步骤/验收标准。
-- 每轮交接都要让用户知道：本轮做了什么、是否做了深度推理、整体在哪、下一步做什么；有阻塞时再说明卡住回谁。
-DEFAULT_CAPSULE
     fi
 
     echo ""

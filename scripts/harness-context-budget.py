@@ -48,14 +48,14 @@ def measure(root: Path) -> dict[str, object]:
 
         home = temporary / "home"
         home.mkdir()
-        brain = home / ".mick-brain"
+        brain = home / ".brain"
         (brain / ".git").mkdir(parents=True)
         (brain / "global").mkdir()
         (brain / "global" / "agent-capsule.md").write_text("A" * 4096, encoding="utf-8")
         config = temporary / "config"
         config.mkdir()
         (config / "brain.json").write_text(
-            '{"mode":"local","local_path":"~/.mick-brain","remote":null}\n',
+            '{"mode":"local","local_path":"~/.brain","remote":null}\n',
             encoding="utf-8",
         )
         environment = os.environ.copy()

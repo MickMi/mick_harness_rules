@@ -225,7 +225,7 @@ def legacy_brain_settings() -> dict[str, object] | None:
     remote_match = re.search(r'^\s*remote:\s*["\']?([^"\'\n]+)', text, re.MULTILINE)
     local_match = re.search(r'^\s*local_path:\s*["\']?([^"\'\n]+)', text, re.MULTILINE)
     remote = remote_match.group(1).strip() if remote_match else None
-    local_path = local_match.group(1).strip() if local_match else "~/.mick-brain"
+    local_path = local_match.group(1).strip() if local_match else "~/.brain"
     explicit_legacy = bool(os.environ.get("MICK_HARNESS_BRAIN_LEGACY_CONFIG"))
     local_exists = Path(local_path).expanduser().exists()
     if not explicit_legacy and not local_exists:
@@ -255,7 +255,7 @@ def load_brain_settings() -> dict[str, object]:
         return {
             "version": 1,
             "mode": mode,
-            "local_path": str(data.get("local_path") or "~/.mick-brain"),
+            "local_path": str(data.get("local_path") or "~/.brain"),
             "remote": data.get("remote") or None,
             "source": "user",
             "config_path": str(path),
@@ -266,7 +266,7 @@ def load_brain_settings() -> dict[str, object]:
     return {
         "version": 1,
         "mode": "disabled",
-        "local_path": "~/.mick-brain",
+        "local_path": "~/.brain",
         "remote": None,
         "source": "default",
         "config_path": str(path),
@@ -355,7 +355,7 @@ def command_brain(args: argparse.Namespace) -> int:
         raise CommandError("远端 URL 不得包含用户名、Token 或密码；请使用系统凭据管理", EXIT_CONFLICT)
 
     current = load_brain_settings()
-    local_path = str(Path(args.local_path or current.get("local_path") or "~/.mick-brain").expanduser())
+    local_path = str(Path(args.local_path or current.get("local_path") or "~/.brain").expanduser())
     proposed = {
         "version": 1,
         "mode": args.mode,

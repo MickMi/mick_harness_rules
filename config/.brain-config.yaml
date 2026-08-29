@@ -8,9 +8,9 @@ version: "0.2.0"
 # This keeps personal memories isolated from the public harness repo.
 brain_repo:
   # Git remote URL for the brain repository
-  remote: "https://github.com/MickMi/mick_brain.git"
-  # Local clone path (default: ~/.mick-brain)
-  local_path: "~/.mick-brain"
+  remote: ""
+  # Local path (default: ~/.brain). Set a private Git URL above to sync it.
+  local_path: "~/.brain"
 
 # --- Directory Layout ---
 # These paths are relative to the brain repo root (not harness root).

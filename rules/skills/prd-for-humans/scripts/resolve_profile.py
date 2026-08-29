@@ -87,7 +87,14 @@ def resolve_profile(*, project: Path, brain: Path, skill_root: Path) -> dict[str
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project", type=Path, default=Path.cwd())
-    parser.add_argument("--brain", type=Path, default=Path(os.environ.get("MICK_BRAIN_DIR", Path.home() / ".mick-brain")))
+    preferred = Path.home() / ".brain"
+    legacy = Path.home() / ".mick-brain"
+    default_brain = legacy if not preferred.exists() and legacy.exists() else preferred
+    parser.add_argument(
+        "--brain",
+        type=Path,
+        default=Path(os.environ.get("BRAIN_DIR") or os.environ.get("MICK_BRAIN_DIR") or default_brain),
+    )
     parser.add_argument("--path-only", action="store_true")
     return parser
 

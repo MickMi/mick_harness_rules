@@ -41,6 +41,7 @@
 - [ ] `setup.sh --non-interactive` 在临时项目中冒烟测试通过。
 - [ ] 相关时，`vibe-init.sh` 冒烟测试通过。
 - [ ] Brain 脚本不会把私有数据泄漏到公开仓库。
+- [ ] `python3 scripts/harness-public-audit.py` 对发布树检查通过。
 
 ## 5. Harness 行为审阅
 

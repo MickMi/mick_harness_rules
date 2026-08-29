@@ -44,7 +44,7 @@ if [ "${BRAIN_MODE:-disabled}" = "disabled" ]; then
     exit 0
 fi
 ensure_brain_available "$HARNESS_ROOT" >/dev/null 2>&1 || exit 0
-BRAIN_REPO="${BRAIN_DIR:-$HOME/.mick-brain}"
+BRAIN_REPO="${BRAIN_DIR:-$HOME/.brain}"
 
 log()   { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"; }
 

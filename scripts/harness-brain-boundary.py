@@ -70,7 +70,7 @@ def brain_configuration() -> dict[str, Any]:
             if data.get("mode") in {"local", "remote", "disabled"}:
                 return {
                     "mode": data["mode"],
-                    "local_path": str(data.get("local_path") or "~/.mick-brain"),
+                    "local_path": str(data.get("local_path") or "~/.brain"),
                     "remote": data.get("remote") or None,
                     "source": "user",
                     "config_path": display_path(path),
@@ -93,9 +93,12 @@ def brain_configuration() -> dict[str, Any]:
                     "source": "legacy",
                     "config_path": display_path(legacy),
                 }
+    preferred = Path.home() / ".brain"
+    legacy_root = Path.home() / ".mick-brain"
+    default_path = legacy_root if not preferred.exists() and legacy_root.exists() else preferred
     return {
         "mode": "disabled",
-        "local_path": "~/.mick-brain",
+        "local_path": display_path(default_path),
         "remote": None,
         "source": "default",
         "config_path": display_path(path),
@@ -103,7 +106,7 @@ def brain_configuration() -> dict[str, Any]:
 
 
 def brain_root() -> Path:
-    configured = os.environ.get("MICK_BRAIN_ROOT") or os.environ.get("BRAIN_DIR")
+    configured = os.environ.get("BRAIN_ROOT") or os.environ.get("BRAIN_DIR") or os.environ.get("MICK_BRAIN_ROOT")
     if configured:
         return Path(configured).expanduser()
     return Path(str(brain_configuration()["local_path"])).expanduser()
@@ -1163,18 +1166,19 @@ def configured_brain_remote() -> str | None:
     return None
 
 
-def repository_snapshot(root: Path) -> dict[str, Any]:
+def repository_snapshot(root: Path, *, explicit: bool = False) -> dict[str, Any]:
     settings = brain_configuration()
     is_git = (root / ".git").exists()
     actual_remote = sanitize_remote_url(git_value(root, "remote", "get-url", "origin")) if is_git else None
     configured_remote = configured_brain_remote()
+    mode = "remote" if explicit and actual_remote else ("local" if explicit else settings["mode"])
     branch = git_value(root, "branch", "--show-current") if is_git else None
     upstream = git_value(root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}") if is_git else None
     status = git_value(root, "status", "--porcelain") if is_git else None
     return {
-        "mode": settings["mode"],
-        "enabled": settings["mode"] != "disabled",
-        "config_source": settings["source"],
+        "mode": mode,
+        "enabled": explicit or settings["mode"] != "disabled",
+        "config_source": "explicit" if explicit else settings["source"],
         "config_path": settings["config_path"],
         "exists": root.is_dir(),
         "path": display_path(root),
@@ -1289,12 +1293,12 @@ def save_sync_state(value: dict[str, Any]) -> None:
 
 def sync_pending(*, confirmed: bool, dry_run: bool = False, brain: Path | None = None) -> dict[str, Any]:
     mode = str(brain_configuration()["mode"])
-    if mode == "disabled":
+    if brain is None and mode == "disabled":
         raise BrainBoundaryError("Brain 当前为暂不启用，没有可执行的同步。")
-    if mode == "local":
+    if brain is None and mode == "local":
         raise BrainBoundaryError("Brain 当前为仅本机模式；记录会保留在本机，不产生待同步任务。")
     root = brain or brain_root()
-    repository = repository_snapshot(root)
+    repository = repository_snapshot(root, explicit=brain is not None)
     if not repository["git"]:
         raise BrainBoundaryError("Brain 本地目录不是 Git 仓库，无法同步。")
     if not repository["remote"]:
@@ -1495,7 +1499,7 @@ def health_snapshot(*, brain: Path | None = None) -> dict[str, Any]:
     latest_write_at = max((record.get("created_at") or "" for record in active_memories), default=None)
     candidates = list_candidates()
     ahead, behind, git_error = git_counts(root)
-    repository = repository_snapshot(root)
+    repository = repository_snapshot(root, explicit=brain is not None)
     repository_exists = repository["exists"]
     brain_enabled = repository.get("enabled", True)
     pending_sync = sum(item.get("sync_status") == "pending" for item in memory_records)

@@ -344,7 +344,7 @@ class BrainBoundaryTests(unittest.TestCase):
 
         self.assertEqual(config["mode"], "disabled")
         self.assertEqual(config["source"], "default")
-        self.assertFalse((home / ".mick-brain").exists())
+        self.assertFalse((home / ".brain").exists())
 
     def test_candidate_is_redacted_deduplicated_and_public_output_has_no_body(self) -> None:
         secret = "sk-abcdefghijklmnopqrstuvwxyz123456"

@@ -166,7 +166,7 @@ harness observe status
 | `harness init --full` | 项目内 `.harness-config.yaml` | 启用完整配置和检查 | 删除该配置文件 |
 | `harness observe init` | 项目内 `.harness-runtime/` | 保存 Agent 工作事件账本和可重建 snapshot | 停止 `watch` 后删除 `.harness-runtime/` |
 | `harness observe service install` | `~/Library/LaunchAgents/com.mick.harness.observer.plist`、`~/.local/state/mick-harness/observer/` | 在 `127.0.0.1:6425` 自动启动并保活本地工作服务器与统一项目工作台 | `harness observe service uninstall` |
-| `harness brain install` | `~/.mick-brain`、可选 Claude hook/LaunchAgent | 创建 Brain 和启用同步 | 删除 Brain 目录或关闭对应 hook |
+| `harness brain install` | `~/.brain`、可选 Claude hook/LaunchAgent | 创建 Brain 和启用同步 | 删除 Brain 目录或关闭对应 hook |
 
 项目文件如果已有同名规则文件，Harness 会用标记块注入，不会直接丢弃原内容。
 
@@ -217,7 +217,7 @@ Mick Agent Harness 由五层组成：
 | Agent Loader | 注入到 Code Agent 的全局入口 | `harness agents sync`、`harness export codex` |
 | Project Manifest | 项目里的最小入口，指向全局 Harness | `AGENTS.md`、`.harness/` |
 | Local Work Server | 接收并聚合所有已注入项目的工作事件 | `127.0.0.1:6425`、`harness observe service` |
-| Private Brain | 私有长期记忆和规则进化信号 | `~/.mick-brain`、`harness brain install` |
+| Private Brain | 私有长期记忆和规则进化信号 | `~/.brain`、`harness brain install` |
 
 推荐形态：
 
@@ -286,7 +286,7 @@ harness observe emit work.round_completed --ref task-39-turn-1 --role Executor \
 
 ## Advanced: Private Brain
 
-Brain 是私有长期记忆，默认放在 `~/.mick-brain`，也可以配置成私有 Git 仓库。
+Brain 是私有长期记忆，默认放在 `~/.brain`，也可以配置成用户自己的私有 Git 仓库；公开 Harness 不预置任何人的 Brain 地址、身份或记忆内容。
 
 Brain 分三层：
 
@@ -303,7 +303,7 @@ harness brain install
 harness brain status
 ```
 
-如果用户还没有 Brain，`harness brain install` 会自动创建本地 `~/.mick-brain` 骨架。若配置了私有仓库但暂时无法 clone，也会降级成本地 fallback，不阻断 `harness init --full`、`harness check` 或原有 Harness 工作流。
+如果用户还没有 Brain，`harness brain install` 会自动创建本地 `~/.brain` 骨架。若配置了私有仓库但暂时无法 clone，也会降级成本地 fallback，不阻断 `harness init --full`、`harness check` 或原有 Harness 工作流。升级前已经使用旧目录的安装会继续读取旧数据，但新安装不会再创建旧命名目录。
 
 Brain 是私有数据，不应该提交到公开 Harness 仓库，也不应该混进业务项目仓库。
 

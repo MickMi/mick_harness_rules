@@ -779,7 +779,7 @@ cmd_metrics() {
     local target="${1:-$(pwd)}"
     local plan="$target/plan.md"
     local audit_log=""
-    for f in "$HARNESS_GLOBAL/audit-log.md" "$HARNESS_GLOBAL/scripts/../audit-log.md" "$HOME/.mick-brain/global/evolution/audit-trail.md"; do
+    for f in "$HARNESS_GLOBAL/audit-log.md" "$HARNESS_GLOBAL/scripts/../audit-log.md" "$HOME/.brain/global/evolution/audit-trail.md" "$HOME/.mick-brain/global/evolution/audit-trail.md"; do
         [ -f "$f" ] && audit_log="$f" && break
     done
 

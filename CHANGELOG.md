@@ -7,6 +7,72 @@ All notable changes to Mick Agent Harness are documented in this file.
 This project follows Semantic Versioning 2.0. Git tags in the form `vX.Y.Z`
 are the release source of truth.
 
+## [0.21.0] - 2026-08-30
+
+### Lightweight Execution, Shared Commands, and Truthful Project Activity
+
+- **Adaptive execution modes**: `auto`, `quick`, `standard`, and `e2e` choose
+  the lightest workflow that can prove the result. Quick work avoids Plan and
+  role ceremony; E2E confirms intent first and stops at a release candidate.
+- **Cross-Agent command surface**: `harness plan`, `goal`, `brain`, and `e2e`
+  share deterministic CLI contracts with thin Agent Skills. Existing Codex
+  `/plan` and `/goal` commands are not overridden.
+- **Explicit Brain states**: users choose disabled, local-only, or private
+  remote memory. A missing remote does not create a false sync failure, and
+  generic `~/.brain` defaults from v0.20.2 remain intact.
+- **Bounded resident context**: detailed role procedures move to on-demand
+  Skills while Kernel safety, verification, and escalation rules remain in the
+  loader under automated byte and approximate-token budgets.
+- **Execution transparency**: structured events record effective mode,
+  selection and escalation reasons, user-decision state, round duration, Agent
+  turns, and Harness commands. Unavailable generic tool-call counts are shown
+  as unrecorded instead of inferred from conversation text.
+- **Unified project identity**: a registered project may use one shallow nested
+  Git repository as its code workspace, and uniquely matched ChatGPT/Codex
+  mirrors contribute their real Agent activity to the same project. Commits and
+  turns are evidence of activity, never fabricated requirements or completion.
+
+Compatibility: v0.20 projects, event ledgers, Agent loaders, Brain modes, and
+the single `127.0.0.1:6425` service remain compatible. Ambiguous nested
+repositories or duplicate mirror names are deliberately not auto-linked.
+
+Migration: run `harness update` to refresh the global installation, registered
+project mounts, Agent adapters, command Skills, and Observer service.
+
+Verification: 195 unittests, generated-rule consistency, Shell/Python/JSON
+syntax, context-budget and public-release audits, a non-interactive temporary
+install, plus a real-browser project path covering nested Git activity, Agent
+mirror activity, responsive width, and console cleanliness.
+
+## [0.20.2] - 2026-08-24
+
+### Public Brain Defaults and Release Privacy
+
+- New installations use the generic private-memory directory `~/.brain`.
+  Existing installations continue to discover the legacy directory when the
+  new path does not exist, without moving or deleting memory.
+- The public configuration no longer includes a maintainer Brain remote or a
+  tracked owner file. Brain identity now comes from the user's private Brain
+  repository; local-only Brain uses the local system user.
+- Owner mismatches preserve private memory by default. Destructive reset is
+  available only through an explicit `--fresh` request.
+- Generated Agent loaders reference private Capsule sources without copying
+  their contents, and no longer contain a built-in maintainer persona.
+- A repeatable public-release audit rejects personal paths, identities, project
+  names, Brain remotes, legacy defaults outside compatibility code, and
+  credential-shaped content.
+
+Compatibility: no automatic data migration is performed. An existing legacy
+Brain remains readable, explicit custom paths and private Git remotes continue
+to work, and new installations create `~/.brain`.
+
+Migration: run `harness update`. Optionally configure the user's private Brain
+remote in `config/.brain-config.yaml`; no remote is required for local use.
+
+Verification: 150 unittests, generated-rule consistency, complete Shell syntax,
+fresh-install and legacy-upgrade smoke tests, public-release audit, and
+`git diff --check`.
+
 ## [0.20.1] - 2026-08-24
 
 ### Overview Selection Restore Hotfix
@@ -213,7 +279,7 @@ the next state write. No new dependencies, no mutation endpoints.
 
 Verification: 43 unittests, shell/Python/JSON/JavaScript syntax,
 `generate.sh --check`, `git diff --check`, Harness Audit 8 PASS / 0 FAIL,
-real RaliTennis parse (38 stages, multi-date legacy heading preserved).
+real sample mobile project parse (38 stages, multi-date legacy heading preserved).
 
 ## [0.15.0] - 2026-08-12
 

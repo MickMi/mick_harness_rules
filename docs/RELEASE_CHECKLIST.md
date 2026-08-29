@@ -46,6 +46,7 @@ Use this checklist before every Harness release.
 - [ ] `setup.sh --non-interactive` smoke test passed in a temporary project.
 - [ ] `vibe-init.sh` smoke test passed when relevant.
 - [ ] Brain scripts are not leaking private data into the public repo.
+- [ ] `python3 scripts/harness-public-audit.py` passes for the release tree.
 
 ## 5. Harness Behavior Review
 

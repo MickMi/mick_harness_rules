@@ -269,7 +269,7 @@ class PlanGoalCommandTests(unittest.TestCase):
             self.assertEqual(payload["mode"], "disabled")
             self.assertEqual(payload["state"], "disabled")
             self.assertEqual(payload["sync_scope"], "none")
-            self.assertFalse((root / "home" / ".mick-brain").exists())
+            self.assertFalse((root / "home" / ".brain").exists())
 
     def test_bundled_legacy_remote_does_not_configure_a_new_user(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -287,7 +287,7 @@ class PlanGoalCommandTests(unittest.TestCase):
             payload = json.loads(result.stdout)
             self.assertEqual(payload["mode"], "disabled")
             self.assertEqual(payload["source"], "default")
-            self.assertFalse((root / "home" / ".mick-brain").exists())
+            self.assertFalse((root / "home" / ".brain").exists())
 
     def test_shell_brain_resolver_ignores_bundled_remote_for_a_new_user(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -310,7 +310,7 @@ class PlanGoalCommandTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout.strip(), "disabled|default|")
-            self.assertFalse((root / "home" / ".mick-brain").exists())
+            self.assertFalse((root / "home" / ".brain").exists())
 
     def test_brain_local_configuration_previews_then_installs_explicitly(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -415,7 +415,7 @@ class PlanGoalCommandTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 2)
             self.assertIn("Brain is disabled", result.stdout)
-            self.assertFalse((root / "home" / ".mick-brain").exists())
+            self.assertFalse((root / "home" / ".brain").exists())
 
     def make_e2e_project(self, root: Path, rounds: dict[str, dict] | None = None) -> Path:
         project = self.make_project(root, with_versions=False)

@@ -372,7 +372,7 @@ if [ "$QUICK_MODE" != true ]; then
             cat > "$CONFIG_FILE" <<EOF
 version: 1
 meta: { language: "en" }
-brain: { enabled: true, path: "~/.mick-brain" }
+brain: { enabled: true, path: "~/.brain" }
 design: { mode: "html", ai_tool: "generic" }
 dev: { scope: "fullstack", tech_stack: { language: "", framework: "", database: "", package_manager: "" } }
 testing: { mode: "critical_path", coverage_threshold: 50 }
@@ -430,10 +430,15 @@ if [ -n "$BRAIN_REPO_REMOTE" ]; then
         info "Attempting to clone brain repo: $BRAIN_REPO_REMOTE"
         info "  → $BRAIN_REPO_LOCAL"
         if clone_brain_repo "$HARNESS_ROOT"; then
-            ok "Brain repo cloned successfully."
+            resolve_brain_dir "$HARNESS_ROOT"
+            if [ "$BRAIN_REMOTE_STATUS" = "connected" ]; then
+                ok "Brain repo cloned successfully."
+            else
+                warn "Brain remote unavailable. Using private local Brain: $BRAIN_DIR"
+            fi
         else
-            warn "Could not clone brain repo. This is normal for fork users."
-            warn "Brain will use local fallback. You can configure your own brain repo later"
+            warn "Could not initialize Brain at: $BRAIN_REPO_LOCAL"
+            warn "You can configure your private Brain repository later"
             warn "by editing .harness/config/.brain-config.yaml"
         fi
     fi
@@ -469,8 +474,8 @@ if [ -n "$BRAIN_REPO_REMOTE" ]; then
         fi
     fi
 else
-    info "No brain_repo.remote configured. Using local brain/ directory."
-    ok "Local brain mode (single-repo)."
+    info "No brain_repo.remote configured."
+    ok "Private local Brain: $BRAIN_DIR"
 fi
 
 # --- Ensure brain directory structure exists ---
@@ -539,20 +544,7 @@ info "Phase 5.5: Checking brain ownership..."
 BRAIN_OWNER_FILE="$BRAIN_DIR/.brain-owner"
 
 detect_current_owner() {
-    local remote_url=""
-    # Try harness repo remote first
-    remote_url=$(git -C "$HARNESS_ROOT" remote get-url origin 2>/dev/null || echo "")
-    if [ -z "$remote_url" ]; then
-        echo ""
-        return
-    fi
-    local owner=""
-    if echo "$remote_url" | grep -qE '^https?://'; then
-        owner=$(echo "$remote_url" | sed -E 's|https?://[^/]+/([^/]+)/.*|\1|')
-    elif echo "$remote_url" | grep -qE '^git@'; then
-        owner=$(echo "$remote_url" | sed -E 's|git@[^:]+:([^/]+)/.*|\1|')
-    fi
-    echo "$owner"
+    brain_remote_owner "$BRAIN_DIR"
 }
 
 read_recorded_owner() {
@@ -571,14 +563,7 @@ record_owner() {
     local owner="$1"
     local sys_user="$2"
     local new_repo=""
-    local remote_url=""
-    remote_url=$(git -C "$HARNESS_ROOT" remote get-url origin 2>/dev/null || echo "")
-    if echo "$remote_url" | grep -qE '^https?://'; then
-        new_repo=$(echo "$remote_url" | sed -E 's|https?://[^/]+/[^/]+/([^/.]+).*|\1|')
-    elif echo "$remote_url" | grep -qE '^git@'; then
-        new_repo=$(echo "$remote_url" | sed -E 's|git@[^:]+:[^/]+/([^/.]+).*|\1|')
-    fi
-    [ -z "$new_repo" ] && new_repo="unknown"
+    new_repo=$(brain_remote_repo "$BRAIN_DIR")
 
     cat << OWNER_EOF > "$BRAIN_OWNER_FILE"
 # Brain Owner Identity
@@ -591,7 +576,7 @@ OWNER_EOF
 
 reset_brain_for_new_owner() {
     local new_owner="$1"
-    warn "Fork detected! Resetting brain data for new owner: $new_owner"
+    warn "Explicit fresh reset requested for Brain owner: $new_owner"
 
     # Clear sessions
     find "$BRAIN_DIR/sessions" -mindepth 1 -not -name '.gitkeep' -exec rm -rf {} + 2>/dev/null || true
@@ -649,8 +634,8 @@ elif [ -z "$RECORDED_OWNER" ]; then
     record_owner "$EFFECTIVE_OWNER" "$CURRENT_SYS_USER"
     ok "Owner recorded."
 elif [ -n "$CURRENT_OWNER" ] && [ "$CURRENT_OWNER" != "$RECORDED_OWNER" ]; then
-    reset_brain_for_new_owner "$CURRENT_OWNER"
-    record_owner "$CURRENT_OWNER" "$CURRENT_SYS_USER"
+    warn "Brain owner mismatch: recorded=$RECORDED_OWNER current=$CURRENT_OWNER"
+    warn "Private data was preserved. Run setup.sh --fresh to reset explicitly."
 else
     ok "Owner verified: ${CURRENT_OWNER:-$CURRENT_SYS_USER}"
 fi

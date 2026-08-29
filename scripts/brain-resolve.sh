@@ -5,8 +5,9 @@
 # Shared utility sourced by all brain-*.sh scripts.
 # Determines where brain data lives:
 #   1. External brain repo (dual-repo model) — preferred
-#   2. ~/.mick-brain local repo (private local fallback)
-#   3. Local harness/brain directory (legacy fallback only)
+#   2. ~/.brain local repo (private local fallback)
+#   3. Existing ~/.mick-brain repo (legacy compatibility only)
+#   4. Local harness/brain directory (legacy fallback only)
 #
 # After sourcing, the following variables are available:
 #   BRAIN_DIR       — absolute path to the brain data root
@@ -41,6 +42,7 @@ resolve_brain_dir() {
     BRAIN_REMOTE_STATUS="none"
     BRAIN_REPO_LOCAL=""
     BRAIN_REPO_REMOTE=""
+    BRAIN_USING_LEGACY_PATH="false"
 
     if [ -f "$user_config" ] && command -v python3 >/dev/null 2>&1; then
         local resolved_config
@@ -91,7 +93,17 @@ PY
 
     # Default local path
     if [ -z "$BRAIN_REPO_LOCAL" ]; then
+        BRAIN_REPO_LOCAL="$HOME/.brain"
+    fi
+
+    # v0.20.2 changed the public default to ~/.brain. Existing installations
+    # continue to use the legacy directory when it already contains data and
+    # the new default has not been created yet.
+    if [ "$BRAIN_REPO_LOCAL" = "$HOME/.brain" ] \
+        && [ ! -e "$HOME/.brain" ] \
+        && [ -d "$HOME/.mick-brain" ]; then
         BRAIN_REPO_LOCAL="$HOME/.mick-brain"
+        BRAIN_USING_LEGACY_PATH="true"
     fi
 
     if [ -z "$BRAIN_MODE" ]; then
@@ -141,6 +153,49 @@ PY
             BRAIN_REMOTE_STATUS="none"
         fi
     fi
+}
+
+# Brain identity comes from the private Brain repository itself. The public
+# Harness repository is shared by every user and is never an identity source.
+brain_remote_url() {
+    local brain_dir="${1:-${BRAIN_DIR:-}}"
+    local remote_url=""
+
+    if [ -n "$brain_dir" ] && [ -d "$brain_dir/.git" ]; then
+        remote_url=$(git -C "$brain_dir" remote get-url origin 2>/dev/null || true)
+    fi
+    [ -n "$remote_url" ] || remote_url="${BRAIN_REPO_REMOTE:-}"
+    printf '%s\n' "$remote_url"
+}
+
+brain_remote_owner() {
+    local remote_url=""
+    remote_url=$(brain_remote_url "${1:-${BRAIN_DIR:-}}")
+
+    case "$remote_url" in
+        http://*|https://*)
+            printf '%s\n' "$remote_url" | sed -E 's|https?://[^/]+/([^/]+)/.*|\1|'
+            ;;
+        git@*:*)
+            printf '%s\n' "$remote_url" | sed -E 's|git@[^:]+:([^/]+)/.*|\1|'
+            ;;
+        *)
+            printf '\n'
+            ;;
+    esac
+}
+
+brain_remote_repo() {
+    local remote_url=""
+    remote_url=$(brain_remote_url "${1:-${BRAIN_DIR:-}}")
+
+    if [ -z "$remote_url" ]; then
+        printf 'local\n'
+        return
+    fi
+    remote_url="${remote_url%/}"
+    remote_url="${remote_url%.git}"
+    printf '%s\n' "${remote_url##*/}"
 }
 
 init_brain_skeleton() {

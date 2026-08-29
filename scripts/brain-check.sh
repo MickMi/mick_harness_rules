@@ -174,7 +174,7 @@ else
     elif [ -n "$BRAIN_REPO_REMOTE" ]; then
         check_warn "Brain remote configured ($BRAIN_REPO_REMOTE) but local Brain is not initialized. Run 'harness brain install'."
     else
-        check_pass "Using local brain/ directory (single-repo mode)"
+        check_pass "Using private local Brain: $BRAIN_DIR"
     fi
 fi
 
@@ -276,26 +276,21 @@ else
 fi
 
 # ============================================================
-# Check 12: Brain ownership (fork detection)
+# Check 12: Brain ownership
 # ============================================================
 echo "📋 Check 12: Brain ownership"
 BRAIN_OWNER_FILE="$BRAIN_DIR/.brain-owner"
 if [ -f "$BRAIN_OWNER_FILE" ]; then
     RECORDED_OWNER=$(grep '^owner:' "$BRAIN_OWNER_FILE" 2>/dev/null | awk '{print $2}' | tr -d ' ')
-    CURRENT_REMOTE=$(git -C "$HARNESS_ROOT" remote get-url origin 2>/dev/null || echo "")
-    CURRENT_OWNER=""
-    if echo "$CURRENT_REMOTE" | grep -qE '^https?://'; then
-        CURRENT_OWNER=$(echo "$CURRENT_REMOTE" | sed -E 's|https?://[^/]+/([^/]+)/.*|\1|')
-    elif echo "$CURRENT_REMOTE" | grep -qE '^git@'; then
-        CURRENT_OWNER=$(echo "$CURRENT_REMOTE" | sed -E 's|git@[^:]+:([^/]+)/.*|\1|')
-    fi
+    CURRENT_OWNER=$(brain_remote_owner "$BRAIN_DIR")
+    [ -n "$CURRENT_OWNER" ] || CURRENT_OWNER=$(whoami 2>/dev/null || echo "")
 
     if [ -z "$CURRENT_OWNER" ]; then
-        check_warn "Could not detect Git remote owner. Ownership check skipped."
+        check_warn "Could not detect Brain owner. Ownership check skipped."
     elif [ "$CURRENT_OWNER" = "$RECORDED_OWNER" ]; then
         check_pass "Brain owner verified: $CURRENT_OWNER"
     else
-        check_fail "Brain owner mismatch! Recorded: $RECORDED_OWNER, Current: $CURRENT_OWNER. Run '.harness/setup.sh --full --fresh' to auto-reset."
+        check_fail "Brain owner mismatch! Recorded: $RECORDED_OWNER, Current: $CURRENT_OWNER. Private data was preserved; use '--fresh' only for an explicit reset."
     fi
 else
     check_warn ".brain-owner file not found. Run '.harness/setup.sh --full' to initialize ownership."
@@ -362,7 +357,7 @@ if [ -f "$CONSTITUTION_FILE" ]; then
             CAPSULE_PRESENT=false
             continue
         fi
-        if ! grep -q "Mick Agent Capsule" "$DIST_FILE" 2>/dev/null; then
+        if ! grep -q "Personal Agent Capsule" "$DIST_FILE" 2>/dev/null; then
             CAPSULE_PRESENT=false
         fi
         for src in "${CAPSULE_SOURCES[@]}"; do
@@ -380,7 +375,7 @@ if [ -f "$CONSTITUTION_FILE" ]; then
         check_pass "Personal Agent Capsule is injected and in sync"
     fi
 else
-    check_pass "No Personal Agent Capsule source found (OK for non-Mick users)"
+    check_pass "No Personal Agent Capsule source found (generic Harness mode)"
 fi
 
 # ============================================================

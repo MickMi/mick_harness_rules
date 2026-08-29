@@ -47,14 +47,14 @@ class ContextBudgetTests(unittest.TestCase):
             shutil.copy2(ROOT / "rules" / "extended.md", isolated_root / "rules" / "extended.md")
             shutil.copy2(ROOT / "scripts" / "brain-resolve.sh", isolated_root / "scripts" / "brain-resolve.sh")
             home = Path(directory) / "home"
-            brain = home / ".mick-brain"
+            brain = home / ".brain"
             (brain / "global").mkdir(parents=True)
             (brain / ".git").mkdir()
             (brain / "global" / "agent-capsule.md").write_text("品味与边界。" * 2000, encoding="utf-8")
             config = Path(directory) / "config"
             config.mkdir()
             (config / "brain.json").write_text(
-                '{"mode":"local","local_path":"~/.mick-brain","remote":null}\n',
+                '{"mode":"local","local_path":"~/.brain","remote":null}\n',
                 encoding="utf-8",
             )
             result = __import__("subprocess").run(
