@@ -133,6 +133,15 @@ class HarnessDoctorTests(unittest.TestCase):
         self.assertIn("docs/VERSIONS.md", todo)
         self.assertIn("## Backlog", versions)
 
+    def test_update_fetches_tags_and_reloads_observer_only_after_a_new_commit(self) -> None:
+        command = (ROOT / "bin" / "harness").read_text(encoding="utf-8")
+
+        self.assertIn('before_revision=$(git -C "$HARNESS_GLOBAL" rev-parse HEAD)', command)
+        self.assertIn('git -C "$HARNESS_GLOBAL" fetch --tags origin', command)
+        self.assertIn('after_revision=$(git -C "$HARNESS_GLOBAL" rev-parse HEAD)', command)
+        self.assertIn('if [ "$before_revision" != "$after_revision" ]', command)
+        self.assertIn('python3 "$observer" service restart', command)
+
 
 if __name__ == "__main__":
     unittest.main()

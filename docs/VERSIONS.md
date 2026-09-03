@@ -241,6 +241,18 @@
 - [x] `task-210` 压缩首次使用路径并清理 README、TODO 与历史验收状态冲突
 - [x] `task-211` 完成全量、生成、语法、安装与真实 6425 验收，形成发布候选
 
+## 0.22.1
+
+- Status: in_progress
+- Branch: fix/v0.22.1-update-reload
+- Goal: 让 `harness update` 在取得新提交后真实重载唯一的 6425 常驻服务并取得发布标签，同时保持无更新时的幂等稳定性。
+
+### Requirements
+
+- [x] `task-212` 固定 tag 获取、变更检测和条件重启合同
+- [x] `task-213` 修复 update 后磁盘版本与运行进程不一致的问题
+- [ ] `task-214` 完成发布、本机部署与 PID、版本、Doctor 复核
+
 ## Backlog
 
 > 对话中冒出的「新价值」需求先落这里；每个版本立项时从这里挑需求组成下一版本的 Goal 与 Requirements。每条写「一句话需求 + 它服务的未来 Goal 方向」。

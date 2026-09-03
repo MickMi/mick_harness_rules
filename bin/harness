@@ -88,6 +88,19 @@ install_observer_service() {
     fi
 }
 
+restart_observer_service_after_update() {
+    [ "${MICK_HARNESS_OBSERVER_AUTO_INSTALL:-1}" != "0" ] || return 0
+    [ "$(uname -s)" = "Darwin" ] || return 0
+    command -v python3 >/dev/null 2>&1 || { warn "Python 3 unavailable; Observer service was not reloaded."; return 0; }
+    local observer="$HARNESS_GLOBAL/scripts/harness-observe.py"
+    [ -f "$observer" ] || { warn "Observer runtime missing; service was not reloaded."; return 0; }
+    if MICK_HARNESS_ACTIVITY=0 python3 "$observer" service restart >/dev/null; then
+        ok "Mick Harness Observer reloaded at http://127.0.0.1:6425/."
+    else
+        warn "Harness updated, but Observer reload failed. Retry: harness observe service restart"
+    fi
+}
+
 # ============================================================
 # harness version
 # ============================================================
@@ -638,9 +651,13 @@ cmd_update() {
         exit 1
     fi
 
+    local before_revision after_revision
+    before_revision=$(git -C "$HARNESS_GLOBAL" rev-parse HEAD)
     info "Updating harness..."
     stash_legacy_registry_if_dirty
     git -C "$HARNESS_GLOBAL" pull --rebase origin main
+    git -C "$HARNESS_GLOBAL" fetch --tags origin
+    after_revision=$(git -C "$HARNESS_GLOBAL" rev-parse HEAD)
     chmod +x "$HARNESS_GLOBAL"/*.sh "$HARNESS_GLOBAL"/bin/* "$HARNESS_GLOBAL"/scripts/*.sh 2>/dev/null || true
 
     # Regenerate dist/
@@ -668,7 +685,11 @@ cmd_update() {
     fi
 
     cmd_agents sync --quiet
-    install_observer_service
+    if [ "$before_revision" != "$after_revision" ]; then
+        restart_observer_service_after_update
+    else
+        install_observer_service
+    fi
 
     ok "All registered projects refreshed."
 }

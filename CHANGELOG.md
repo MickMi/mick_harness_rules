@@ -7,6 +7,19 @@ All notable changes to Mick Agent Harness are documented in this file.
 This project follows Semantic Versioning 2.0. Git tags in the form `vX.Y.Z`
 are the release source of truth.
 
+## [0.22.1] - 2026-09-03
+
+### Update Runtime Reload Hotfix
+
+- `harness update` now compares the installed revision before and after pull,
+  fetches release tags, and reloads the single 6425 Observer only when a new
+  revision was installed.
+- A no-change update keeps the healthy service process intact and continues to
+  use the existing idempotent service installation path.
+
+Compatibility: no project, Agent, Brain, event, or dashboard migration is
+required. This only corrects the installation lifecycle after an update.
+
 ## [0.22.0] - 2026-09-03
 
 ### Unified Diagnostics and Maintenance Closure

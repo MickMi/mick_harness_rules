@@ -1,4 +1,4 @@
-> 🧭 状态：v0.22.0 已发布 | 进度 211/211 | 当前归属：完成 | 最近交付：main 发布回归通过，正式版本进入发布与本机部署
+> 🧭 状态：v0.22.1 验证中 | 进度 213/214 | 当前归属：QA | 最近交付：update 已按提交变化获取标签并条件重载 6425
 
 # Plan: Company Runtime V0 → Portfolio V0.2
 
@@ -2489,3 +2489,39 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 - files: `docs/VERSIONS.md`, `plan.md`, Git branch `main`, annotated Git tag `v0.22.0`, installed `~/.mick-harness`
 - verify: 发布候选已快进合并到 main；main 再次通过 `204 tests / 0 failures` 和生成一致性，随后以 annotated tag 发布并用远端引用、安装版本、6425 健康状态和安装版 `harness doctor` 复核。
 - boundary: 保留用户未跟踪的 `narc_for_mac/`；正式发布不修改 Brain 私人内容。
+
+## v0.22.1 · 2026-09-03 · 更新后真实重载服务
+
+### 用户目标
+
+- `harness update` 不仅更新磁盘文件，还要让唯一的 6425 常驻进程实际加载新代码，并让本机版本描述取得对应发布标签。
+
+### 已验证问题
+
+- v0.22.0 更新后 `VERSION` 与安装提交均已变化，但 6425 PID 和启动时间保持不变，证明仍运行更新前的 Python 进程。
+- GitHub 已存在 `v0.22.0`，本机安装 clone 未取得该标签，导致 `harness version` 显示 `v0.21.0-2-g...`。
+
+### 边界
+
+- 只修改 update 生命周期；无新版本时继续复用健康服务，不因重复 update 无谓重启。
+- 不改变 Observer 的幂等 install 语义，不修改项目、Brain 数据或用户未跟踪文件。
+
+### 实施步骤
+
+- [x] 212. [失败合同] 固定 update 必须取得发布标签，并且只在安装提交变化时显式重启 Observer。
+- [x] 213. [修复] 在 pull 前后比较提交；更新后获取 tags、刷新项目和 Agent，再重启唯一 6425；无变化时沿用幂等 install。
+- [ ] 214. [发布] 完成回归、v0.22.1 发布、本机更新和 PID/版本/Doctor 真实复核。
+
+### 完成判定
+
+- [ ] 有新提交时，update 后 6425 PID 或启动时间变化且 `/healthz` 正常；安装版 `harness version` 显示当前 tag。
+- [ ] 无新提交时，重复 update 不重启健康服务。
+- [ ] 全量回归、生成一致性、公开发布审计和安装版 Doctor 通过。
+
+### Step 212 — 2026-09-03
+- files: `tests/test_harness_doctor.py`, `plan.md`
+- verify: 新合同在 v0.22.0 实现上按预期失败，明确缺少更新前后提交比较、tag 获取和 Observer 条件重启。
+
+### Step 213 — 2026-09-03
+- files: `bin/harness`, `VERSION`, `CHANGELOG.md`, `CHANGELOG.zh-CN.md`, `docs/VERSIONS.md`, `plan.md`
+- verify: 聚焦合同与 `bash -n bin/harness` 通过；更新路径只在 before/after revision 不同时调用 `service restart`，无变化时继续调用幂等 `service install`。
