@@ -227,8 +227,10 @@
 
 ## 0.22.0
 
-- Status: in_progress
-- Branch: feat/v0.22-maintenance-doctor
+- Status: released
+- Branch: main
+- Tag: v0.22.0
+- Work Branches: feat/v0.22-maintenance-doctor
 - Goal: 用一条确定性诊断路径收拢安装、项目、Agent、Brain、Observer 与 audit 状态，补齐真实 fixture，并清理失真的旧待办，让当前需求列表回到单一、可信、可清零的状态源。
 
 ### Requirements

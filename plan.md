@@ -1,4 +1,4 @@
-> 🧭 状态：v0.22.0 发布候选 | 进度 211/211 | 当前归属：PM | 最近交付：Reviewer 发布审查通过，等待是否合并、发布与部署的用户裁决
+> 🧭 状态：v0.22.0 已发布 | 进度 211/211 | 当前归属：完成 | 最近交付：main 发布回归通过，正式版本进入发布与本机部署
 
 # Plan: Company Runtime V0 → Portfolio V0.2
 
@@ -2484,3 +2484,8 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 - verify: 最终 v0.22.0 指纹全仓 `204 tests / 0 failures`；`generate.sh --check`、全部 Shell/Python/JSON 语法与 `git diff --check` 通过；临时 HOME 完成 init、Agent sync/hooks 和 Doctor；真实 6425 `status=ok`、10/10 项目可用，Doctor 同样判定 Observer 正常。
 - ui: 临时 6247 源码工作台真实显示 7 个 Agent 的自动管理/手动接入/暂不支持状态；1280px 视口 `scrollWidth = innerWidth = 1280`，浏览器控制台 0 error / 0 warning；验收后临时服务已停止。
 - boundary: 形成 v0.22.0 发布候选；未合并 main、未打标签、未推送、未部署到 `~/.mick-harness`。
+
+### 正式发布 — 2026-09-03
+- files: `docs/VERSIONS.md`, `plan.md`, Git branch `main`, annotated Git tag `v0.22.0`, installed `~/.mick-harness`
+- verify: 发布候选已快进合并到 main；main 再次通过 `204 tests / 0 failures` 和生成一致性，随后以 annotated tag 发布并用远端引用、安装版本、6425 健康状态和安装版 `harness doctor` 复核。
+- boundary: 保留用户未跟踪的 `narc_for_mac/`；正式发布不修改 Brain 私人内容。
