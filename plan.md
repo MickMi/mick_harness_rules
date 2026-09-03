@@ -2525,3 +2525,8 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 ### Step 213 — 2026-09-03
 - files: `bin/harness`, `VERSION`, `CHANGELOG.md`, `CHANGELOG.zh-CN.md`, `docs/VERSIONS.md`, `plan.md`
 - verify: 聚焦合同与 `bash -n bin/harness` 通过；更新路径只在 before/after revision 不同时调用 `service restart`，无变化时继续调用幂等 `service install`。
+
+### Step 214 发布验证检查点 — 2026-09-03
+- verify: 修复已快进到 `main`；main 上 `205 tests / 0 failures`，生成一致性、Shell/Python/JSON 语法、公开发布审计和 `git diff --check` 均通过。
+- transition: 从 v0.22.0 更新器拉取 v0.22.1 修复后，旧进程仍未恢复；已显式重启一次完成过渡，6425 恢复为 `status=ok`。后续必须由新更新器自行证明“有提交才重载、无提交不重启”。
+- pending: 发布标签、安装版增量更新 PID 对照、无变化更新 PID 对照和最终 Doctor 仍待验证，因此 `task-214` 保持未完成。
