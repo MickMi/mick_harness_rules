@@ -72,7 +72,7 @@ if [ -f "$HARNESS_ROOT/scripts/brain-resolve.sh" ]; then
         CANDIDATES+=("$BRAIN_DIR/global/evolution/audit-trail.md")
     fi
 fi
-CANDIDATES+=("$HARNESS_ROOT/audit-log.md")
+CANDIDATES+=("$PROJECT_DIR/audit-log.md")
 
 TRAIL_FILE=""
 for c in "${CANDIDATES[@]}"; do

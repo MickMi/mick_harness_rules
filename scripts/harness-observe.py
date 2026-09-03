@@ -3727,6 +3727,7 @@ def agent_status_snapshot(
             "id": source["id"],
             "name": source["name"],
             "tier": source["tier"],
+            "adapter": source.get("adapter", {}),
             "detected_by": sorted({signal["kind"] for signal in source.get("signals", []) if signal.get("found")}),
             "layers": layers,
             "evidence": {

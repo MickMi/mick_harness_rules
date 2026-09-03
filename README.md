@@ -84,22 +84,21 @@ harness init
 harness init --full
 ```
 
-### 3. 接入本机 Code Agent
+### 3. 一次检查，按提示修复
 
 ```bash
-harness agents doctor     # 看发现、注入、Hook 与待验证状态
-harness agents sync       # 原子同步 Claude/Codex 全局 Loader（先加 --dry-run）
-harness agents hooks      # 接入 session/turn 生命周期回写（先加 --dry-run）
+harness doctor
 ```
 
-不能自动管理的工具，用导出：
+它会一起检查安装、当前项目、Code Agent、Brain、本地工作服务和项目审计。只有出现具体修复建议时才需要运行对应命令，例如：
 
 ```bash
-harness export codex
-harness export agent
-harness export ide
-harness export api
+harness agents sync --dry-run
+harness agents hooks --dry-run
+harness observe service install
 ```
+
+不能自动管理的工具，诊断会明确标为“手动接入”或“暂不支持”；需要时再使用 `harness export ide` / `harness export api`。
 
 ### 4. 新会话验证是否生效
 
@@ -247,6 +246,7 @@ harness update
 
 | 命令 | 用途 |
 |---|---|
+| `harness doctor [--json] [dir]` | 一次检查安装、项目、Agent、Brain、Observer 与 audit，并给出下一步。 |
 | `harness check [dir]` | 检查项目 Harness / Brain / 规则生成状态。 |
 | `harness report [dir]` | 查看 `plan.md` 进度、阻塞和验证状态。 |
 | `harness metrics [dir]` | 聚合完成率、验证覆盖率和 audit 信号。 |
@@ -407,9 +407,6 @@ HOME="$tmp_home" MICK_HARNESS_ROOT="$PWD" ./bin/harness brain install
 HOME="$tmp_home" MICK_HARNESS_ROOT="$PWD" ./bin/harness brain status
 ```
 
-## 下一版本重点
+## 需求与路线
 
-- 增加更统一的 `harness doctor`，一次性检查安装、项目、Agent loader、Brain、hook 和 audit。
-- 完善 Adapter Registry，让每个工具的支持等级、加载方式和 hook 能力更明确。
-- 增加 fixture 测试，覆盖 Brain ingest、hook adapter、`brain evolve` 和无 Brain fallback。
-- 继续把产品路径压缩成：安装一次、项目 init 一次、Agent sync/export 一次、Brain 可选开启。
+正式版本、进行中需求和 Backlog 统一记录在 [版本规划](docs/VERSIONS.md)。README 不再维护第二份“下一版本重点”，避免同一需求出现两个互相冲突的状态源。

@@ -1,4 +1,4 @@
-> 🧭 状态：v0.21.0 发布候选 | 进度 206/206 | 当前归属：Release | 最近交付：执行透明度与跨工作区项目身份修复已通过真实页面验收
+> 🧭 状态：v0.22.0 发布候选 | 进度 211/211 | 当前归属：PM | 最近交付：Reviewer 发布审查通过，等待是否合并、发布与部署的用户裁决
 
 # Plan: Company Runtime V0 → Portfolio V0.2
 
@@ -1797,11 +1797,15 @@ Planner 回复：采用建议方案；这修复的是本轮真实执行触发的
 
 ### 完成判定
 
-- [ ] 没有 QA 回合时，办公室明确显示“未独立验收”；UI/高风险交付不会跳过 QA 直接建议 Reviewer。
-- [ ] Reviewer 历史至少显示对应需求、审查对象/证据和结论；缺少对象时坦率显示未记录。
-- [ ] 办公室不再以五行表格呈现；五个工位支持 hover/focus 预览和点击历史，当前流转在场景中可见。
-- [ ] 失联项目可通过二次确认移出 registry，刷新后消失；测试证明目标路径未被删除或修改。
-- [ ] 全仓测试、生成一致性、diff 检查和 6246 真实路径通过；未部署 6425、未合并 main、未发布。
+- [x] 没有 QA 回合时，办公室明确显示“未独立验收”；UI/高风险交付不会跳过 QA 直接建议 Reviewer。
+- [x] Reviewer 历史至少显示对应需求、审查对象/证据和结论；缺少对象时坦率显示未记录。
+- [x] 办公室不再以五行表格呈现；五个工位支持 hover/focus 预览和点击历史，当前流转在场景中可见。
+- [x] 失联项目可通过二次确认移出 registry，刷新后消失；测试证明目标路径未被删除或修改。
+- [x] 全仓测试、生成一致性、diff 检查和 6246 真实路径通过；未部署 6425、未合并 main、未发布。
+
+### 历史验收状态修正 — 2026-09-03
+
+- 以上五项已分别由 Step 147–160 的自动化、真实 API、6246 交互与用户视觉确认完成，并随 v0.19.0 发布；本次只修正遗留复选框，不改变历史实现或发布事实。
 
 ### Step 146 — 2026-08-20
 - files: `tests/test_harness_observe.py`, `plan.md`
@@ -2421,3 +2425,62 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 - files: `scripts/harness-observe.py`, `scripts/harness-observe-hook.py`, `web/observe-dashboard.html`, `tests/test_harness_observe.py`, `docs/OBSERVE.md`, `docs/VERSIONS.md`, `plan.md`
 - verify: Observer 定向回归 `101 tests / 0 failures`；合并 v0.20.2 后最终全仓 `195 tests / 0 failures`，生成一致性、Shell/Python/JSON、上下文预算、公开发布审计、`git diff --check` 与非交互临时安装全部通过；源码工作台在真实浏览器读取 `hiring-system-74507438d8`，展示 21 个 Agent 回合、7 个 Git 提交、代码仓库 `~/Desktop/hiring-system/site`，不再出现 `vundefined`，桌面宽度无横向溢出且控制台 0 error / 0 warning。
 - notes: 登记目录继续是稳定项目身份；唯一浅层子 Git 仓库作为代码工作区，ChatGPT/Codex 镜像按声明标题唯一匹配并归入同一项目。Git 与 Agent 活动只证明真实工作发生，不伪造版本、需求或 PM 状态；宿主未提供通用工具调用计数时明确显示“未记录”。
+
+## v0.22.0 · 2026-09-03 · 维护诊断与需求清零
+
+### 用户目标
+
+- 把散落在 README、旧 TODO、Agent 诊断、Brain 与 Observer 状态里的维护事项收拢成一份可执行、可验证的诊断结果。
+- 清空当前真实需求列表：实现仍有价值的维护能力，明确关闭已被替代的旧待办，并避免历史验收勾选状态继续制造假进度。
+
+### 已确认事实
+
+- `main`、`origin/main` 与 `v0.21.0` 均指向 `741f4af`；GitHub 当前没有开放 Issue。
+- `docs/VERSIONS.md` 的正式版本需求全部完成，Backlog 为空；README 仍列有 4 项下一版本重点。
+- 根目录 `TODO.md` 把已经完成的 Git Brain 架构继续标为进行中，并保留 4 条早期实现待办，已不再是可信状态源。
+- 开发前全量基线在允许绑定 localhost 的环境为 `195 tests / 0 failures`；受限沙箱内的 6 个错误均为临时端口权限，不是产品回归。
+
+### 范围与边界
+
+- 不新增第三方依赖，不重新设计工作台，不修改 Brain 私人数据，不自动发布或推送。
+- 顶层 `harness doctor` 只聚合确定性状态源，不复制 Agent、Brain、Observer 或 audit 的业务逻辑。
+- Adapter Registry 只补齐机器可读的支持状态、加载方式、生命周期能力和限制，不虚构未验证的 Agent 支持。
+- 旧 TODO 若已被现有能力替代，记录替代关系后关闭；不为了清零而重复实现过时脚本。
+
+### 实施步骤
+
+- [x] 207. [测试与实现] 增加顶层 `harness doctor [--json] [project]`，聚合安装、项目、Agent loader、Brain、Observer 与 audit，并对不可用项给出可执行下一步。
+- [x] 208. [注册表] 升级 Agent Adapter Registry 的能力字段与文档，让支持等级、规则加载、Skill、Hook、自动修复和已知限制可被 CLI 与工作台一致读取。
+- [x] 209. [Fixture] 增加 Brain ingest、hook adapter、`brain evolve` 与无 Brain fallback 的隔离测试，禁止读写用户真实 Brain 或 Agent 配置。
+- [x] 210. [收口] 压缩 README 首次使用路径，纠正 `TODO.md`、历史验收勾选和“下一版本重点”，使 `docs/VERSIONS.md` 成为唯一产品需求源。
+- [x] 211. [验证] 运行全量测试、生成一致性、Shell/Python/JSON 校验、安装冒烟与真实 6425 Doctor/工作台检查，形成干净发布候选并复查剩余需求数为 0。
+
+### 完成判定
+
+- [x] 用户运行一条 `harness doctor` 就能知道 Harness 是否安装、当前项目是否接入、Agent 是否加载、Brain 是否启用、6425 是否健康、audit 是否通过，以及失败时下一步做什么。
+- [x] Registry 对每个 Agent 明确区分 detected / managed / manual / unsupported，且不会把文件存在误报为运行时已加载。
+- [x] 四类 Brain/Hook fixture 在临时 HOME 和临时项目中可重复运行，测试后不留下用户目录副作用。
+- [x] README、TODO、plan 与版本 Backlog 不再互相冲突；当前需求清单只有本版本步骤，完成后为 0。
+- [x] 全量回归本次为 0 failures，真实产品服务状态和 Doctor 输出相互一致；未获得发布授权前停在发布候选。
+
+### Step 207 — 2026-09-03
+- files: `bin/harness`, `scripts/harness-doctor.py`, `tests/test_harness_doctor.py`, `README.md`
+- verify: 顶层 CLI 与六组件报告聚焦测试通过；JSON 输出可机器读取，Brain 未启用时标为 optional，Observer 或远端配置异常时返回 blocked 和固定修复动作。
+
+### Step 208 — 2026-09-03
+- files: `config/agent-registry.json`, `scripts/harness-agent-manager.py`, `scripts/harness-observe.py`, `web/observe-dashboard.html`, `docs/AGENT-SUPPORT.md`, `tests/test_harness_agents.py`, `tests/test_harness_observe.py`
+- verify: Registry schema v2、CLI 报告、Observer API 与工作台支持标签聚焦测试通过；七个 Agent 均声明 support/loading/skills/hooks/repair，运行时加载状态仍只来自真实事件。
+
+### Step 209 — 2026-09-03
+- files: `tests/test_brain_workflows.py`, `scripts/harness-evolve.sh`
+- verify: 5 个隔离 fixture 全部通过，覆盖配置 Brain 写入、无配置不写入、Claude Hook 幂等、Brain 演进只产提案、无 Brain 时读取当前项目日志；测试全部使用临时 HOME/配置/项目。
+
+### Step 210 — 2026-09-03
+- files: `README.md`, `TODO.md`, `docs/AGENT-SUPPORT.md`, `plan.md`, `tests/test_harness_doctor.py`
+- verify: README 首次路径改为 install → init → doctor；旧 TODO 不含未完成复选框，README 不再维护“下一版本重点”，v0.19 五项历史验收按已有 Step 147–160 证据修正为完成；需求源合同测试通过。
+
+### Step 211 — 2026-09-03
+- files: `VERSION`, `CHANGELOG.md`, `CHANGELOG.zh-CN.md`, `dist/AGENTS.md`, `docs/VERSIONS.md`, `plan.md`
+- verify: 最终 v0.22.0 指纹全仓 `204 tests / 0 failures`；`generate.sh --check`、全部 Shell/Python/JSON 语法与 `git diff --check` 通过；临时 HOME 完成 init、Agent sync/hooks 和 Doctor；真实 6425 `status=ok`、10/10 项目可用，Doctor 同样判定 Observer 正常。
+- ui: 临时 6247 源码工作台真实显示 7 个 Agent 的自动管理/手动接入/暂不支持状态；1280px 视口 `scrollWidth = innerWidth = 1280`，浏览器控制台 0 error / 0 warning；验收后临时服务已停止。
+- boundary: 形成 v0.22.0 发布候选；未合并 main、未打标签、未推送、未部署到 `~/.mick-harness`。

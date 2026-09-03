@@ -6,6 +6,30 @@ Mick Agent Harness 的重要变更都会记录在本文件中。
 
 本项目遵循 Semantic Versioning 2.0。形如 `vX.Y.Z` 的 Git tag 是最终发布事实源。
 
+## [0.22.0] - 2026-09-03
+
+### 统一诊断与维护需求收口
+
+- **一条确定性 Doctor**：`harness doctor [--json] [project]` 聚合安装、项目注入、
+  Code Agent、可选 Brain、唯一的本地 Observer 和 Plan audit，不复制各子系统的业务逻辑；
+  每个失败项都给出固定、可审查的下一步。
+- **Adapter Registry v2**：每个已知 Agent 分别声明支持、规则加载、Skill、Hook 和修复能力。
+  CLI 与工作台读取同一合同；静态文件存在仍不会被当成运行时加载证明。
+- **隔离 Brain fixture**：覆盖已配置写入、未启用不写入、Claude Hook 幂等、只生成提案的
+  规则演进和项目本地回退。无 Brain 时的回退现在读取当前项目日志，不再误读 Harness 仓库日志。
+- **唯一需求源**：首次使用压缩为安装、项目 init、Doctor；README 和 TODO 的失真待办被关闭，
+  v0.19 历史验收状态按已有证据修正，`docs/VERSIONS.md` 保持为唯一产品需求源。
+
+兼容性：v0.21 项目、Agent Loader、Hook 文件、Brain 模式、事件账本和唯一的
+`127.0.0.1:6425` 服务继续兼容。Registry v2 是本版本内部合同，不需要迁移项目。
+
+迁移说明：运行 `harness update`，再运行 `harness doctor`；只执行它针对当前机器实际状态
+给出的修复命令。Brain 继续保持可选。
+
+验证：204 个 unittest、生成规则一致性、全部 Shell/Python/JSON 语法检查、临时干净 HOME
+安装路径、真实 6425 健康对照，以及浏览器验证的 7 Agent 适配页面；无横向溢出，控制台
+0 条错误或警告。
+
 ## [0.21.0] - 2026-08-30
 
 ### 轻量执行、统一命令与真实项目活动

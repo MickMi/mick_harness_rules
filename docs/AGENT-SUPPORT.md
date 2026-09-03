@@ -1,7 +1,7 @@
 # Code Agent 支持与可靠性基线
 
-> 适用版本：v0.17.0
-> 基线日期：2026-08-13
+> 适用版本：v0.22.0
+> 最近复核：2026-09-03
 > 本文是能力事实与验收边界，不以界面文案代替运行证据。
 
 ## 五层状态模型
@@ -37,6 +37,20 @@ flowchart LR
 | Trae | Tier 2 | 尽力 | 仅能力说明 | 否 | 否 | 不伪造完整支持 |
 
 “自动发现所有 Code Agent”不是本版本承诺。系统只对注册表中的已知 Agent 检查 PATH、macOS App、配置目录和编辑器扩展四类可重现信号。
+
+## Adapter Registry v2
+
+注册表不再只用 Tier 概括支持程度，而是分别声明五项能力。CLI `harness agents doctor` 与工作台“Agent 接入”读取同一份注册表，因此不会在两个界面给出不同承诺。
+
+| 字段 | managed | manual | unsupported |
+|---|---|---|---|
+| `support` | Harness 提供受测适配 | 有受限接入路径 | 当前不承诺接入 |
+| `loading` | 可原子管理 Loader | 需导出后由用户接入 | 没有可验证入口 |
+| `skills` | 可管理 Harness 命令 Skill | 需按工具规范手动安装 | 不注入 |
+| `hooks` | 可管理生命周期 Hook | 工具有入口但需人工配置 | 不伪造回写能力 |
+| `repair` | 固定、可审计的修复命令列表 | 同左 | 空列表 |
+
+当前边界：Claude Code 与 Codex 为 `managed`；Cursor、Windsurf、Trae 为 `manual`，只导出 IDE 规则且没有生命周期 Hook；Cline 与 Roo 为 `unsupported`。文件存在仍不等于本次会话已加载，加载证明继续只来自真实运行事件。
 
 ## 当前链路基线
 

@@ -7,6 +7,38 @@ All notable changes to Mick Agent Harness are documented in this file.
 This project follows Semantic Versioning 2.0. Git tags in the form `vX.Y.Z`
 are the release source of truth.
 
+## [0.22.0] - 2026-09-03
+
+### Unified Diagnostics and Maintenance Closure
+
+- **One deterministic Doctor**: `harness doctor [--json] [project]` combines
+  installation, project injection, Code Agent, optional Brain, the single
+  local Observer, and plan audit health without duplicating their underlying
+  business logic. Each failure includes a fixed, reviewable next action.
+- **Adapter Registry v2**: every known Agent declares support, rule loading,
+  Skill, Hook, and repair capabilities independently. CLI and workbench use the
+  same contract; static files still never count as runtime loading proof.
+- **Isolated Brain fixtures**: repeatable tests cover configured ingestion,
+  disabled Brain behavior, idempotent Claude hooks, proposal-only evolution,
+  and project-local fallback. The fallback now reads the current project's
+  audit log instead of the Harness repository's log.
+- **Single demand source**: first use is reduced to install, project init, then
+  Doctor. Stale README and TODO backlogs are retired, historical v0.19
+  acceptance states are corrected from existing evidence, and
+  `docs/VERSIONS.md` remains the only product demand source.
+
+Compatibility: v0.21 projects, Agent loaders, Hook files, Brain modes, event
+ledgers, and the single `127.0.0.1:6425` service remain compatible. Registry v2
+is internal to this Harness version and requires no project migration.
+
+Migration: run `harness update`, then `harness doctor`. Apply only the repair
+commands reported for the user's actual machine; Brain remains optional.
+
+Verification: 204 unittests, generated-rule consistency, complete
+Shell/Python/JSON syntax checks, a temporary clean-home install path, real 6425
+health comparison, and a browser-verified Agent page with seven adapters, no
+horizontal overflow, and no console warnings or errors.
+
 ## [0.21.0] - 2026-08-30
 
 ### Lightweight Execution, Shared Commands, and Truthful Project Activity

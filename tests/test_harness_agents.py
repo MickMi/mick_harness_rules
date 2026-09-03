@@ -34,7 +34,7 @@ class AgentRegistryTests(unittest.TestCase):
         agents = registry["agents"]
         ids = [agent["id"] for agent in agents]
         self.assertEqual(len(ids), len(set(ids)))
-        self.assertEqual(registry["schema_version"], "1")
+        self.assertEqual(registry["schema_version"], "2")
         self.assertEqual(
             {agent["id"] for agent in agents},
             {"claude-code", "codex", "cursor", "windsurf", "cline", "roo-code", "trae"},
@@ -45,8 +45,22 @@ class AgentRegistryTests(unittest.TestCase):
             self.assertIn("loader", agent)
             self.assertIn("lifecycle", agent)
             self.assertIn("limitations", agent)
+            self.assertEqual(
+                set(agent["adapter"]),
+                {"support", "loading", "skills", "hooks", "repair"},
+            )
+            self.assertIn(agent["adapter"]["support"], {"managed", "manual", "unsupported"})
+            self.assertIn(agent["adapter"]["loading"], {"managed", "manual", "unsupported"})
+            self.assertIn(agent["adapter"]["skills"], {"managed", "manual", "unsupported"})
+            self.assertIn(agent["adapter"]["hooks"], {"managed", "manual", "unsupported"})
+            self.assertIsInstance(agent["adapter"]["repair"], list)
         tier_one = {agent["id"] for agent in agents if agent["tier"] == 1}
         self.assertEqual(tier_one, {"claude-code", "codex"})
+        support = {agent["id"]: agent["adapter"]["support"] for agent in agents}
+        self.assertEqual(support["claude-code"], "managed")
+        self.assertEqual(support["codex"], "managed")
+        self.assertEqual(support["cursor"], "manual")
+        self.assertEqual(support["cline"], "unsupported")
 
 
 class HarnessAuditTests(unittest.TestCase):
@@ -148,7 +162,7 @@ class AgentManagerTests(unittest.TestCase):
         )
         codex = next(agent for agent in report["agents"] if agent["id"] == "codex")
 
-        self.assertEqual(report["schema_version"], "1")
+        self.assertEqual(report["schema_version"], "2")
         self.assertEqual(codex["injection"]["status"], "injected")
         self.assertEqual(codex["loading"]["status"], "unverified")
         self.assertEqual(codex["execution"]["status"], "unverified")
@@ -159,9 +173,10 @@ class AgentManagerTests(unittest.TestCase):
         result = self.run_cli("doctor", "--json", "--home", str(self.home))
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
-        self.assertEqual(payload["schema_version"], "1")
+        self.assertEqual(payload["schema_version"], "2")
         self.assertEqual(len(payload["agents"]), 7)
         self.assertIn("detected", payload["summary"])
+        self.assertEqual(payload["agents"][0]["adapter"], self.manager.load_registry(REGISTRY)["agents"][0]["adapter"])
 
     def test_cli_version_prefers_declared_product_version_over_git_tag(self) -> None:
         env = os.environ.copy()

@@ -127,6 +127,8 @@
     .agent-card-head { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
     .agent-card-title { font-weight: 680; }
     .agent-tier { color: var(--muted); font-size: 11px; }
+    .agent-adapter { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+    .agent-adapter span { border-radius: 999px; background: var(--surface-2); padding: 4px 7px; color: var(--muted); font-size: 10px; }
     .agent-layers { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; margin-top: 11px; }
     .agent-layer { min-width: 0; border-top: 3px solid var(--border); padding-top: 6px; color: var(--muted); font-size: 10px; }
     .agent-layer[data-status="verified"] { border-color: var(--success); color: var(--text); }
@@ -1835,11 +1837,20 @@
         const agentGrid = el("div", "agent-grid");
         const layerLabels = { discovered: "发现", injected: "注入", loaded: "加载", execution: "遵循", feedback: "回写" };
         const layerStates = { verified: "已验证", configured: "待真实会话", unverified: "未验证", not_detected: "未发现", blocked: "有冲突" };
+        const adapterStates = { managed: "自动管理", manual: "手动接入", unsupported: "暂不支持" };
         (state.agents?.agents || []).forEach(agent => {
           const card = el("article", "agent-card");
           const head = el("div", "agent-card-head");
           head.append(el("span", "agent-card-title", agent.name), el("span", "agent-tier", `Tier ${agent.tier}`));
           card.append(head);
+          const adapter = agent.adapter || {};
+          const adapterMeta = el("div", "agent-adapter");
+          adapterMeta.append(
+            el("span", "", `规则 ${adapterStates[adapter.loading] || "未声明"}`),
+            el("span", "", `Skill ${adapterStates[adapter.skills] || "未声明"}`),
+            el("span", "", `Hook ${adapterStates[adapter.hooks] || "未声明"}`),
+          );
+          card.append(adapterMeta);
           const layers = el("div", "agent-layers");
           Object.entries(layerLabels).forEach(([key, label]) => {
             const layer = el("div", "agent-layer");

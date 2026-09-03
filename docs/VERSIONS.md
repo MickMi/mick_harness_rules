@@ -225,6 +225,20 @@
 - [x] `task-182` 在项目主页让每条需求自带任务小队，并在选中需求内展开角色办公室，展示有效阶段、允许下一角色、门禁原因和被拒绝的跳转
 - [x] `task-183` 通过全仓回归、Skill 校验、生成一致性和 6246 真实交互证明流程有效且旧项目兼容
 
+## 0.22.0
+
+- Status: in_progress
+- Branch: feat/v0.22-maintenance-doctor
+- Goal: 用一条确定性诊断路径收拢安装、项目、Agent、Brain、Observer 与 audit 状态，补齐真实 fixture，并清理失真的旧待办，让当前需求列表回到单一、可信、可清零的状态源。
+
+### Requirements
+
+- [x] `task-207` 提供顶层 `harness doctor`，聚合六类真实状态并给出可执行修复建议
+- [x] `task-208` 完善 Agent Adapter Registry 的支持等级、加载方式、Hook 能力与限制合同
+- [x] `task-209` 增加 Brain ingest、hook adapter、`brain evolve` 与无 Brain fallback 的隔离 fixture
+- [x] `task-210` 压缩首次使用路径并清理 README、TODO 与历史验收状态冲突
+- [x] `task-211` 完成全量、生成、语法、安装与真实 6425 验收，形成发布候选
+
 ## Backlog
 
 > 对话中冒出的「新价值」需求先落这里；每个版本立项时从这里挑需求组成下一版本的 Goal 与 Requirements。每条写「一句话需求 + 它服务的未来 Goal 方向」。

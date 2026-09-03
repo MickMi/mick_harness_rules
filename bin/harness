@@ -544,6 +544,15 @@ cmd_agents() {
 }
 
 # ============================================================
+# harness doctor — one deterministic health report
+# ============================================================
+cmd_doctor() {
+    local doctor="$HARNESS_GLOBAL/scripts/harness-doctor.py"
+    [ -f "$doctor" ] || { fail "scripts/harness-doctor.py not found."; return 1; }
+    python3 "$doctor" "$@"
+}
+
+# ============================================================
 # harness brain — Brain workflow commands (status/configure/install/sync/daily/evolve)
 # ============================================================
 cmd_brain() {
@@ -940,6 +949,10 @@ case "${1:-}" in
         shift
         cmd_agents "$@"
         ;;
+    doctor)
+        shift
+        cmd_doctor "$@"
+        ;;
     report)
         shift
         cmd_report "${1:-}"
@@ -965,6 +978,7 @@ case "${1:-}" in
         echo "  harness init --all-rules 额外挂旧工具入口"
         echo "  harness export [surface] 输出 Codex / Agent / API / IDE 加载器"
         echo "  harness agents [scan|doctor|sync|migrate|hooks] 管理本机 Code Agent 接入"
+        echo "  harness doctor [dir]    一次检查安装、项目、Agent、Brain、工作服务与 audit"
         echo "  harness update           更新全局 Harness + 刷新所有注册项目"
         echo "  harness check [dir]      验证当前项目脚手架完整性"
         echo "  harness plan [options]   扫描项目并预览/建立 plan.md（默认只预览）"

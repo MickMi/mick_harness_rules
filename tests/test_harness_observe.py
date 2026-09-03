@@ -1005,6 +1005,10 @@ class ObserveRuntimeTests(unittest.TestCase):
                 "injection": {"status": "injected"},
                 "loading": {"status": "hook_configured"},
                 "execution": {"status": "unverified"},
+                "adapter": {
+                    "support": "managed", "loading": "managed", "skills": "managed",
+                    "hooks": "managed", "repair": ["harness agents sync --dry-run"],
+                },
                 "issues": [{
                     "code": "load-proof-missing",
                     "severity": "info",
@@ -1023,6 +1027,7 @@ class ObserveRuntimeTests(unittest.TestCase):
         self.assertEqual(agent["layers"]["loaded"]["status"], "verified")
         self.assertEqual(agent["layers"]["execution"]["status"], "unverified")
         self.assertEqual(agent["layers"]["feedback"]["status"], "verified")
+        self.assertEqual(agent["adapter"]["support"], "managed")
         self.assertEqual(agent["evidence"]["event_count"], 1)
         self.assertFalse(any(issue["code"] == "load-proof-missing" for issue in agent["issues"]))
         self.assertNotIn("thr_agent_status", json.dumps(result))
@@ -1664,6 +1669,8 @@ class ObserveRuntimeTests(unittest.TestCase):
             self.assertIn(f'{label}\"', dashboard)
         self.assertIn("待真实会话", dashboard)
         self.assertIn("尚无真实会话证据", dashboard)
+        for label in ("自动管理", "手动接入", "暂不支持"):
+            self.assertIn(label, dashboard)
 
     def test_dashboard_visualizes_skill_governance_without_false_load_claims(self) -> None:
         dashboard = DASHBOARD.read_text(encoding="utf-8")
@@ -2920,6 +2927,10 @@ class ObserveRuntimeTests(unittest.TestCase):
                 agents = json.loads(response.read())
             self.assertEqual(len(agents["agents"]), 7)
             self.assertIn("layers", agents["agents"][0])
+            self.assertEqual(
+                set(agents["agents"][0]["adapter"]),
+                {"support", "loading", "skills", "hooks", "repair"},
+            )
             valid_id = portfolio["projects"][0]["project_id"]
             with urlopen(f"{base}/api/projects/{valid_id}/index.json", timeout=1) as response:
                 self.assertEqual(response.status, 200)

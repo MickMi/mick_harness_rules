@@ -17,7 +17,7 @@ import tempfile
 from typing import Any, Iterable
 
 
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "2"
 GLOBAL_BEGIN = "<!-- MICK-HARNESS-GLOBAL:BEGIN — auto-managed by harness agents sync -->"
 GLOBAL_END = "<!-- MICK-HARNESS-GLOBAL:END -->"
 LEGACY_MARKERS = (
@@ -40,6 +40,16 @@ def load_registry(path: Path) -> dict[str, Any]:
     data = json.loads(path.read_text(encoding="utf-8"))
     if data.get("schema_version") != SCHEMA_VERSION or not isinstance(data.get("agents"), list):
         raise AgentManagerError(f"Unsupported Agent registry: {path}")
+    allowed = {"managed", "manual", "unsupported"}
+    expected = {"support", "loading", "skills", "hooks", "repair"}
+    for agent in data["agents"]:
+        adapter = agent.get("adapter")
+        if not isinstance(adapter, dict) or set(adapter) != expected:
+            raise AgentManagerError(f"Invalid adapter contract for {agent.get('id', 'unknown')}")
+        if any(adapter[field] not in allowed for field in ("support", "loading", "skills", "hooks")):
+            raise AgentManagerError(f"Invalid adapter capability for {agent.get('id', 'unknown')}")
+        if not isinstance(adapter["repair"], list) or not all(isinstance(item, str) for item in adapter["repair"]):
+            raise AgentManagerError(f"Invalid adapter repair actions for {agent.get('id', 'unknown')}")
     return data
 
 
@@ -203,9 +213,10 @@ def build_report(
             "loading": loading,
             "execution": {"status": "unverified", "evidence": None},
             "feedback": {"status": "unverified", "evidence": None},
+            "adapter": agent["adapter"],
             "capabilities": {
-                "managed_loader": bool(agent["loader"].get("managed")),
-                "lifecycle": bool(agent["lifecycle"].get("adapter")),
+                "managed_loader": agent["adapter"]["loading"] == "managed",
+                "lifecycle": agent["adapter"]["hooks"] != "unsupported",
             },
             "limitations": agent["limitations"],
             "issues": issues,
@@ -417,7 +428,8 @@ def _print_human(report: dict[str, Any]) -> None:
     print("============")
     for agent in report["agents"]:
         found = "detected" if agent["detected"] else "not detected"
-        print(f"{agent['name']}: {found} · Tier {agent['tier']} · {agent['injection']['status']}")
+        adapter = agent["adapter"]
+        print(f"{agent['name']}: {found} · {adapter['support']} · loader {adapter['loading']} · hooks {adapter['hooks']} · {agent['injection']['status']}")
         for issue in agent["issues"]:
             print(f"  - [{issue['severity']}] {issue['message']} → {issue['repair']}")
 
