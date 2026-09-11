@@ -1,4 +1,55 @@
-> 🧭 状态：v0.22.1 验证中 | 进度 213/214 | 当前归属：QA | 最近交付：update 已按提交变化获取标签并条件重载 6425
+> 🧭 状态：用户已确认合并本批改动并更新已登记项目 | 当前归属：Executor | 本轮范围：Git 合并与 Harness 更新，不修改项目业务代码
+
+## 2026-09-11 · 合并已确认功能并更新本机项目
+
+- authorization: 用户确认将动态状态栏、会话上报与触发记录、项目记忆总结、预览确认后再完整测试的规则一起提交并合并 main，再更新已登记项目的 Harness。遵循 PR 合并，不直接推送 main，不新增版本标签。
+- preservation: 安装目录的已知预览改动先备份；项目自有规则、业务代码、Brain 内容及用户未提交改动保留。工作副本的私人绝对路径改为状态目录相对描述，完整原始日志保留本机。
+- verification: 首轮完整回归 236 tests，仅公开内容审计因计划日志中的私人绝对路径失败；其余 235 项通过。Node 动态状态反馈测试通过。修正公开日志与重新生成规则后复测对应检查。
+
+## 2026-09-10 · 更新结果回到操作入口
+
+- [x] 225. [修改] `web/observe-dashboard.html` 的操作卡就地展示过程、完成或失败、时间和详情；用普通语言解释本地改动冲突，连接中断保持未知并允许重新查询。复用操作账本，不自动重试更新或清理目录。`scripts/harness-observe.py` 按实际时间返回操作历史，补相关聚焦测试。
+  > 修订（2026-09-10）：用户纠正为单一动态状态栏：点击开始后出现，运行中原位切换完成/失败；入口卡片不挂结果块。保持既有确认与安全边界，复用状态查询和历史。
+- boundary: 仅交最小自检后的预览；不执行真实更新、Git stash/reset/pull，不更改全局规则、Brain 或 Hook。需要的预览服务仅代理读取，不允许操作写入。
+  > 部署授权（2026-09-10）：用户体验确认后要求执行；本轮备份并部署 Dashboard 与 Observer 的操作排序修正，重启既有 6425 服务。其他安装文件不覆盖；不拉取 Git、不自动处理本地未提交改动，保留可回滚备份。
+
+### Step 225 — 2026-09-10 · 操作入口内的结果反馈预览
+
+- files: `web/observe-dashboard.html`、`scripts/harness-observe.py`、`tests/test_harness_observe.py`、`tests/test_operation_feedback.cjs`。
+- implemented: 结果就地保留、中文说明本地改动冲突、详情入口、手动重新查询、请求期间防重复点击；连接丢失显示未知，不把旧记录当最新成功。隐藏未执行的旧预检卡片；历史按创建时间排序再截断，避免随机编号遗漏新结果。
+- verify: `node tests/test_operation_feedback.cjs` → PASS / exit 0，覆盖状态、详情、连接断开/恢复、刷新数据恢复和非全局报错；三项聚焦 Python 测试（历史排序、界面合同、确认幂等）→ 3 tests / OK / exit 0；`git diff --check` → exit 0。
+- preview: 仅本机 `http://127.0.0.1:6431/?view=workbench`，临时只读代理读取 6425 记录，拒绝所有 POST；不构成第二个写入后端。开发区未注入 Harness，不自动初始化，进度保留在此。
+- browser: 桌面真实失败记录显示“更新未完成”，详情可打开底层错误；390px 模拟成功显示“已完成”，有醒目模拟标记，scrollWidth=390；发现通用命令仍挤成四列，局部修正为窄屏单列。没有执行真实更新或写入模拟记录。
+- remaining: 等用户确认交互，再做完整回归与正式环境部署；6425 安装目录仍有本地预览改动，更新冲突本身未处理。真实更新成功链路和服务重启后的持续轮询尚未端到端验收，连接中断当前需点击重新查询。
+
+### Step 225 修订 — 2026-09-10 · 同一状态栏原位切换
+
+- correction: 上一版误把“更新过程反馈”设计成入口卡片上的持久结果块；用户要求的是一个连续变化的状态栏。本次移除每卡结果，只保留操作区的当前操作状态栏。
+- files: `web/observe-dashboard.html`、`tests/test_operation_feedback.cjs`。
+- verify: `node tests/test_operation_feedback.cjs` → PASS / exit 0，隔离模拟点击路径覆盖准备、确认受理、等待执行、运行、失败与成功，状态栏保持同一标识；原有断线/恢复与详情检查保留。`git diff --check` → exit 0。
+- boundary: 仅更新 6431 只读预览；没有执行真实 Harness 更新，没有部署 6425，没有推进 QA/发布。旋转状态指示尊重减少动画设置，成功或失败均不再消失进历史列表。
+
+### Step 225 部署 — 2026-09-10 · 正式工作台动态状态栏
+
+- deployed: 用户确认后，仅将 `web/observe-dashboard.html` 与 `scripts/harness-observe.py` 部署到 Harness 安装目录，重启原有 6425 LaunchAgent；两文件与源文件逐字节一致。备份位于本机 Harness 状态目录的 `operation-feedback-backup-20260910-VFl582/`。
+- regression: 解除本机测试监听权限限制后的完整回归为 236 tests / 0 errors / 1 failure；唯一失败是旧版顶部报错字符串断言。更新为结构化预检检查后，该测试单独复测 OK / exit 0；Node 操作反馈测试 PASS / exit 0；`git diff --check` exit 0。未重复整套回归。补充预检失败“尚未执行操作”，与执行中失败区分。
+- live: `/healthz` status=ok，PID 41239，10/10 项目有效且同步，无扫描错误；真实浏览器刷新后显示单一操作状态栏，历史失败保留于栏内，“查看详情”可打开真实错误并关闭，无页面顶部错误横幅。
+- boundary: 本次是界面与操作排序修复部署，不是 Git 版本更新；没有 pull/stash/reset、提交或发布，没有覆盖其他安装文件。安装目录的本地改动冲突仍存在，真实更新成功与重启期间轮询连续性未通过实际更新验证；断线后需手动重新查询。首次浏览器加载曾停在等待，刷新后正常，未扩展修改首屏加载机制。
+
+## 2026-09-10 · 普通开发先交体验预览
+
+用户确认：普通功能/UI 开发先做最小自检并停下，用户体验确认后再进入完整测试；明确授权的 E2E 仍到发布候选。此阶段尚未分配发布版本，覆盖旧 V0 对规则文件的禁止修改范围，仅限下述调整。
+
+- [x] 224. [修改] 统一 Core、Extended、角色编排与 Executor 的停顿点，同步命令合同及说明，扩展已有合同测试；移除每步强制验证与自动收尾冲突。不改运行时门禁、前端、全局安装、Hook 或 Brain。
+- verify-baseline: `python3 -B -m unittest tests.test_harness_commands -q` → 26 tests / OK / exit 0。
+- boundary: 本轮只验证规则合同和上下文预算，不跑全仓回归或浏览器 E2E；规则文字不是运行时硬拦截，真实 Agent 遵守程度待后续任务验证。
+- reporting: 开发工作区未注入 Harness，开始回写返回 exit 64；不为记录进度自动初始化或关联另一个项目。
+
+### Step 224 — 2026-09-10 · 预览前最小自检，确认后完整测试
+
+- files: `rules/core.md`, `rules/extended.md`, `rules/roles/orchestration.md`, `rules/roles/executor.md`, `config/command-registry.json`, `docs/COMMANDS.md`, `tests/test_harness_commands.py`。
+- verify: `python3 -B -m unittest tests.test_harness_commands -q` → 28 tests / OK / exit 0；新增两项合同检查，保留 Quick、E2E、安全和真实状态边界。`python3 -B scripts/harness-context-budget.py` → passed / exit 0：Core 9908、项目 Loader 16342、全局 Loader 12159、合计 28501 bytes；`git diff --check` → exit 0。
+- notes: 复用已有模式、命令注册表和测试，不新增 Skill 或运行时状态。预览不发 delivered/passed、不自动交 QA；Solo 不覆盖用户确认。不跑全仓回归，不部署 Loader，不重启 6425；合同检查不证明实际 Agent 已遵守。
 
 # Plan: Company Runtime V0 → Portfolio V0.2
 
@@ -2530,3 +2581,91 @@ B. 若视觉或交互不通过，回 Executor 修正；通过后勾选步骤 153
 - verify: 修复已快进到 `main`；main 上 `205 tests / 0 failures`，生成一致性、Shell/Python/JSON 语法、公开发布审计和 `git diff --check` 均通过。
 - transition: 从 v0.22.0 更新器拉取 v0.22.1 修复后，旧进程仍未恢复；已显式重启一次完成过渡，6425 恢复为 `status=ok`。后续必须由新更新器自行证明“有提交才重载、无提交不重启”。
 - pending: 发布标签、安装版增量更新 PID 对照、无变化更新 PID 对照和最终 Doctor 仍待验证，因此 `task-214` 保持未完成。
+
+## 2026-09-09 · 工作台上报控制与可追溯操作
+
+用户已确认：一次点击只做一件事；会话上报、提交候选、批准/驳回、应用规则、本地 Git 提交、远端推送相互独立。开发在 `feat/workbench-automation-controls` 工作区进行；不部署、不变更个人 Hook、Brain、真实上报设置，不推进 task-214。发布版本尚未分配。
+
+### 当前开发里程碑：先让上报状态可信
+
+- [x] 215. [创建] `scripts/harness-reporting.py` — 本地全局开关、项目覆盖、显式会话目录关联、并发安全且限量的脱敏触发记录；沿用 Harness 状态目录，不新建服务。
+- [x] 216. [修改] `scripts/harness-observe-hook.py` — 报告触发/成功/失败/跳过，修复 Claude 缺少 turn_id 的回合关联；不保存聊天正文，不靠会话关闭才记录。
+- [x] 217. [修改] `scripts/harness-observe.py` — 在客户端和接收端检查上报策略，增加受鉴权保护的配置/关联接口与只读触发记录；暂停不影响非会话项目采集、Brain 开关或已有历史。
+- [x] 218. [修改] `web/observe-dashboard.html` — 设置增加“会话上报”，独立操作全局开关、项目覆盖、目录关联及只读记录；真实错误/空态和刷新恢复。
+- [x] 219. [验证] `tests/test_harness_reporting.py`、现有 Observer 回归、隔离浏览器路径；补充 `docs/SESSION-REPORTING.md`，记录明确覆盖范围及不能证明的宿主状态。
+
+### 下一里程碑（保留，未声称完成）
+
+- 候选提交与审批沿用现有入口，拆除组合动作；审批不等于应用。
+- 应用规则需要已审核的具体变更和基线，校验失败不生效；Git 提交、Git 推送各自独立确认。
+- 不用“登记已落地”冒充实际应用规则，不用历史事件冒充当前 Hook 信任/加载状态。
+
+### 验收边界
+
+- 默认兼容已有会话上报；全局暂停优先于项目开启；项目继承与覆盖可区分。损坏配置安全停报并显示原因，不悄悄恢复开启。
+- 暂停期间不发送/暂存新会话事件，保留最小本地诊断；已有待处理事件和历史不删除。
+- 未关联工作区必须先由用户选择已登记项目；不凭模糊名称强行归属。
+- 日志只保存事件名、项目/工作区标识、时间、结果与固定原因；不保存 Prompt、聊天全文、密钥、完整异常或工具参数。
+- 本地写入、服务接收、失败和跳过分别显示；没有记录只说尚未观察到，不假定健康。
+
+### 开发基线
+
+- `test_harness_observe.py`：受限环境运行 101 项，6 项因禁止监听本地端口报 PermissionError；其余无失败。使用权限许可的随机本地端口重新执行基线，不改产品代码绕过测试。
+
+### Step 215–219 — 2026-09-09 · 上报开关与真实触发链路
+
+- files: `scripts/harness-reporting.py`、`scripts/harness-observe-hook.py`、`scripts/harness-observe.py`、`web/observe-dashboard.html`、`tests/test_harness_reporting.py`、`docs/SESSION-REPORTING.md`、`plan.md`。
+- verify: 同环境 Observer 基线 `101 tests / OK / exit 0`；改动后 Observer 再跑 `101 tests / OK / exit 0`。
+- verify: 新增 17 项上报专项合同；最终 `python3 -B -m unittest discover -s tests -q` → `222 tests / OK / 10.703s / exit 0`，包含公开发布扫描；首次扫描拒绝测试文件中的仿真凭据字面量，改为运行时构造测试值后通过，未削弱扫描规则。
+- verify: Dashboard 的单个内嵌 JavaScript 脚本通过 Node 语法检查；`git diff --check` → exit 0。
+- browser: 随机端口临时工作台完成全局暂停、项目开启不能绕过总开关、刷新持久化、工作区关联不顺带开启上报、恢复与继承、新事件归属、接收与本地回退区分、记录展开；1280px 桌面及 390px 窄屏检查通过，窄屏 `scrollWidth=innerWidth=390`，长路径换行。
+- browser: 停止临时服务后点击刷新，页面显示 `无法读取上报状态：Failed to fetch`，暂停按钮 disabled；临时服务及测试页已关闭，浏览器尺寸已恢复。自动刷新保留未变化的页面节点，不打断用户操作。
+- boundary: 原仓库仍为 main / `6a5d7a7`，原有 `docs/VERSIONS.md` 和 `narc_for_mac/` 保持不动；未部署 6425、未修改真实上报设置或个人 Hook、未写真实 Brain、未执行 Git 提交/推送。当前对话宿主的实际 Hook 信任状态仍未验证。
+- next: 候选提交、审批、规则应用与 Git 操作仍独立排期；规则应用第一版需要用户确认目标为中央 Harness 还是选中的单个项目，不能把状态登记当成已经应用。
+
+### 2026-09-09 · 部署到日常工作台预览
+
+用户明确授权“部署到 6425，看下效果”，覆盖上一轮“不部署”的边界。本次只部署已经验证的上报控制第一批，不构成正式版本发布。
+
+- [x] 220. [部署] 备份安装版的 Observer、Hook 适配器和 Dashboard；将开发工作区的这三个文件及新 `scripts/harness-reporting.py` 部署到 `~/.mick-harness`，复用既有服务重启 6425；验证 PID 变化、健康状态、10 个项目、上报接口和浏览器页面。失败时恢复已备份文件并重启旧服务。
+- boundary: 不合并源仓库 main、不提交或推送 Git、不更改用户上报策略、Brain 配置、Claude/Codex Hook 配置或信任设置；只升级已有 Hook 命令所引用的适配器代码。保留安装版的用户自有 `verify.sh` 和 `verify.d/`。
+- baseline: 6425 `/healthz` 返回 `status=ok`，PID 61758，10/10 项目同步，原 `/api/reporting.json` 返回 404；服务实际从 `~/.mick-harness/scripts/harness-observe.py` 启动。
+
+### Step 220 — 2026-09-09 · 日常工作台预览已部署
+
+- verify: 部署前专项测试 `17 tests / OK / exit 0`；使用 LaunchAgent 实际的 Python 3.11 再验 `17 tests / OK / 2.230s / exit 0`。
+- backup: `~/.local/state/mick-harness/deploy-backup-20260909-JJz9VQ` 保存三个旧文件。新 `harness-reporting.py` 是本次添加；回退需要恢复旧三个文件、将新增模块移出安装目录，再重启服务。
+- retry: 第一次重启未在 8 秒窗口内就绪，自动恢复旧文件，旧服务健康；未发现新代码导入/语法错误。启动流程先完成全项目扫描再响应；第二次部署保留最多额外 30 秒诊断窗口并设相同回退条件，实际在正常窗口内成功。首次超时的精确成因未完全确认，不宣称已修复启动性能问题。
+- deployed: 最终 PID 87535，启动时间 `2026-09-09T08:58:13+00:00`；`status=ok`，10/10 项目同步，首轮扫描 4166ms；`/api/reporting.json` 返回 200，10 个项目，0 条实际触发记录，未填入模拟数据。
+- browser: 已在真实 `http://127.0.0.1:6425/?view=settings&focus=reporting` 打开并保留页面；读取到全局开关、10 个项目覆盖项、真实空记录提示，手动刷新后仍正常。首屏等待偏慢，但最后载入成功，浏览器错误/警告日志为空；该性能问题保留后续改进。
+- boundary: 4 个部署文件与开发工作区逐字节一致；Claude/Codex Hook 配置摘要未变，没有创建上报配置文件，保留原有默认行为。源码 main 未改、未提交/推送/发布；安装目录现在是未提交的本地预览覆盖，后续 update/正式发布前需处理该覆盖层，不能声称已发布新版本。
+
+## 2026-09-09 · 设置页设计标准与可用的项目记忆摘要
+
+用户要求统一优雅设计、缩小按钮并理清层级；项目记忆从流水账转为能提炼问题、追踪改进的摘要。发布版本尚未分配。
+
+- [x] 221. [设计] 以 shadcn/ui 官方设计与按钮规范为参考，记录 Harness 的紧凑操作界面标准；统一设置页控件、标题、间距与操作优先级。不引入框架或新依赖。
+- [x] 222. [实现] 在现有 Brain 边界层提供只读、全量输入的项目/任务摘要；保留来源和未知态，排除撤销/已更正事实，不把重复日志当多个独立问题。摘要可编辑提炼为已有 Harness 改进候选，保留多条来源并显示已有处理状态。
+- [x] 223. [验证与预览] 隔离测试摘要、跨项目隔离、重复提交、权限与错误；浏览器检查桌面/窄屏、展开证据、创建候选和回到处理记录；通过后更新既有 6425 本地预览，保留回滚备份。
+
+### 设计与数据边界
+
+- 视觉方向：Operate 模式；用户先看需要操作的同步/审批，再看项目结论与改进。中性色、单一强调色、默认 32px 按钮、14px 正文；触屏操作目标至少 44px。
+- 只按明确项目/任务标识关联；旧记录使用可定位的前缀兼容。没有任务关联的日志归档，不按相似字样猜测修复关系。
+- 摘要为本机原文提取和归组，不调用外部模型、不生成未经记录的新结论。每个摘要保留完整证据入口。
+- 复用现有候选与审批接口，不建第二套闭环。创建候选 ≠ 提交审批 ≠ 实施 ≠ 验证有效；不能自动宣称问题已解决。
+- 不更改中央规则、宿主 Hook、上报开关或 Brain 配置，不删除/批量改写真实记忆，不合并 main 或发布。
+- 基线：222 项测试中 221 通过；公开发布审计因上一轮部署记录中的个人绝对路径失败。本轮将该自有记录改为可移植路径表述，不削弱扫描。
+
+### Step 221–223 — 2026-09-09 · 结论摘要和紧凑设置页预览
+
+- files: `docs/DESIGN-SYSTEM.md`、`rules/roles/designer.md`（可选参考指引）、`scripts/harness-brain-boundary.py`、`scripts/harness-observe.py`、`web/observe-dashboard.html`、`tests/test_memory_digest.py`、`tests/test_harness_observe.py`、`plan.md`。
+- design: 设置页 28px 标题、17px 区块标题、13px/32px 按钮；空审批压成一行；来源、原始记录、高级设置折叠；保留项目原有角色视觉，不引入框架。
+- data: 全量读取 645 条现有记忆，归为 256 个任务主题，其中 77 项执行结论；221 条过程日志归档。默认只看已有结论，每页 5 项。只按项目和明确任务 ID 归组；旧记录缺少关联时不按语义相似猜测。原文、状态和来源不被摘要覆盖。
+- actions: 摘要可提炼为独立改进候选，每次明确附带最多 100 条来源；重复提交幂等，禁止跨项目混入；同一任务的多条证据保持一个问题信号。创建后可回看处理进度和来源，不自动送审、应用或上传。
+- verify: 最终 `python3 -B -m unittest discover -s tests -q` → `233 tests / OK / 19.626s / exit 0`；新增 11 项摘要测试覆盖全量历史、任务/项目隔离、未知态、旧更正/撤销、只读、频次、授权和 UI 合同。内嵌 JavaScript 语法通过，`git diff --check` 通过。
+- browser: 隔离数据完成“查看两条来源 → 填写改进 → 保存 → 刷新保留 → 返回摘要查看进度”；两条证据显示为一次问题信号。390px 页面宽度与滚动宽度同为 390，无越界元素；真实桌面按钮为 13px/32px，页面无横向溢出。停服务后更新摘要显示 Failed to fetch，可重试且不删除原始记录。临时服务和模拟数据已清理。
+- performance: 真实环境首屏原来等待全部 8 个接口；项目总览、Skill 扫描、Brain 状态探针均出现超过 15 秒。摘要与原始记录取消非必要两两相似计算，并让设置分块呈现，未知状态不冒充零值。部署后单次摘要接口 1.375s、原始记录不匹配相似项 0.474s；其他全局扫描耗时仍未专门优化，未宣称整体性能问题完全解决。
+- deploy: 复用 6425，最终服务 PID 72418，10/10 项目正常，三个部署文件逐字节与开发区一致。回滚备份为 `~/.local/state/mick-harness/design-preview-20260909-XYThTX`。只更新 Observer、Brain 边界和页面；设计标准留在源码供后续发布，不改宿主配置或个人 Brain 数据。
+- boundary: 源仓库 main 与用户已有改动保持不变，无 Git 提交/推送/正式发布。当前工作区未生成被忽略的 `dist/AGENTS.md`，因此导出一致性检查未通过；本轮未改 Core/Extended 或部署 Loader，不把单元回归等同正式发布验收。
+- remaining: 本机提取不是跨任务深度语义总结；提炼问题仍需用户判断。自动应用规则与效果实测另行实现，不用“已登记”冒充真实解决。200% 浏览器缩放和真实触屏尚未单独验收。

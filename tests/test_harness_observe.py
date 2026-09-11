@@ -245,6 +245,19 @@ class ObserveRuntimeTests(unittest.TestCase):
         self.assertIn("活跃计划", preview["summary"])
         self.assertLessEqual(len(preview["summary"]), 300)
 
+    def test_operation_history_uses_time_not_random_identifier(self) -> None:
+        state_dir = self.project / "ordered-operations"
+        root = OBSERVE.operations_root(state_dir)
+        root.mkdir(parents=True)
+        for number in range(25):
+            record = {"operation_id": f"op_{25-number:016d}", "action": "harness-update",
+                      "status": "succeeded", "created_at": f"2026-09-10T10:{number:02d}:00+00:00"}
+            (root / f"{record['operation_id']}.json").write_text(json.dumps(record), encoding="utf-8")
+        snapshot = OBSERVE.operation_snapshot(state_root=state_dir)
+        self.assertEqual(len(snapshot["items"]), 20)
+        self.assertEqual(snapshot["items"][0]["created_at"], "2026-09-10T10:24:00+00:00")
+        self.assertEqual(snapshot["items"][-1]["created_at"], "2026-09-10T10:05:00+00:00")
+
     def test_operation_preview_and_confirmation_are_idempotent_and_single_use(self) -> None:
         state_dir = self.project / "state"
         first = OBSERVE.prepare_operation("agent-sync", {}, state_root=state_dir)
@@ -1454,8 +1467,9 @@ class ObserveRuntimeTests(unittest.TestCase):
             self.assertIn(label, dashboard)
         self.assertNotIn('el("h1", "", "Brain 工作台")', dashboard)
         self.assertLess(dashboard.index("本次同步清单"), dashboard.index("全局待审批"))
-        self.assertLess(dashboard.index("全局待审批"), dashboard.index("项目记忆"))
-        self.assertLess(dashboard.index("项目记忆"), dashboard.index("连接与高级设置"))
+        # Check rendering order, not incidental words in explanatory copy.
+        self.assertLess(dashboard.index("stack.append(inbox)"), dashboard.index("renderMemoryDigest(stack)"))
+        self.assertLess(dashboard.index("renderMemoryDigest(stack)"), dashboard.index("连接与高级设置"))
         for contract in (
             "brainSyncPreview", "dry_run: true", "查看同步清单", "不会上传",
             "待推送提交", "brain-project-details", "brain-connection-details",
@@ -1466,7 +1480,8 @@ class ObserveRuntimeTests(unittest.TestCase):
         self.assertNotIn("window.prompt", dashboard)
         self.assertNotIn("window.confirm", dashboard)
         self.assertIn('field.type === "select" ? (field.options?.[0]?.value ?? "")', dashboard)
-        self.assertIn('preview.summary || "预检未通过；未发生写入。"', dashboard)
+        self.assertIn('item.status === "blocked" && item.can_execute === false', dashboard)
+        self.assertIn('尚未执行操作。', dashboard)
         self.assertIn("X-Harness-Action-Token", dashboard)
         self.assertIn("关闭会话不是写入前提", dashboard)
         self.assertIn("Brain 接入状态", dashboard)

@@ -42,7 +42,16 @@
       "standard": {
         "purpose": "deliver ordinary multi-file work or work with a small number of product decisions",
         "initial_confirmation": "only when a material product choice is unresolved",
-        "shows_progress_at": "a meaningful milestone, user decision, blocker, or delivery"
+        "shows_progress_at": "a meaningful milestone, user decision, blocker, or delivery",
+        "feature_ui_checkpoint": {
+          "stops_at": "usable_preview_awaiting_user",
+          "before_preview": ["startup", "core_user_path", "relevant_safety_checks"],
+          "resume_full_testing_on": "explicit user acceptance of the current preview scope",
+          "user_acceptance_is_qa_pass": false,
+          "mark_requirement_complete_at_preview": false,
+          "runtime_enforced": false,
+          "exceptions": ["clear_low_risk_fixes", "documentation_only", "explicit_e2e_authorization"]
+        }
       },
       "e2e": {
         "purpose": "deliver one clear requirement from confirmed intent to a release candidate",

@@ -38,6 +38,7 @@
 ## 交接
 
 - 产品需求主路径是 `PM → Reviewer(product_review) → Executor → QA → Release`；产品审查批准后可按复杂度插入 Planner / Designer，高风险交付可在 QA 后增加 `Reviewer(release_review)`。
+- Standard 功能/UI 在 Executor 最小自检后插入用户体验确认，确认前不交 QA；E2E 已授权时不逐角色停顿。体验确认不是新增角色或 QA 通过，停顿及回写按 Extended §10.7。
 - Reviewer 的 `product_review` 是开发前产品逻辑门禁；`release_review` 是发布风险审查，两者必须结构化区分，不能从摘要猜测。
 - 纯技术修复仅在不改变产品行为、具有明确复现证据并记录受控例外原因时，允许 `Executor → QA → Release`。
 - 工作台只接受同一需求的合法结构化门禁事件推进阶段；非法角色跳转保留审计但不改变有效状态。
