@@ -599,6 +599,13 @@ def process_observer_event(project: str, event: dict[str, Any]) -> dict[str, Any
         "created_at": timestamp,
         "updated_at": timestamp,
     }
+    payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+    subject = event.get("subject") if isinstance(event.get("subject"), dict) else {}
+    requirement = payload.get("requirement_id") or (
+        subject.get("id") if subject.get("kind") == "task" or str(event.get("type", "")).startswith("task.") else None
+    )
+    if requirement:
+        record["requirement_id"] = redact(str(requirement))[:128]
     target = append_project_brain(record)
     record["brain_path"] = str(target.relative_to(brain_root()))
     atomic_json(path, record)
@@ -610,11 +617,12 @@ def project_memory_view(record: dict[str, Any]) -> dict[str, Any]:
         "memory_id", "project", "kind", "summary", "status", "sync_status",
         "source_event_type", "source_event_id", "source_agent", "created_at", "updated_at", "brain_path",
         "occurrence_count", "merged_from", "merged_into", "similar_memory_ids",
+        "requirement_id", "corrects", "corrected_by",
     )
     return {key: record.get(key) for key in keys}
 
 
-def list_project_memories(*, project: str | None = None, limit: int | None = None) -> list[dict[str, Any]]:
+def list_project_memories(*, project: str | None = None, limit: int | None = None, find_similar: bool = True) -> list[dict[str, Any]]:
     root = project_memory_root()
     paths = (root / safe_slug(project)).glob("*.json") if project else root.glob("*/*.json")
     records = [json.loads(path.read_text(encoding="utf-8")) for path in paths] if root.exists() else []
@@ -632,7 +640,7 @@ def list_project_memories(*, project: str | None = None, limit: int | None = Non
     values = sorted(grouped.values(), key=lambda item: item.get("created_at") or "", reverse=True)
     if limit is not None:
         values = values[:max(0, limit)]
-    for current in values:
+    for current in values if find_similar else []:
         current["similar_memory_ids"] = [
             other["memory_id"]
             for other in values
@@ -642,6 +650,81 @@ def list_project_memories(*, project: str | None = None, limit: int | None = Non
             and summaries_are_similar(str(current.get("summary") or ""), str(other.get("summary") or ""))
         ]
     return [project_memory_view(record) for record in values]
+
+
+def project_memory_digest() -> dict[str, Any]:
+    """Extract task conclusions, never infer resolution or mutate source memories.
+
+    Reads all records before grouping (not the recent-100 UI window). No LLM,
+    fuzzy task matching, date-as-task inference, or quadratic similarity pass.
+    """
+    records = list_project_memories(find_similar=False)
+    active = [r for r in records if r.get("status") not in {"reverted", "corrected", "merged"}]
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    archived = 0
+    for record in active:
+        text = str(record.get("summary") or "")
+        prefix = re.match(r"^([A-Za-z0-9][A-Za-z0-9._-]{0,127})(?:[:：]\s*| 状态变为 )", text)
+        legacy_task = prefix.group(1) if prefix and re.search(r"[-_0-9]", prefix.group(1)) else None
+        task = record.get("requirement_id") or legacy_task
+        if not task and record.get("kind") not in {"result", "decision", "gotcha", "preference"}:
+            archived += 1
+            continue
+        key = (str(record.get("project") or ""), str(task or record["memory_id"]))
+        groups.setdefault(key, []).append({**record, "task": task})
+
+    improvements = list_harness_improvements()
+    projects: dict[str, dict[str, Any]] = {}
+    status_labels = {
+        "observed": "已提炼 · 待送审", "pending_approval": "待审批", "approved": "已批准 · 待实施",
+        "implemented": "已登记实施 · 待验证", "verified": "已登记效果改善",
+        "needs_followup": "效果待改进", "rejected": "已驳回",
+    }
+    for (project, key), sources in groups.items():
+        sources.sort(key=lambda r: (r.get("created_at") or "", r["memory_id"]), reverse=True)
+        substantive = [r for r in sources if r.get("kind") in {"result", "decision", "gotcha", "preference"}
+                       and not re.match(r"^\S+ 状态变为 ", str(r.get("summary") or ""))]
+        requirements = [r for r in sources if r.get("kind") == "requirement"]
+        chosen = (substantive or requirements or sources)[0]
+        text = str(chosen.get("summary") or "")
+        if chosen.get("task"):
+            text = re.sub(r"^" + re.escape(str(chosen["task"])) + r"[:：]\s*", "", text)
+        text = re.split(r"[；;]\s*产物[：:]", text, maxsplit=1)[0]
+        title, separator, conclusion = text.partition(" — ")
+        title = re.sub(r"（(?:completed|in_progress|pending|discovered|blocked)）$", "", title)
+        summary = conclusion if separator else (text if substantive else "尚无执行结论，请展开查看已记录的需求。")
+        ids = {r["memory_id"] for r in sources}
+        linked = [i for i in improvements if any(s.get("memory_id") in ids for s in i.get("sources", []))]
+        followup = linked[0] if linked else None
+        topic = {
+            "topic_id": hashlib.sha256(f"{project}\0{key}".encode()).hexdigest()[:20],
+            "requirement_id": chosen.get("task"),
+            "title": title[:100] + ("…" if len(title) > 100 else ""),
+            "conclusion": summary[:260] + ("…" if len(summary) > 260 else ""),
+            "updated_at": sources[0].get("created_at"),
+            "source_count": len(sources),
+            "has_conclusion": bool(substantive),
+            "improvements": [{
+                "improvement_id": item["improvement_id"], "summary": item["summary"],
+                "status": item["status"], "label": status_labels.get(item["status"], item["status"]),
+            } for item in linked],
+            "next_step": status_labels.get(followup["status"], "查看改进记录") if followup else "可提炼经验，不代表存在待修问题",
+            "sources": [project_memory_view(r) for r in sources],
+        }
+        entry = projects.setdefault(project, {"project": project, "topics": [], "record_count": 0})
+        entry["topics"].append(topic)
+        entry["record_count"] += len(sources)
+    for entry in projects.values():
+        entry["topics"].sort(key=lambda t: t.get("updated_at") or "", reverse=True)
+        entry["updated_at"] = entry["topics"][0]["updated_at"]
+        entry["conclusion_count"] = sum(t["has_conclusion"] for t in entry["topics"])
+        entry["followup_count"] = sum(any(i["status"] not in {"verified", "rejected"} for i in t["improvements"]) for t in entry["topics"])
+    return {
+        "method": "local_extractive", "records_read": len(records), "active_records": len(active),
+        "archived_records": archived, "excluded_records": len(records) - len(active),
+        "topic_count": sum(len(p["topics"]) for p in projects.values()),
+        "projects": sorted(projects.values(), key=lambda p: p.get("updated_at") or "", reverse=True),
+    }
 
 
 def undo_project_memory(identifier: str) -> dict[str, Any]:
@@ -676,7 +759,7 @@ def correct_project_memory(identifier: str, *, summary: str) -> dict[str, Any]:
     original["updated_at"] = timestamp
     atomic_json(matches[0], original)
     record = {
-        **{key: original.get(key) for key in ("schema_version", "project", "kind", "source_event_type", "source_event_id", "source_agent")},
+        **{key: original.get(key) for key in ("schema_version", "project", "kind", "source_event_type", "source_event_id", "source_agent", "requirement_id")},
         "memory_id": correction_id,
         "summary": cleaned,
         "status": "written_local",
@@ -772,8 +855,8 @@ def project_memory_record(identifier: str) -> dict[str, Any]:
     if len(matches) != 1:
         raise BrainBoundaryError(f"Unknown project memory: {identifier}")
     record = json.loads(matches[0].read_text(encoding="utf-8"))
-    if record.get("status") in {"reverted", "merged"}:
-        raise BrainBoundaryError("Reverted or merged project memory cannot become a Harness improvement.")
+    if record.get("status") in {"reverted", "merged", "corrected"}:
+        raise BrainBoundaryError("Reverted, corrected or merged project memory cannot become a Harness improvement.")
     return record
 
 
@@ -811,7 +894,8 @@ def harness_improvement_view(record: dict[str, Any], records: list[dict[str, Any
     records = records if records is not None else raw_harness_improvements()
     sources = list(record.get("sources") or [])
     projects = sorted({str(item.get("project")) for item in sources if item.get("project")})
-    occurrence_count = max(int(record.get("occurrence_count") or 0), len(sources), 1)
+    # Several stages of one task are evidence, not independent recurrences.
+    occurrence_count = max(int(record.get("occurrence_count") or 0), 1) if record.get("evidence_group") == "task_digest" else max(int(record.get("occurrence_count") or 0), len(sources), 1)
     eligible = len(projects) >= 2 or occurrence_count >= 3
     active_statuses = {"observed", "pending_approval"}
     similar = [
@@ -845,14 +929,23 @@ def list_harness_improvements() -> list[dict[str, Any]]:
 
 
 def create_harness_improvement(
-    memory_id: str, *, target: str, summary: str | None = None,
+    memory_id: str, *, target: str, summary: str | None = None, memory_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     if target not in HARNESS_IMPROVEMENT_TARGETS:
         raise BrainBoundaryError("Harness improvement target must be rule, skill, checker, or profile.")
     with simple_lock(harness_improvement_root() / ".write.lock"):
         memory = project_memory_record(memory_id)
+        if memory_ids is not None and (
+            not isinstance(memory_ids, list) or len(memory_ids) > 100
+            or not all(isinstance(i, str) for i in memory_ids)
+        ):
+            raise BrainBoundaryError("memory_ids must contain at most 100 string identifiers.")
+        identifiers = sorted(set([memory_id, *(memory_ids or [])]))
+        memories = [project_memory_record(i) for i in identifiers]
+        if len({m.get("project") for m in memories}) != 1:
+            raise BrainBoundaryError("A task digest must belong to one project.")
         cleaned = validate_summary(summary or str(memory.get("summary") or ""))
-        material = json.dumps([memory_id, target, cleaned], ensure_ascii=False, separators=(",", ":"))
+        material = json.dumps([identifiers if len(identifiers) > 1 else memory_id, target, cleaned], ensure_ascii=False, separators=(",", ":"))
         identifier = f"improvement_{hashlib.sha256(material.encode('utf-8')).hexdigest()[:20]}"
         path = harness_improvement_path(identifier)
         if path.is_file():
@@ -865,12 +958,14 @@ def create_harness_improvement(
             "summary": cleaned,
             "status": "observed",
             "sources": [{
-                "memory_id": memory_id,
-                "project": memory.get("project"),
-                "kind": memory.get("kind"),
-                "source_agent": memory.get("source_agent"),
-                "summary_digest": memory.get("summary_digest"),
-            }],
+                "memory_id": source["memory_id"],
+                "project": source.get("project"),
+                "kind": source.get("kind"),
+                "source_agent": source.get("source_agent"),
+                "summary_digest": source.get("summary_digest"),
+            } for source in memories],
+            "evidence_count": len(memories),
+            "evidence_group": "task_digest" if memory_ids is not None else None,
             "occurrence_count": max(int(memory.get("occurrence_count") or 1), 1),
             "created_at": timestamp,
             "updated_at": timestamp,

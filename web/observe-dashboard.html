@@ -297,6 +297,17 @@
     .operation-action:disabled { cursor: not-allowed; opacity: .55; }
     .operation-action strong { display: block; font-size: 13px; }
     .operation-action span { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
+    .operation-feedback { margin-top: 12px; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; background: var(--surface); padding: 10px 12px; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+    .operation-feedback-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; }
+    .operation-feedback-head .operation-feedback-actions { margin: 0 0 0 auto; }
+    .operation-feedback[data-status="running"] .operation-status::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 6px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: operation-spin .9s linear infinite; }
+    @keyframes operation-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .operation-feedback[data-status="running"] .operation-status::before { animation: none; } }
+    .operation-feedback p { margin: 4px 0; }
+    .operation-feedback[data-status="succeeded"] { border-left: 3px solid var(--success, #227348); }
+    .operation-feedback[data-status="failed"], .operation-feedback[data-status="blocked"] { border-left: 3px solid var(--warning); }
+    .operation-feedback-actions { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 6px; }
+    .operation-feedback .operation-result-action { min-height: 32px; font-size: 13px; }
     .operation-active { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; margin-top: 11px; border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 9px 11px; font-size: 12px; }
     .operation-active[data-status="failed"] { border-left-color: var(--danger); background: var(--danger-soft); }
     .operation-status { color: var(--accent); font-weight: 700; }
@@ -336,7 +347,7 @@
     .workbench-projects h2 { margin: 0; font-size: 18px; }
     .workbench-secondary > section { border-top: 1px solid var(--border); padding-top: 15px; }
     .workbench-secondary h2 { margin: 0; font-size: 16px; }
-    .settings-tabs { display: flex; gap: 8px; margin: 18px 0 24px; border-bottom: 1px solid var(--border); }
+    .settings-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 24px; border-bottom: 1px solid var(--border); }
     .settings-tab { appearance: none; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); padding: 10px 4px 12px; margin-right: 20px; font: inherit; font-weight: 700; cursor: pointer; }
     .settings-tab[aria-current="true"] { color: var(--accent); border-bottom-color: var(--accent); }
     .skill-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); margin: 22px 0; }
@@ -530,7 +541,7 @@
     .brain-item { border: 1px solid var(--border); border-radius: 12px; padding: 12px; background: var(--surface-soft); }
     .brain-meta { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
     .brain-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-    .brain-actions button { border: 1px solid var(--border); border-radius: 999px; background: var(--surface); padding: 6px 11px; cursor: pointer; }
+    .brain-actions button { border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); padding: 6px 11px; cursor: pointer; font-size: 13px; line-height: 18px; }
     .brain-actions button.primary { border-color: var(--accent); color: var(--accent); }
     .brain-actions button.danger { border-color: var(--danger); color: var(--danger); }
     .brain-stack { display: grid; gap: 16px; margin-top: 18px; }
@@ -571,6 +582,73 @@
     .brain-dialog-cancel { background: transparent; color: var(--text); }
     .brain-dialog-submit { border-color: var(--accent); background: var(--accent); color: white; }
     .brain-dialog-submit[data-danger="true"] { border-color: var(--danger); background: var(--danger); }
+    /* Harness compact operate standard: docs/DESIGN-SYSTEM.md.
+       Scoped to settings; project artifacts and role characters keep their scale. */
+    .settings-page { --control-height: 32px; font-size: 14px; line-height: 1.55; }
+    .settings-page h1 { font-size: 28px; font-weight: 650; letter-spacing: -.025em; }
+    .settings-page h2 { font-size: 17px; font-weight: 650; line-height: 1.4; }
+    .settings-page h3 { font-size: 14px; font-weight: 600; }
+    .settings-page .topline { align-items: center; margin-bottom: 8px; }
+    .settings-page .freshness { font-size: 12px; }
+    .settings-page .settings-tabs { gap: 20px; margin: 12px 0 20px; }
+    .settings-page .settings-tab { padding: 8px 0; margin: 0; font-size: 13px; font-weight: 550; }
+    .settings-page button:not(.settings-tab), .brain-dialog-actions button {
+      min-height: var(--control-height, 32px); height: auto; max-width: 100%;
+      border-radius: 6px; padding: 6px 10px; font-size: 13px; line-height: 18px;
+      font-weight: 500; white-space: normal; overflow-wrap: anywhere; cursor: pointer;
+    }
+    .settings-page button:disabled { cursor: not-allowed; opacity: .55; }
+    .settings-page button:hover:not(:disabled):not(.settings-tab) { filter: brightness(.97); }
+    .settings-page .brain-card { border-radius: 8px; padding: 20px; box-shadow: none; }
+    .settings-page .brain-card h2 { margin: 0; }
+    .settings-page .brain-stack { gap: 16px; margin-top: 16px; }
+    .settings-page .section-help { margin: 6px 0 12px; font-size: 13px; line-height: 1.6; max-width: 75ch; }
+    .settings-page .empty { padding: 12px 0; border: 0; text-align: left; font-size: 13px; }
+    .settings-page .brain-item { background: transparent; border: 0; border-top: 1px solid var(--border); border-radius: 0; padding: 14px 0; overflow-wrap: anywhere; }
+    .settings-page .brain-list { gap: 0; }
+    .settings-page .brain-sync-status { margin-top: 8px; font-size: 12px; }
+    .settings-page .brain-repository-line { margin-top: 0; border-top: 0; }
+    .settings-page .brain-summary { font-size: 14px; font-weight: 550; }
+    .settings-page .brain-sync-button { background: var(--text); border-color: var(--text); color: var(--surface); }
+    .settings-page .service-action { border-color: var(--border); color: var(--text); background: var(--surface); }
+    .settings-page .brain-meta { font-size: 12px; }
+    .settings-page .brain-inbox-empty { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 20px; padding: 14px 20px; }
+    .settings-page .brain-inbox-empty .brain-list { margin: 0; }
+    .settings-page .brain-inbox-empty .empty { padding: 0; }
+    .memory-head, .memory-toolbar, .memory-pagination { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .memory-head .muted, .memory-pagination { font-size: 12px; }
+    .memory-toolbar { margin: 16px 0 0; padding: 12px 0; border-top: 1px solid var(--border); }
+    .memory-toolbar label { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); min-width: 0; max-width: 100%; }
+    .memory-toolbar select { max-width: 100%; min-width: 0; min-height: 32px; border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; background: var(--surface); color: var(--text); font: inherit; font-size: 13px; }
+    .memory-topic { padding: 16px 0; border-top: 1px solid var(--border); min-width: 0; }
+    .memory-topic-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+    .memory-topic-head h3 { margin: 0; max-width: 70ch; overflow-wrap: anywhere; }
+    .memory-topic-head time { flex: none; font-size: 12px; color: var(--muted); }
+    .memory-conclusion { color: var(--muted); margin: 6px 0 10px; line-height: 1.65; overflow-wrap: anywhere; max-width: 90ch; }
+    .memory-topic-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }
+    .memory-topic-actions button, .memory-pagination button { border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+    .memory-evidence { margin-top: 10px; font-size: 12px; }
+    .memory-evidence summary, .memory-raw-summary { cursor: pointer; color: var(--muted); overflow-wrap: anywhere; }
+    .memory-evidence-list { max-height: 360px; overflow: auto; padding: 4px 12px; border-left: 2px solid var(--border); margin-top: 8px; }
+    .memory-source { border-bottom: 1px solid var(--border); padding: 10px 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+    .memory-source p { margin: 4px 0; }
+    .memory-pagination { padding-top: 12px; border-top: 1px solid var(--border); }
+    .memory-pagination div { display: flex; gap: 6px; }
+    .memory-linked { color: var(--accent); }
+    .memory-archive .brain-actions { padding-left: 12px; }
+    .memory-archive .memory-raw-summary { font-size: 13px; }
+    @media (pointer: coarse) {
+      .settings-page button, .settings-page select, .brain-dialog-actions button { min-height: 44px; }
+      .memory-evidence summary { padding: 12px 0; }
+    }
+    @media (max-width: 600px) {
+      .settings-page .brain-card { padding: 16px; }
+      .settings-page .settings-tabs { gap: 12px; }
+      .memory-toolbar label { width: 100%; }
+      .memory-toolbar select { flex: 1; width: 0; }
+      .settings-page .brain-sync-overview { grid-template-columns: 1fr; }
+      .settings-page .brain-sync-overview > button { justify-self: start; }
+    }
     .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
     @media (max-width: 900px) {
       .app { grid-template-columns: 1fr; }
@@ -613,7 +691,8 @@
       .skill-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
     @media (max-width: 760px) {
-      .operation-grid { grid-template-columns: 1fr; }
+      .operation-grid, .operation-grid[data-group="command"] { grid-template-columns: 1fr; }
+      .operation-head > .operation-result-action { flex-shrink: 0; min-height: 32px; }
       .operation-active, .operation-history-row { grid-template-columns: 1fr; gap: 4px; }
       .project-summary-row { grid-template-columns: minmax(0, 1fr) auto; gap: 10px 14px; }
       .project-identity { grid-column: 1; grid-row: 1; }
@@ -659,6 +738,23 @@
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
     }
+    .reporting-stack { display: grid; gap: 24px; margin-top: 22px; }
+    .reporting-section { min-width: 0; border-top: 1px solid var(--border); padding-top: 20px; }
+    .reporting-section h2 { margin: 0 0 8px; font-size: 18px; }
+    .reporting-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--border); }
+    .reporting-row > div { min-width: 0; flex: 1 1 230px; overflow-wrap: anywhere; }
+    .reporting-row p { margin: 4px 0; font-size: 13px; line-height: 1.6; }
+    .reporting-row select, .reporting-row button, .reporting-section > button { max-width: 100%; min-height: 36px; padding: 7px 12px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text); font: inherit; font-size: 13px; cursor: pointer; white-space: normal; }
+    .reporting-row button:disabled, .reporting-row select:disabled { cursor: default; opacity: .55; }
+    .reporting-row button:focus-visible, .reporting-row select:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+    .reporting-row button[data-primary="true"] { border-color: var(--accent); color: var(--accent); }
+    .reporting-outcome { font-size: 13px; font-weight: 650; }
+    .reporting-outcome[data-status="failed"] { color: var(--danger); }
+    .reporting-outcome[data-status="delivered"] { color: var(--success); }
+    .reporting-history { display: grid; gap: 0; }
+    .reporting-history details { padding: 12px 0; border-bottom: 1px solid var(--border); min-width: 0; }
+    .reporting-history summary { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 16px; cursor: pointer; font-size: 13px; line-height: 1.6; }
+    .reporting-history details p { margin: 8px 0; font-size: 13px; overflow-wrap: anywhere; }
   </style>
 </head>
 <body>
@@ -691,6 +787,9 @@
         { action: "command-e2e", group: "command", label: "推进单条需求", description: "按真实门禁推进一条需求。" }
       ];
       let operationPollTimer = null;
+      Object.assign(state, { operationMessages: {}, operationReadError: null, operationSubmitting: null, operationFocus: null });
+      let reportingPollTimer = null;
+      Object.assign(state, { reporting: null, reportingLoading: false, reportingError: null, reportingPending: false });
 
       function el(tag, className, text) {
         const node = document.createElement(tag);
@@ -728,7 +827,7 @@
           cache: "no-store",
           headers: {
             "Content-Type": "application/json",
-            "X-Harness-Action-Token": state.brainHealth?.action_token || ""
+            "X-Harness-Action-Token": state.brainHealth?.action_token || state.operations?.action_token || ""
           },
           body: JSON.stringify(body)
         });
@@ -775,34 +874,76 @@
         return ({ prepared: "等待确认", queued: "等待执行", running: "正在执行", succeeded: "已完成", blocked: "已安全停止", cancelled: "已取消", failed: "失败" })[status] || status || "未知";
       }
 
+      function operationOutcome(item) {
+        const raw = `${item.summary || ""}\n${item.result || ""}`;
+        if (item.status === "succeeded") return { title: "已完成", message: `${item.label || "操作"}已完成。`, next: "执行记录已保存，可查看详情。" };
+        if (item.status === "cancelled") return { title: "已取消", message: "你已取消此次操作。", next: "未执行确认后的操作。" };
+        if (item.status === "blocked" && item.can_execute === false) return { title: "预检未通过", message: "检查发现执行条件不满足，尚未执行操作。", next: "查看详情处理原因后，再重新发起。" };
+        if (["queued", "running", "prepared"].includes(item.status)) return { title: operationStatusLabel(item.status), message: item.status === "prepared" ? "尚未确认执行。" : "任务在后台执行，结果将保留在这里。", next: "" };
+        if (item.action === "harness-update" && /unstaged changes|uncommitted changes|commit or stash|local changes.*overwritten/i.test(raw)) {
+          return { title: "更新未完成", message: "安装目录有尚未保存到 Git 的本地改动，更新被中止。", next: "先确认这些改动需要保留还是发布；处理后重新发起更新。这里不会自动覆盖、提交或暂存它们。" };
+        }
+        return { title: item.status === "blocked" ? "已停止，待处理" : "未完成", message: "操作未能完成，请查看详情确认原因。", next: "可能已有部分步骤执行，不要直接重复操作。" };
+      }
+
+      function latestOperation(action) {
+        const items = [...(state.operations?.items || [])];
+        if (state.operations?.active) items.push(state.operations.active);
+        return items.filter(item => item.action === action && item.status !== "prepared").sort((a, b) =>
+          String(b.created_at || b.updated_at || "").localeCompare(String(a.created_at || a.updated_at || ""))
+        )[0];
+      }
+
+      function renderOperationFeedback(action) {
+        const focused = state.operationFocus;
+        const item = focused?.operation_id ? [state.operations?.active, ...(state.operations?.items || [])].find(value => value?.operation_id === focused.operation_id) : latestOperation(action);
+        const transient = state.operationMessages[action];
+        if (!item && !transient) return null;
+        const box = el("div", "operation-feedback");
+        box.id = "current-operation-status";
+        box.dataset.status = transient ? "unknown" : state.operationReadError ? "unknown" : item.status;
+        box.setAttribute("role", "status");
+        const outcome = transient || (state.operationReadError ? { title: "最新状态未确认", message: `上次记录：${operationStatusLabel(item.status)}。`, next: "请重新查询状态。" } : operationOutcome(item));
+        const head = el("div", "operation-feedback-head");
+        head.append(el("strong", "", focused?.label || item?.label || "当前操作"), el("span", "operation-status", outcome.title));
+        if (item && !transient) head.append(el("span", "muted", formattedTime(item.updated_at || item.created_at)));
+        const actions = el("div", "operation-feedback-actions");
+        if (item && !transient) {
+          const inspect = el("button", "operation-result-action", "查看详情");
+          inspect.type = "button";
+          inspect.addEventListener("click", () => showOperationResult(item));
+          actions.append(inspect);
+        }
+        head.append(actions);
+        box.append(head, el("p", "", outcome.message));
+        if (outcome.next && ["failed", "blocked"].includes(item?.status) && !transient) box.append(el("p", "muted", outcome.next));
+        return box;
+      }
+
       async function refreshOperations() {
-        const previous = state.operations?.active?.operation_id || null;
-        state.operations = await fetchJson("/api/operations.json");
-        const active = state.operations.active;
         if (operationPollTimer) clearTimeout(operationPollTimer);
         operationPollTimer = null;
-        if (active) {
+        try {
+          state.operations = await fetchJson("/api/operations.json");
+          state.operationReadError = null;
+        } catch (error) {
+          state.operationReadError = "暂时无法读取最新结果，可能正在重启或连接已中断。上次记录不代表当前状态；可重新查询，不会重新执行操作。";
+        }
+        if (state.operations?.active && !state.operationReadError) {
           operationPollTimer = setTimeout(async () => {
-            try {
-              await refreshOperations();
-              render();
-            } catch (error) {
-              state.notice = `操作状态刷新失败：${error.message}`;
-              render();
-            }
+            await refreshOperations();
+            render();
           }, 1000);
-        } else if (previous) {
-          const latest = state.operations.items?.[0];
-          if (latest) state.notice = latest.summary || `${latest.label}：${operationStatusLabel(latest.status)}`;
-          [state.portfolio, state.agents] = await Promise.all([
-            fetchJson("/api/portfolio.json"),
-            fetchJson("/api/agents.json")
-          ]);
         }
         return state.operations;
       }
 
       async function startHarnessOperation(item) {
+        if (state.operationSubmitting || state.operations?.active || state.operationReadError) return;
+        state.operationSubmitting = item.action;
+        state.operationFocus = {action: item.action, label: item.label};
+        state.operationMessages[item.action] = { title: "正在准备", message: "正在准备确认单，尚未执行更新。", preparing: true };
+        render();
         try {
           let parameters = {};
           const projectOptions = (state.portfolio?.projects || [])
@@ -825,7 +966,7 @@
             parameters = { project_path: values.project_path, full: values.mode === "full" };
           } else if (["command-plan", "command-goal", "command-e2e"].includes(item.action)) {
             if (!projectOptions.length) {
-              state.notice = "当前没有可执行命令的已连接项目；请先注入或修复项目连接。";
+              state.operationMessages[item.action] = { title: "暂时无法执行", message: "没有已连接项目，请先注入或修复项目连接。" };
               render();
               return;
             }
@@ -860,8 +1001,9 @@
             parameters = values;
           }
           const preview = await postOperation("/api/operations/preview", { action: item.action, parameters });
+          state.operationFocus = preview;
+          delete state.operationMessages[item.action];
           if (!preview.can_execute) {
-            state.notice = `无法执行：${preview.summary || "预检未通过；未发生写入。"}`;
             await refreshOperations();
             render();
             return;
@@ -880,19 +1022,28 @@
             await postOperation(`/api/operations/${encodeURIComponent(preview.operation_id)}/cancel`, {
               confirmation_token: preview.confirmation_token
             });
-            state.notice = `${preview.label}已取消，未执行项目或全局配置写入。`;
             await refreshOperations();
             render();
             return;
           }
-          await postOperation(`/api/operations/${encodeURIComponent(preview.operation_id)}/execute`, {
+          const accepted = await postOperation(`/api/operations/${encodeURIComponent(preview.operation_id)}/execute`, {
             confirmation_token: preview.confirmation_token
           });
-          state.notice = `${preview.label}已进入后台执行；离开页面不会中断任务。`;
+          state.operations.active = accepted;
+          state.operationFocus = accepted;
+          state.operations.items = [accepted, ...(state.operations.items || []).filter(value => value.operation_id !== accepted.operation_id)];
+          render();
           await refreshOperations();
           render();
         } catch (error) {
-          state.notice = `Harness 操作失败：${error.message}`;
+          state.operationMessages[item.action] = { title: "暂时无法确认结果", message: "请求未成功返回，请先重新查询操作记录。不要重复执行。", next: "若任务已受理，后台仍可能继续运行。" };
+          await refreshOperations();
+        } finally {
+          if (state.operationMessages[item.action]?.preparing) {
+            delete state.operationMessages[item.action];
+            state.operationFocus = null;
+          }
+          state.operationSubmitting = null;
           render();
         }
       }
@@ -1055,7 +1206,7 @@
         navTree.replaceChildren();
         const projects = state.portfolio?.projects || [];
         const validCount = projects.filter(item => item.validation === "valid").length;
-        portfolioSummary.textContent = `${validCount}/${projects.length} 个项目可用`;
+        portfolioSummary.textContent = state.portfolio ? `${validCount}/${projects.length} 个项目可用` : "项目列表读取中…";
 
         const global = el("div", "nav-views");
         GLOBAL_VIEWS.forEach(([value, label]) => {
@@ -1071,7 +1222,7 @@
         const validProjects = projects.filter(project => project.validation === "valid");
         const invalidProjects = projects.filter(project => project.validation !== "valid");
         const projectLabel = el("div", "nav-section-label");
-        projectLabel.append(el("span", "", "项目"), el("span", "nav-count", `${validProjects.length} 个可用`));
+        projectLabel.append(el("span", "", "项目"), el("span", "nav-count", state.portfolio ? `${validProjects.length} 个可用` : "读取中"));
         navTree.append(projectLabel);
 
         validProjects.forEach(project => {
@@ -1215,7 +1366,7 @@
         state.workspace = null;
         state.events = [];
         state.view = "settings";
-        state.focus = section === "skills" ? "skills" : section === "improvements" ? "improvements" : null;
+        state.focus = ["skills", "improvements", "reporting"].includes(section) ? section : null;
         writeUrlState();
         render();
       }
@@ -1223,7 +1374,7 @@
       function renderSettingsTabs(active) {
         const tabs = el("nav", "settings-tabs");
         tabs.setAttribute("aria-label", "设置分类");
-        [["memory", "记忆与同步"], ["skills", "能力与 Skill"], ["improvements", "Harness 改进"]].forEach(([value, label]) => {
+        [["reporting", "会话上报"], ["memory", "记忆与同步"], ["skills", "能力与 Skill"], ["improvements", "Harness 改进"]].forEach(([value, label]) => {
           const button = el("button", "settings-tab", label);
           button.type = "button";
           button.setAttribute("aria-current", String(active === value));
@@ -1237,13 +1388,15 @@
         const [health, candidates, memories, improvements] = await Promise.all([
           fetchJson("/api/brain/status.json"),
           fetchJson("/api/brain/candidates.json"),
-          fetchJson("/api/brain/project-memory.json"),
+          fetchJson("/api/brain/project-memory.json?limit=100&similar=0"),
           fetchJson("/api/harness/improvements.json")
         ]);
         state.brainHealth = health;
         state.brainCandidates = candidates.items || [];
         state.projectMemories = memories.items || [];
         state.harnessImprovements = improvements.items || [];
+        state.memoryDigest = null;
+        state.memoryDigestError = null;
         render();
       }
 
@@ -1277,20 +1430,22 @@
         const health = state.brainHealth || {};
         const repository = health.repository || {};
         const pendingSync = Number(health.remote_sync?.pending_local_records || 0);
-        const brainMode = repository.mode || "disabled";
+        const brainMode = repository.mode || "unknown";
         const repositoryEffective = brainMode === "disabled" || (brainMode === "local" ? Boolean(repository.git) : Boolean(repository.git && repository.remote_matches_config));
         const canSyncRemote = brainMode === "remote" && Boolean(repository.git && repository.remote_matches_config);
         const top = el("div", "topline");
         const titleWrap = el("div", "");
         titleWrap.append(el("div", "eyebrow", "设置 · 本机记忆服务"), el("h1", "", "记忆与同步"));
-        top.append(titleWrap, el("div", "freshness", health.generated_at || "尚未读取"));
+        top.append(titleWrap, el("div", "freshness", health.generated_at ? `更新于 ${formattedTime(health.generated_at)}` : "尚未读取"));
         content.append(top);
         const back = el("button", "service-action", "← 返回工作台");
         back.type = "button";
         back.addEventListener("click", () => { state.view = "workbench"; state.focus = null; selectProject(null); });
-        content.append(back);
         renderSettingsTabs("memory");
-        content.append(el("p", "section-help", "本机服务自动记录已确认的工作事实；Hook 只负责采集事件，Prompt 只辅助识别含义，关闭会话不是写入前提。远端发送前，先核对这一次具体会上传什么。"));
+        const explanation = el("details", "memory-evidence");
+        explanation.append(el("summary", "", "我的信息会保存在哪里？"));
+        explanation.append(el("p", "section-help", "本机服务自动记录已确认的工作事实；Hook 只负责采集事件，Prompt 只辅助识别含义，关闭会话不是写入前提。项目记忆默认只在本机整理，远端发送前可查看同步清单；创建改进候选不会修改规则。"));
+        content.append(explanation);
         if (state.notice) content.append(el("p", "warning-line", state.notice));
 
         const stack = el("div", "brain-stack");
@@ -1303,10 +1458,11 @@
         syncCopy.append(el("h2", "", "本次同步清单"));
         syncCopy.append(el("p", "section-help", "先由本机后端读取真实 Git 状态并生成清单；查看清单不会上传、提交或修改任何文件。"));
         const syncStatus = el("div", "brain-sync-status");
+        const healthLabel = value => ({ready:"可用", disabled:"已停用", pending:"待同步", synced:"已同步", not_configured:"未配置", unavailable:"不可用", error:"异常", failed:"失败"})[value] || value || "未知";
         syncStatus.append(
-          el("span", "", `本地写入 · ${health.local_write?.status || "未知"}`),
-          el("span", "", `项目记录待同步 · ${pendingSync}`),
-          el("span", "", `远端同步 · ${health.remote_sync?.status || "未知"}`)
+          el("span", "", `本地写入 · ${healthLabel(health.local_write?.status)}`),
+          el("span", "", `项目记录待同步 · ${state.brainHealth ? pendingSync : "读取中"}`),
+          el("span", "", `远端同步 · ${healthLabel(health.remote_sync?.status)}`)
         );
         syncCopy.append(syncStatus);
         const previewButton = el("button", "brain-sync-button", state.brainSyncPreview ? "重新读取清单" : "查看同步清单");
@@ -1479,25 +1635,30 @@
           item.append(actions);
           inboxList.append(item);
         });
-        if (!inboxList.children.length) inboxList.append(el("div", "empty", "当前无需审批。新的跨项目偏好或 Profile 版本变化出现后，会在这里显示内容、来源和操作。"));
+        if (!inboxList.children.length) {
+          inbox.classList.add("brain-inbox-empty");
+          inbox.querySelector(".section-help")?.remove();
+          inboxList.append(el("div", "empty", state.settingsBooting && !state.candidatesLoaded ? "正在读取审批状态…" : "当前无需审批。项目记录不需要逐条批准。"));
+        }
         inbox.append(inboxList);
         stack.append(inbox);
 
+        renderMemoryDigest(stack);
         const projectDetails = el("details", "brain-card brain-project-details");
         projectDetails.id = "brain-project-memory";
         projectDetails.tabIndex = -1;
-        projectDetails.open = state.focus === "project-memory";
-        projectDetails.append(el("summary", "brain-summary", `项目记忆 · ${health.local_write?.project_memory_count || 0} 条`));
+        projectDetails.append(el("summary", "brain-summary", `原始记录 · 最近 ${(state.projectMemories || []).length} 条`));
         const activityBody = el("div", "brain-details-body");
-        activityBody.append(el("p", "section-help", "这是 AI 自动沉淀的项目级记录，默认收起，更接近日志。由已完成、已接受或已验证的事件生成；原始对话和工具日志不会进入这里。"));
-        const activityList = el("div", "brain-list");
-        (state.projectMemories || []).slice(0, 30).forEach(memory => {
-          const item = el("article", "brain-item");
+        activityBody.append(el("p", "section-help", "用于核对和纠错的原始日志，不作为待处理清单。上方摘要读取全部历史，不限于这里最近的记录。"));
+        const activityList = el("div", "brain-list memory-archive");
+        (state.projectMemories || []).forEach(memory => {
+          const item = el("details", "brain-item");
+          item.append(el("summary", "memory-raw-summary", `${memory.project} · ${String(memory.summary || "").slice(0, 88)}…`));
           const repeated = (memory.occurrence_count || 1) > 1 ? ` · 合并 ${memory.occurrence_count} 次重复记录` : "";
           item.append(el("div", "brain-meta", `${memory.project} · ${memory.kind} · ${memory.status} · 同步 ${memory.sync_status}${repeated}`));
           item.append(el("div", "", memory.summary));
           const actions = el("div", "brain-actions");
-          if (memory.status !== "reverted") {
+          if (!["reverted", "corrected", "merged"].includes(memory.status)) {
             const reportProblem = el("button", "primary", "提交为 Harness 问题");
             reportProblem.type = "button";
             reportProblem.addEventListener("click", async () => {
@@ -1666,6 +1827,144 @@
         return button;
       }
 
+      function renderMemoryDigest(container) {
+        const section = el("section", "brain-card memory-digest");
+        section.id = "memory-digest";
+        const head = el("div", "memory-head");
+        head.append(el("h2", "", "项目记忆摘要"));
+        const refresh = el("button", "service-action", "更新摘要");
+        refresh.type = "button";
+        refresh.disabled = Boolean(state.memoryDigestLoading);
+        refresh.addEventListener("click", () => { state.memoryDigest = null; state.memoryDigestError = null; render(); });
+        head.append(refresh); section.append(head);
+        section.append(el("p", "section-help", "先看任务结论，再提炼可复用的问题。中间过程和完整原文在来源中。"));
+        container.append(section);
+        if (!state.memoryDigest) {
+          if (state.memoryDigestError) {
+            section.append(el("p", "error", `摘要读取失败：${state.memoryDigestError}。可以重试，原始记录仍保留在下方。`));
+            return;
+          }
+          section.append(el("p", "muted", "正在整理本机记录…"));
+          if (!state.memoryDigestLoading) {
+            state.memoryDigestLoading = true;
+            fetchJson("/api/brain/project-memory/summary.json").then(value => {
+              state.memoryDigest = value;
+            }).catch(error => {
+              state.memoryDigestError = error.message;
+            }).finally(() => { state.memoryDigestLoading = false; if (state.view === "settings") render(); });
+          }
+          return;
+        }
+        const digest = state.memoryDigest;
+        const projects = digest.projects || [];
+        section.append(el("div", "brain-meta", `${digest.active_records} 条记录 → ${projects.reduce((n, p) => n + p.conclusion_count, 0)} 项执行结论 · ${digest.archived_records} 条过程日志归档`));
+        if (!projects.length) {
+          section.append(el("div", "empty", "尚无可提取的任务结论。不会从空记录生成经验或改进建议。"));
+          return;
+        }
+        if (!projects.some(p => p.project === state.memoryProject)) state.memoryProject = projects[0].project;
+        const toolbar = el("div", "memory-toolbar");
+        const projectLabel = el("label", "", "项目");
+        const select = el("select", "");
+        projects.forEach(project => {
+          const name = state.portfolio?.projects?.find(p => p.project_id === project.project)?.name || project.project;
+          const option = el("option", "", `${name} · ${project.topics.length} 个主题`);
+          option.value = project.project; option.selected = state.memoryProject === project.project; select.append(option);
+        });
+        select.addEventListener("change", () => { state.memoryProject = select.value; state.memoryPage = 0; render(); });
+        projectLabel.append(select); toolbar.append(projectLabel);
+        const filterLabel = el("label", "", "查看");
+        const filter = el("select", "");
+        [["all", "全部主题"], ["conclusions", "已有执行结论"], ["followup", "已进入改进流程"]].forEach(([value, label]) => {
+          const option = el("option", "", label); option.value = value;
+          option.selected = (state.memoryFilter || "conclusions") === value; filter.append(option);
+        });
+        filter.addEventListener("change", () => { state.memoryFilter = filter.value; state.memoryPage = 0; render(); });
+        filterLabel.append(filter); toolbar.append(filterLabel); section.append(toolbar);
+        const project = projects.find(p => p.project === state.memoryProject);
+        const memoryFilter = state.memoryFilter || "conclusions";
+        const topics = project.topics.filter(t => memoryFilter === "conclusions" ? t.has_conclusion
+          : memoryFilter === "followup" ? t.improvements.length > 0 : true);
+        const pageSize = 5;
+        const page = Math.min(state.memoryPage || 0, Math.max(0, Math.ceil(topics.length / pageSize) - 1));
+        topics.slice(page * pageSize, (page + 1) * pageSize).forEach(topic => {
+          const row = el("article", "memory-topic");
+          const title = el("div", "memory-topic-head");
+          title.append(el("h3", "", topic.title || topic.requirement_id || "未命名主题"),
+            el("time", "", String(topic.updated_at || "").slice(0, 10)));
+          row.append(title, el("p", "memory-conclusion", topic.conclusion));
+          const actions = el("div", "memory-topic-actions");
+          if (topic.improvements.length) {
+            const open = el("button", "", "查看处理进度");
+            open.type = "button";
+            open.addEventListener("click", () => {
+              state.memoryDigest = null;
+              state.improvementFocus = topic.improvements[0].improvement_id;
+              openSettingsSection("improvements");
+            });
+            actions.append(open, el("span", "memory-linked", topic.improvements.map(i => i.label).join(" / ")));
+          } else {
+            const improve = el("button", "", "提炼为改进");
+            improve.type = "button";
+            improve.disabled = !(state.brainHealth?.action_token || state.operations?.action_token);
+            if (improve.disabled) improve.title = "正在读取本机操作授权，请稍候";
+            improve.addEventListener("click", async () => {
+              const sources = topic.sources.slice(0, 100);
+              const values = await brainDialog({
+                title: "提炼为 Harness 改进",
+                description: `请从这次任务中提炼可复用的问题和改进方向，而不是粘贴执行日志。附带 ${sources.length}/${topic.source_count} 条来源；只保存本机候选，不审批、不应用、不推送。`,
+                confirmLabel: "保存改进候选",
+                fields: [
+                  {name:"summary", label:"问题与改进方向", type:"textarea", value:"", placeholder:"例如：长按钮文案反复溢出；统一控件尺寸，并增加窄屏检查。", required:true},
+                  {name:"target", label:"建议落点", type:"select", options:[
+                    {value:"checker", label:"自动检查 · 防止再次发生"}, {value:"rule", label:"行为规则"},
+                    {value:"skill", label:"角色方法"}, {value:"profile", label:"风格规范"},
+                  ]},
+                ],
+              });
+              if (!values) return;
+              improve.disabled = true;
+              try {
+                const result = await postBrain("/api/harness/improvements", {
+                  memory_id: sources[0].memory_id, memory_ids: sources.map(s => s.memory_id),
+                  target: values.target, summary: values.summary,
+                });
+                state.improvementFocus = result.improvement_id;
+                state.notice = "改进候选已保存。下一步可查看来源，再单独提交审批；规则尚未改变。";
+                state.memoryDigest = null; state.focus = "improvements"; writeUrlState();
+                await refreshHarnessImprovements();
+              } catch (error) {
+                state.notice = `保存失败：${error.message}`; render();
+              } finally { improve.disabled = false; }
+            });
+            actions.append(improve, el("span", "", "未提炼 · 不等于未解决"));
+          }
+          row.append(actions);
+          topic.improvements.forEach(item => row.append(el("p", "brain-meta", `改进：${item.summary}`)));
+          const evidence = el("details", "memory-evidence");
+          evidence.append(el("summary", "", `查看 ${topic.source_count} 条来源${topic.requirement_id ? ` · ${topic.requirement_id}` : " · 未关联任务"}`));
+          const list = el("div", "memory-evidence-list");
+          topic.sources.forEach(source => {
+            const item = el("div", "memory-source");
+            item.append(el("div", "brain-meta", `${String(source.created_at || "").slice(0, 10)} · ${source.kind} · ${source.memory_id}`),
+              el("p", "", source.summary));
+            list.append(item);
+          });
+          evidence.append(list); row.append(evidence); section.append(row);
+        });
+        if (!topics.length) section.append(el("div", "empty", "当前没有符合筛选的结论。可切换“全部主题”查看需求，不能把尚未记录结论的任务当作已完成。"));
+        const pagination = el("div", "memory-pagination");
+        pagination.append(el("span", "muted", `共 ${topics.length} 个主题 · 第 ${page + 1}/${Math.max(1, Math.ceil(topics.length / pageSize))} 页`));
+        const controls = el("div", "");
+        [["上一页", -1], ["下一页", 1]].forEach(([label, offset]) => {
+          const button = el("button", "", label); button.type = "button";
+          button.disabled = offset < 0 ? page === 0 : (page + 1) * pageSize >= topics.length;
+          button.addEventListener("click", () => { state.memoryPage = page + offset; render(); document.getElementById("memory-digest")?.scrollIntoView({block:"start"}); });
+          controls.append(button);
+        });
+        pagination.append(controls); section.append(pagination);
+      }
+
       function renderImprovements() {
         content.replaceChildren();
         const items = state.harnessImprovements || [];
@@ -1697,11 +1996,24 @@
         const list = el("div", "brain-list");
         items.forEach(candidate => {
           const card = el("article", "brain-item");
+          card.id = candidate.improvement_id;
+          if (state.improvementFocus === candidate.improvement_id) card.style.borderLeft = "3px solid var(--accent)";
           card.dataset.status = candidate.status;
           card.append(el("div", "brain-meta", `${improvementTargetLabel(candidate.target)} · ${improvementStatusLabel(candidate.status)}`));
           card.append(el("div", "", candidate.summary));
           const projects = (candidate.source_projects || []).join("、") || "未记录项目";
-          card.append(el("p", "muted", `来源项目：${projects} · 跨项目 ${candidate.project_count || 0} 个 · 出现 ${candidate.occurrence_count || 1} 次`));
+          card.append(el("p", "muted", `来源项目：${projects} · ${candidate.sources?.length || 0} 条证据 · ${candidate.occurrence_count || 1} 次问题信号`));
+          const evidence = el("details", "memory-evidence");
+          evidence.append(el("summary", "", "查看来源与相关摘要"));
+          (candidate.sources || []).forEach(source => evidence.append(el("p", "brain-meta", `${source.project} · ${source.kind} · ${source.memory_id}`)));
+          const backToMemory = el("button", "service-action", "返回相关摘要");
+          backToMemory.type = "button";
+          backToMemory.addEventListener("click", () => {
+            state.memoryProject = candidate.sources?.[0]?.project;
+            state.memoryFilter = "followup"; state.memoryPage = 0;
+            state.memoryDigest = null; openSettingsSection("memory");
+          });
+          evidence.append(backToMemory); card.append(evidence);
           if (candidate.status === "observed" && !candidate.eligible_for_approval) {
             card.append(el("p", "section-help", "尚未达到自动送审条件：单项目一次信号默认只保留观察；你仍可明确送审。"));
           }
@@ -1825,7 +2137,7 @@
           list.append(card);
         });
         if (!list.children.length) {
-          list.append(el("div", "empty", "还没有 Harness 改进候选。请先在“记忆与同步”的项目记忆中选择一条真实问题，点击“提交为 Harness 问题”。"));
+          list.append(el("div", "empty", "还没有 Harness 改进候选。在“记忆与同步”的摘要中点击“提炼为改进”，保留问题和来源后再送审。"));
         }
         content.append(list);
       }
@@ -2015,8 +2327,164 @@
         content.append(list);
       }
 
+      const reportingReasons = {
+        reported: "服务已接收并写入（重复事件会去重）", local_fallback: "服务暂不可用，已写入本地项目记录；不是远端同步成功",
+        reporting_paused: "上报已暂停；本次事件没有发送或积压", invalid_configuration: "上报配置损坏，已安全停报，请修复配置",
+        invalid_payload: "宿主输入格式无效", payload_too_large: "宿主输入超过大小限制", unsupported_event: "不支持的事件类型",
+        project_unresolved: "没有找到对应项目；可在下方关联工作区", missing_session: "宿主未提供有效的会话信息",
+        missing_turn: "没有可关联的回合标识", submission_failed: "上报失败；未证明服务已接收", workspace_unavailable: "会话工作目录不可用"
+      };
+
+      async function refreshReporting() {
+        if (state.reportingLoading) return;
+        state.reportingLoading = true;
+        let changed = false;
+        try {
+          const value = await fetchJson("/api/reporting.json");
+          changed = !!state.reportingError || !state.reporting || JSON.stringify({ ...value, generated_at: null }) !== JSON.stringify({ ...state.reporting, generated_at: null });
+          state.reporting = value;
+          state.reportingError = null;
+        } catch (error) {
+          state.reportingError = `无法读取上报状态：${error.message}`;
+          changed = true;
+        } finally {
+          state.reportingLoading = false;
+          // Keep fields, text selections and accessibility nodes stable on an unchanged poll.
+          if (state.view === "settings" && state.focus === "reporting") {
+            if (changed) render();
+            else {
+              const freshness = content.querySelector(".freshness");
+              if (freshness) freshness.textContent = `读取于 ${formattedTime(state.reporting.generated_at)}`;
+            }
+          }
+          clearTimeout(reportingPollTimer);
+          reportingPollTimer = setTimeout(pollReporting, 5000);
+        }
+      }
+
+      function pollReporting() {
+        if (state.view !== "settings" || state.focus !== "reporting") return;
+        // Do not replace a field or expanded record while the user is using it.
+        if (document.hidden || state.reportingPending || content.contains(document.activeElement)
+            || content.querySelector("details[open]") || document.querySelector("dialog[open]")) {
+          reportingPollTimer = setTimeout(pollReporting, 5000);
+          return;
+        }
+        refreshReporting();
+      }
+
+      async function changeReporting(body) {
+        if (state.reportingPending || !state.reporting || state.reportingError) return;
+        state.reportingPending = true;
+        const revision = state.reporting.configuration.revision;
+        render();
+        try {
+          const response = await fetch("/api/reporting/configuration", {
+            method: "POST", cache: "no-store",
+            headers: { "Content-Type": "application/json", "X-Harness-Action-Token": state.reporting.action_token },
+            body: JSON.stringify({ ...body, revision })
+          });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+          state.reporting = result;
+          state.notice = body.action === "associate" ? "项目关联已保存，只影响后续事件；不会搬移历史记录。" : "上报设置已保存；历史记录、Brain 配置和 Git 均未改动。";
+        } catch (error) {
+          state.notice = `设置未保存：${error.message}。请刷新后重试。`;
+        } finally {
+          state.reportingPending = false;
+          render();
+        }
+      }
+
+      function renderReporting() {
+        clearTimeout(reportingPollTimer);
+        reportingPollTimer = setTimeout(pollReporting, 5000);
+        content.replaceChildren();
+        const value = state.reporting;
+        const top = el("div", "topline");
+        const heading = el("div", "");
+        heading.append(el("div", "eyebrow", "设置 · 只在本机记录"), el("h1", "", "会话上报"));
+        top.append(heading, el("div", "freshness", value ? `读取于 ${formattedTime(value.generated_at)}` : "尚未读取"));
+        content.append(top);
+        renderSettingsTabs("reporting");
+        content.append(el("p", "section-help", "控制 Harness 的会话生命周期与 Agent 主动工作回写；不采集聊天全文。项目文件扫描、Brain 远端同步和第三方 Hook 不受这个开关控制。暂停时仍保留最小本地触发诊断。"));
+        const refresh = el("button", "service-action", state.reportingLoading ? "正在刷新…" : "刷新记录");
+        refresh.type = "button"; refresh.disabled = state.reportingLoading || state.reportingPending;
+        refresh.addEventListener("click", refreshReporting); content.append(refresh);
+        if (state.notice) content.append(el("p", "warning-line", state.notice));
+        if (state.reportingError) content.append(el("p", "error", state.reportingError));
+        if (!value) {
+          content.append(el("p", "empty", state.reportingError ? "未能取得真实状态，没有默认显示为已开启。" : "正在读取本地设置与触发记录…"));
+          if (!state.reportingLoading && !state.reportingError) refreshReporting();
+          return;
+        }
+        const config = value.configuration;
+        const stack = el("div", "reporting-stack");
+        const controls = el("section", "reporting-section"); controls.id = "reporting-controls";
+        controls.append(el("h2", "", "上报范围"));
+        const row = el("div", "reporting-row");
+        const globalText = el("div", "");
+        globalText.append(el("strong", "", config.error ? "配置异常 · 已安全停报" : config.enabled ? "全局上报已开启" : "全局上报已暂停"));
+        globalText.append(el("p", "muted", "全局暂停优先于项目设置。只控制后续上报；不删除历史，也不会启动 Git 同步。"));
+        const toggle = el("button", "", config.enabled ? "暂停全局上报" : "开启全局上报");
+        toggle.type = "button"; toggle.dataset.primary = "true";
+        toggle.disabled = state.reportingPending || !!config.error || !!state.reportingError;
+        toggle.addEventListener("click", () => changeReporting({ action: "global", enabled: !config.enabled }));
+        row.append(globalText, toggle); controls.append(row);
+        const projects = value.projects.filter(project => project.validation === "valid");
+        projects.forEach(project => {
+          const item = el("div", "reporting-row"), text = el("div", "");
+          text.append(el("strong", "", project.name), el("p", "muted", `${project.enabled ? "当前允许上报" : "当前暂停上报"} · ${project.source === "project" ? "项目单独设置" : "全局设置"}`));
+          const select = el("select", ""); select.setAttribute("aria-label", `${project.name} 的上报设置`);
+          [["inherit", "跟随全局"], ["true", "项目开启"], ["false", "项目暂停"]].forEach(([key, title]) => { const option = el("option", "", title); option.value = key; select.append(option); });
+          select.value = project.override === null ? "inherit" : String(project.override);
+          select.disabled = state.reportingPending || !!config.error || !!state.reportingError;
+          select.addEventListener("change", () => changeReporting({ action: "project", project_id: project.project_id, enabled: select.value === "inherit" ? null : select.value === "true" }));
+          item.append(text, select); controls.append(item);
+        });
+        stack.append(controls);
+
+        const unmatched = new Map();
+        value.records.filter(item => item.reason === "project_unresolved" && item.workspace_ref).forEach(item => { if (!unmatched.has(item.workspace_ref)) unmatched.set(item.workspace_ref, item); });
+        if (unmatched.size || Object.keys(config.associations).length) {
+          const section = el("section", "reporting-section"); section.append(el("h2", "", "会话与项目关联"));
+          section.append(el("p", "section-help", "仅改变后续事件的归属。历史跳过记录保持原样；不会根据名字猜项目，也不会补读旧对话。"));
+          const refs = new Set([...unmatched.keys(), ...Object.keys(config.associations)]);
+          refs.forEach(ref => {
+            const observed = value.records.find(item => item.workspace_ref === ref);
+            const item = el("div", "reporting-row"), text = el("div", "");
+            const associated = projects.find(project => project.project_id === config.associations[ref]);
+            text.append(el("strong", "", observed?.workspace || `工作区 ${ref.slice(0, 8)}`), el("p", "muted", associated ? `后续上报归入 ${associated.name}` : "尚未关联到有效项目"));
+            const bind = el("button", "", associated ? "更改关联" : "选择关联项目"); bind.type = "button";
+            bind.disabled = state.reportingPending || !!config.error || !!state.reportingError || !projects.length;
+            bind.addEventListener("click", async () => {
+              const values = await brainDialog({ title: "关联会话工作区", description: "仅将这个工作区之后的上报关联到所选项目，不开启上报、不移动任何文件。", confirmLabel: "保存关联",
+                fields: [{ name: "project_id", label: "目标项目", type: "select", value: config.associations[ref] || "", options: [{ value: "", label: "不关联／移除指定关联" }, ...projects.map(project => ({ value: project.project_id, label: project.name }))] }] });
+              if (values) await changeReporting({ action: "associate", workspace_ref: ref, project_id: values.project_id || null });
+            });
+            item.append(text, bind); section.append(item);
+          }); stack.append(section);
+        }
+
+        const history = el("section", "reporting-section");
+        history.append(el("h2", "", "实际触发记录"), el("p", "section-help", `最多保留最近 ${value.record_limit} 次。最近触发：${value.last_trigger_at ? formattedTime(value.last_trigger_at) : "尚未观察到"}；最近服务接收：${value.last_delivery_at ? formattedTime(value.last_delivery_at) : "尚未观察到"}。这不是宿主 Hook 信任或当前会话加载成功的证明。`));
+        if (value.history_error) history.append(el("p", "error", "触发记录读取失败，不能判断运行情况。"));
+        else if (!value.records.length) history.append(el("p", "empty", "尚未观察到触发。需要已升级且被宿主信任的 Harness Hook；配置存在不代表已经运行。"));
+        const list = el("div", "reporting-history");
+        value.records.forEach(item => {
+          const details = el("details", ""), summary = el("summary", "");
+          const outcome = el("span", "reporting-outcome", ({ delivered: "服务已接收并写入", written_local: "已本地写入", skipped: "已跳过", failed: "执行失败" })[item.status] || "未知");
+          outcome.dataset.status = item.status;
+          const project = projects.find(project => project.project_id === item.project_id);
+          summary.append(el("span", "muted", formattedTime(item.triggered_at)), el("strong", "", `${item.platform} · ${item.event}`), el("span", "", project?.name || "未归属项目"), outcome);
+          details.append(summary, el("p", "", reportingReasons[item.reason] || "未知结果"), el("p", "muted", `${item.workspace || "未提供有效工作目录"} · 耗时 ${item.duration_ms} ms`));
+          list.append(details);
+        }); history.append(list); stack.append(history); content.append(stack);
+      }
+
       function renderSettings() {
-        if (state.focus === "skills") renderSkills();
+        if (state.focus === "reporting") renderReporting();
+        else if (state.focus === "skills") renderSkills();
         else if (state.focus === "improvements") renderImprovements();
         else renderBrain();
       }
@@ -2080,16 +2548,25 @@
         operationTitle.append(el("p", "section-help", "先看影响再确认；执行由本机固定脚本完成，不交给 AI 自由发挥。"));
         operationHead.append(operationTitle);
         operationSection.append(operationHead);
+        const statusRefresh = el("button", "operation-result-action", "重新查询状态");
+        statusRefresh.type = "button";
+        statusRefresh.addEventListener("click", async () => {
+          statusRefresh.disabled = true;
+          await refreshOperations();
+          if (!state.operationReadError) state.operationMessages = {};
+          render();
+        });
+        operationHead.append(statusRefresh);
+        if (state.operationReadError) {
+          const warning = el("p", "operation-feedback", state.operationReadError);
+          warning.setAttribute("role", "status");
+          operationSection.append(warning);
+        }
         const activeOperation = state.operations?.active;
-        if (activeOperation) {
-          const active = el("div", "operation-active");
-          active.dataset.status = activeOperation.status || "queued";
-          active.append(
-            el("span", "operation-status", operationStatusLabel(activeOperation.status)),
-            el("span", "", `${activeOperation.label} · ${activeOperation.target}`),
-            el("span", "muted", formattedTime(activeOperation.updated_at))
-          );
-          operationSection.append(active);
+        const currentOperation = state.operationFocus || activeOperation || (state.operations?.items || []).find(item => item.status !== "prepared");
+        if (currentOperation) {
+          const feedback = renderOperationFeedback(currentOperation.action);
+          if (feedback) operationSection.append(feedback);
         }
         const catalog = state.operations?.catalog?.length ? state.operations.catalog : OPERATION_FALLBACKS;
         [["system", "本机与项目"], ["command", "通用命令"]].forEach(([group, label]) => {
@@ -2101,7 +2578,7 @@
           groupItems.forEach(item => {
             const button = el("button", "operation-action");
             button.type = "button";
-            button.disabled = Boolean(activeOperation);
+            button.disabled = Boolean(activeOperation || state.operationSubmitting || state.operationReadError || state.operationMessages[item.action]);
             button.append(el("strong", "", item.label), el("span", "", item.description));
             button.addEventListener("click", () => startHarnessOperation(item));
             operationGrid.append(button);
@@ -2119,7 +2596,7 @@
             const row = el("div", "operation-history-row");
             row.append(
               el("span", "", item.label),
-              el("span", "muted", item.summary || item.target),
+              el("span", "muted", operationOutcome(item).message),
               el("span", item.status === "failed" ? "error" : item.status === "succeeded" ? "success" : "muted", operationStatusLabel(item.status))
             );
             const inspect = el("button", "operation-result-action", "查看结果");
@@ -3285,6 +3762,7 @@
       }
 
       function render() {
+        content.classList.toggle("settings-page", state.view === "settings");
         renderNavTree();
         const isGlobalView = ["workbench", "settings"].includes(state.view);
         if (!state.project || isGlobalView) {
@@ -3412,16 +3890,32 @@
       }
 
       async function load() {
+        const requested = readUrlState();
+        const settingsEntry = state.view === "settings";
+        state.settingsBooting = settingsEntry;
+        if (settingsEntry) render();
+        const part = (url, key, items = false) => fetchJson(url).then(value => {
+          state[key] = items ? value.items || [] : value;
+          if (key === "brainCandidates") state.candidatesLoaded = true;
+          if (settingsEntry && state.view === "settings") {
+            if (key === "portfolio") renderNavTree();
+            const focused = document.activeElement;
+            const interacting = focused && focused !== document.body && focused !== document.documentElement;
+            if (!interacting && !document.querySelector(".brain-dialog-backdrop")
+                && !content.querySelector("details[open]")) render();
+          }
+          return value;
+        });
         try {
           const [portfolio, agents, skills, operations, brainHealth, brainCandidates, projectMemories, harnessImprovements] = await Promise.all([
-            fetchJson("/api/portfolio.json"),
-            fetchJson("/api/agents.json"),
-            fetchJson("/api/skills.json"),
-            fetchJson("/api/operations.json"),
-            fetchJson("/api/brain/status.json"),
-            fetchJson("/api/brain/candidates.json"),
-            fetchJson("/api/brain/project-memory.json?limit=100"),
-            fetchJson("/api/harness/improvements.json")
+            part("/api/portfolio.json", "portfolio"),
+            part("/api/agents.json", "agents"),
+            part("/api/skills.json", "skills"),
+            part("/api/operations.json", "operations"),
+            part("/api/brain/status.json", "brainHealth"),
+            part("/api/brain/candidates.json", "brainCandidates", true),
+            part("/api/brain/project-memory.json?limit=100&similar=0", "projectMemories", true),
+            part("/api/harness/improvements.json", "harnessImprovements", true)
           ]);
           state.portfolio = portfolio;
           state.agents = agents;
@@ -3431,7 +3925,8 @@
           state.brainCandidates = brainCandidates.items || [];
           state.projectMemories = projectMemories.items || [];
           state.harnessImprovements = harnessImprovements.items || [];
-          const requested = readUrlState();
+          state.settingsBooting = false;
+          if (settingsEntry) return;
           let projectId = requested.projectId;
           if (!projectId && requested.runId) {
             projectId = state.portfolio.projects.find(project => project.runs?.some(run => run.run_id === requested.runId))?.project_id || null;
@@ -3449,6 +3944,12 @@
           await selectProject(projectId, requested.runId, true);
           if (state.operations?.active) refreshOperations().catch(() => {});
         } catch (error) {
+          state.settingsBooting = false;
+          if (settingsEntry) {
+            state.notice = `部分设置数据未载入：${error.message}。已读取的摘要和来源仍可查看。`;
+            if (state.view === "settings") render();
+            return;
+          }
           const box = el("div", "empty error", "无法读取运行数据。");
           box.append(el("div", "event-summary", error.message));
           box.append(el("p", "muted", "请确认 Mick Harness Observer 正在 127.0.0.1:6425 运行。可执行 harness observe service status；临时模式可运行 harness observe watch --all。"));

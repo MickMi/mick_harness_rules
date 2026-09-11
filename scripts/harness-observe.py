@@ -44,6 +44,7 @@ INGEST_PATH = "/api/v1/events"
 BRAIN_STATUS_PATH = "/api/brain/status.json"
 BRAIN_CANDIDATES_PATH = "/api/brain/candidates.json"
 BRAIN_PROJECT_MEMORY_PATH = "/api/brain/project-memory.json"
+BRAIN_DIGEST_PATH = "/api/brain/project-memory/summary.json"
 BRAIN_SYNC_PATH = "/api/brain/sync"
 HARNESS_IMPROVEMENTS_PATH = "/api/harness/improvements.json"
 OPERATIONS_PATH = "/api/operations.json"
@@ -115,6 +116,25 @@ NESTED_REPOSITORY_IGNORES = {
     ".git", ".harness", ".harness-runtime", ".next", "build", "dist",
     "node_modules", "vendor", "venv", ".venv", "__pycache__",
 }
+
+
+def load_reporting() -> Any:
+    path = Path(__file__).resolve().with_name("harness-reporting.py")
+    spec = importlib.util.spec_from_file_location("harness_reporting_runtime", path)
+    if spec is None or spec.loader is None:
+        raise ObserveError("Unable to load session reporting")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def reporting_pause(project: Path, envelope: dict[str, Any]) -> dict[str, Any] | None:
+    if envelope.get("source", {}).get("kind") != "agent":
+        return None
+    selected = load_reporting().policy(project_id(project))
+    if selected["enabled"]:
+        return None
+    return {"appended": 0, "skipped": True, "reason": selected["reason"]}
 
 
 def load_brain_boundary() -> Any:
@@ -446,6 +466,9 @@ def resolve_agent_project(cwd: Path, registry_path: Path | None = None) -> Path 
     """Map a vendor session directory to one registered Harness project without guessing."""
     cwd = cwd.resolve(strict=False)
     descriptors = [item for item in load_registered_projects(registry_path) if item["validation"] == "valid"]
+    associated = load_reporting().associated_project(cwd)
+    if associated:
+        return next((Path(item["path"]).resolve(strict=False) for item in descriptors if item["project_id"] == associated), None)
     path_matches: list[tuple[int, Path]] = []
     for descriptor in descriptors:
         registered = Path(descriptor["path"]).resolve(strict=False)
@@ -1137,6 +1160,9 @@ def build_harness_command_envelope(
 
 def ingest_envelope(project: Path, envelope: dict[str, Any]) -> dict[str, Any]:
     validate_ingest_envelope(envelope, project_id(project))
+    paused = reporting_pause(project, envelope)
+    if paused:
+        return paused
     init_runtime(project)
     run_record, target_run_dir = current_run(project)
     parent_id = envelope.get("parent_id")
@@ -1214,6 +1240,9 @@ def submit_envelope(
     timeout: float = 0.3,
 ) -> dict[str, Any]:
     validate_ingest_envelope(envelope, project_id(project))
+    paused = reporting_pause(project, envelope)
+    if paused:
+        return paused
     queued_path = queue_envelope(project, envelope)
     selected_port = port or int(os.environ.get("MICK_HARNESS_OBSERVER_PORT", DEFAULT_PORT))
     token = ensure_ingest_token(state_root)
@@ -1226,18 +1255,21 @@ def submit_envelope(
     try:
         with urlopen(request, timeout=timeout) as response:
             result = json.loads(response.read().decode("utf-8"))
-        acknowledge_envelope(queued_path)
+        if not result.get("skipped"):
+            acknowledge_envelope(queued_path)
         return {**result, "transport": "service"}
     except HTTPError as error:
         if error.code in {404, 405} and has_harness_entry(project):
             result = ingest_envelope(project, envelope)
-            acknowledge_envelope(queued_path)
+            if not result.get("skipped"):
+                acknowledge_envelope(queued_path)
             return {**result, "transport": "local-fallback"}
         detail = error.read().decode("utf-8", errors="replace")[:500]
         raise ObserveError(f"Observer rejected event ({error.code}): {detail}", 2) from error
     except (URLError, TimeoutError, OSError, json.JSONDecodeError):
         result = ingest_envelope(project, envelope)
-        acknowledge_envelope(queued_path)
+        if not result.get("skipped"):
+            acknowledge_envelope(queued_path)
         return {**result, "transport": "local-fallback"}
 
 
@@ -1268,7 +1300,9 @@ def replay_outbox(project: Path) -> dict[str, Any]:
         try:
             envelope = load_json(path)
             validate_ingest_envelope(envelope, project_id(project))
-            ingest_envelope(project, envelope)
+            result = ingest_envelope(project, envelope)
+            if result.get("skipped"):
+                continue
             acknowledge_envelope(path)
             replayed += 1
         except (ObserveError, OSError, TypeError, ValueError):
@@ -3985,6 +4019,7 @@ def operation_snapshot(*, state_root: Path | None = None) -> dict[str, Any]:
                 continue
             if isinstance(value, dict):
                 items.append(public_operation(value))
+    items.sort(key=lambda item: (str(item.get("created_at") or item.get("updated_at") or ""), str(item.get("operation_id") or "")), reverse=True)
     active = next((item for item in items if item.get("status") in {"queued", "running"}), None)
     return {
         "schema_version": "1",
@@ -4844,6 +4879,14 @@ def serve_runtime(
             parsed = urlparse(self.path)
             path = parsed.path
             try:
+                if path == "/api/reporting.json":
+                    if not self._reporting_origin_allowed():
+                        self._send_bytes(403, "application/json", json_bytes({"error": "local-origin-required"}), head_only=head_only)
+                        return
+                    value = load_reporting().snapshot(descriptors())
+                    value["action_token"] = action_token
+                    self._send_bytes(200, "application/json", json_bytes(value), head_only=head_only)
+                    return
                 if path in {"/", "/index.html"}:
                     self._send_bytes(200, "text/html; charset=utf-8", dashboard_path.read_bytes(), head_only=head_only)
                     return
@@ -4914,6 +4957,13 @@ def serve_runtime(
                     value = {"items": load_brain_boundary().list_candidates()}
                     self._send_bytes(200, "application/json", json_bytes(value), head_only=head_only)
                     return
+                if path == BRAIN_DIGEST_PATH:
+                    if not self._reporting_origin_allowed():
+                        self._send_bytes(403, "application/json", json_bytes({"error": "local-origin-required"}), head_only=head_only)
+                        return
+                    value = load_brain_boundary().project_memory_digest()
+                    self._send_bytes(200, "application/json", json_bytes(value), head_only=head_only)
+                    return
                 if path == BRAIN_PROJECT_MEMORY_PATH:
                     query = parse_qs(parsed.query)
                     selected = (query.get("project") or [None])[0]
@@ -4923,8 +4973,11 @@ def serve_runtime(
                         raise ObserveError("Project memory limit must be an integer", 400) from error
                     if limit < 1 or limit > 500:
                         raise ObserveError("Project memory limit must be between 1 and 500", 400)
+                    similar = (query.get("similar") or ["1"])[0]
+                    if similar not in {"0", "1"}:
+                        raise ObserveError("Project memory similar must be 0 or 1", 400)
                     value = {
-                        "items": load_brain_boundary().list_project_memories(project=selected, limit=limit),
+                        "items": load_brain_boundary().list_project_memories(project=selected, limit=limit, find_similar=similar == "1"),
                         "limit": limit,
                     }
                     self._send_bytes(200, "application/json", json_bytes(value), head_only=head_only)
@@ -5036,8 +5089,48 @@ def serve_runtime(
         def do_HEAD(self) -> None:  # noqa: N802
             self._route(True)
 
+        def _reporting_origin_allowed(self) -> bool:
+            hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
+            origin = self.headers.get("Origin")
+            return self.headers.get("Host") in hosts and (not origin or origin in {f"http://{host}" for host in hosts})
+
         def do_POST(self) -> None:  # noqa: N802
             parsed = urlparse(self.path)
+            if parsed.path == "/api/reporting/configuration":
+                if not self._reporting_origin_allowed():
+                    self._send_bytes(403, "application/json", json_bytes({"error": "local-origin-required"}))
+                    return
+                supplied = self.headers.get("X-Harness-Action-Token", "")
+                if not supplied or not hmac.compare_digest(supplied, action_token):
+                    self._send_bytes(401, "application/json", json_bytes({"error": "unauthorized-action"}))
+                    return
+                if self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
+                    self._send_bytes(415, "application/json", json_bytes({"error": "content-type-must-be-application-json"}))
+                    return
+                reporting = load_reporting()
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                    if length < 1 or length > 8192:
+                        self._send_bytes(413, "application/json", json_bytes({"error": "invalid-body-size"}))
+                        return
+                    body = json.loads(self.rfile.read(length).decode("utf-8"))
+                    if not isinstance(body, dict):
+                        raise ValueError("Object required")
+                    known = {item["project_id"] for item in descriptors() if item["validation"] == "valid"}
+                    reporting.change_configuration(body, known)
+                    result = reporting.snapshot(descriptors())
+                    result["action_token"] = action_token
+                except reporting.ReportingError as error:
+                    self._send_bytes(409, "application/json", json_bytes({"error": str(error)}))
+                    return
+                except (ValueError, UnicodeDecodeError):
+                    self._send_bytes(400, "application/json", json_bytes({"error": "invalid-json-body"}))
+                    return
+                except OSError:
+                    self._send_bytes(500, "application/json", json_bytes({"error": "reporting-settings-not-saved"}))
+                    return
+                self._send_bytes(200, "application/json", json_bytes(result))
+                return
             project_unregister = re.fullmatch(
                 r"/api/projects/([A-Za-z0-9._-]+)/unregister", parsed.path
             )
@@ -5155,10 +5248,14 @@ def serve_runtime(
                         raise ValueError("body-must-be-object")
                     brain = load_brain_boundary()
                     if harness_improvement_create:
+                        if not self._reporting_origin_allowed():
+                            self._send_bytes(403, "application/json", json_bytes({"error": "local-origin-required"}))
+                            return
                         result = brain.create_harness_improvement(
                             str(body.get("memory_id") or ""),
                             target=str(body.get("target") or ""),
                             summary=body.get("summary"),
+                            memory_ids=body.get("memory_ids"),
                         )
                     elif harness_improvement_action:
                         identifier, action = harness_improvement_action.groups()

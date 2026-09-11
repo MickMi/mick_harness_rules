@@ -69,6 +69,37 @@ class CommandContractTests(unittest.TestCase):
             "requires explicit user confirmation",
         )
 
+    def test_standard_preview_checkpoint_preserves_safety_and_honest_state(self):
+        modes = self.registry["execution_modes"]["modes"]
+        checkpoint = modes["standard"]["feature_ui_checkpoint"]
+        self.assertEqual(checkpoint["stops_at"], "usable_preview_awaiting_user")
+        self.assertEqual(checkpoint["before_preview"],
+                         ["startup", "core_user_path", "relevant_safety_checks"])
+        self.assertIn("explicit user acceptance", checkpoint["resume_full_testing_on"])
+        for field in ("user_acceptance_is_qa_pass", "mark_requirement_complete_at_preview",
+                      "runtime_enforced"):
+            self.assertFalse(checkpoint[field])
+        self.assertEqual(checkpoint["exceptions"],
+                         ["clear_low_risk_fixes", "documentation_only", "explicit_e2e_authorization"])
+        self.assertEqual(modes["e2e"]["stops_at"], "release_candidate")
+        self.assertFalse(modes["quick"]["starts_role_workflow"])
+
+    def test_preview_rules_do_not_reintroduce_automatic_full_pipeline(self):
+        core = (ROOT / "rules/core.md").read_text(encoding="utf-8")
+        extended = (ROOT / "rules/extended.md").read_text(encoding="utf-8")
+        executor = (ROOT / "rules/roles/executor.md").read_text(encoding="utf-8")
+        orchestration = (ROOT / "rules/roles/orchestration.md").read_text(encoding="utf-8")
+        self.assertIn("可体验预览，待用户确认", core)
+        self.assertNotIn("Executor 完成一步必须调用", core)
+        self.assertIn("交付后结束本轮", extended)
+        self.assertIn("预览不发 `gate_result=delivered` 或 `passed`", extended)
+        self.assertIn("--needs-user-decision", extended)
+        self.assertNotIn("plan 全部完成：进入 Reviewer/收尾模式", extended)
+        self.assertIn("Solo 仅决定由谁执行", extended)
+        self.assertIn("体验预览仅回写阶段摘要", executor)
+        self.assertIn("确认前不交 QA", orchestration)
+        self.assertIn("不是服务端硬拦截", self.docs)
+
     def test_exit_codes_are_stable_and_documented(self):
         self.assertEqual(set(self.registry["exit_codes"]), {"0", "2", "64", "69", "74"})
         for code in self.registry["exit_codes"]:
