@@ -3659,6 +3659,80 @@ def portfolio_project_record(descriptor: dict[str, Any], *, sync: bool = True) -
     return record
 
 
+def harness_installation_snapshot(root: Path) -> dict[str, Any]:
+    """Inspect installed files, not a running Agent's context or remote releases."""
+    root = root.resolve()
+    result: dict[str, Any] = {"path": str(root), "version": None, "revision": None,
+                              "dirty": None, "rules_digest": None}
+    try:
+        result["version"] = (root / "VERSION").read_text(encoding="utf-8").strip()[:80]
+        digest = hashlib.sha256()
+        files = sorted((root / "rules").rglob("*.md")) + [root / "dist" / "AGENTS.md"]
+        if not (root / "rules" / "core.md").is_file():
+            return result
+        for path in files:
+            if path.stat().st_size > 2 * 1024 * 1024:
+                return result
+            digest.update(str(path.relative_to(root)).encode())
+            digest.update(b"\0" + path.read_bytes() + b"\0")
+        result["rules_digest"] = digest.hexdigest()
+        # Do not accidentally use the parent business repository's HEAD.
+        top = run_git(root, ["rev-parse", "--show-toplevel"])
+        if top.returncode == 0 and Path(top.stdout.strip()).resolve() == root:
+            revision = run_git(root, ["rev-parse", "HEAD"])
+            if revision.returncode == 0:
+                result["revision"] = revision.stdout.strip()
+            dirty = run_git(root, ["status", "--porcelain", "--", "VERSION", "rules", "dist",
+                                   "scripts", "web", "config", "generate.sh", "setup.sh", "harness"])
+            if dirty.returncode == 0:
+                result["dirty"] = bool(dirty.stdout.strip())
+    except (OSError, UnicodeError, RuntimeError, subprocess.TimeoutExpired):
+        pass
+    return result
+
+
+def project_harness_snapshot(project: Path, baseline: dict[str, Any], cache: dict[str, Any]) -> dict[str, Any]:
+    result: dict[str, Any] = {"status": "unknown", "version": None, "revision": None,
+                              "loader_matches": False, "session_load": "unverified"}
+    try:
+        root = (project / ".harness").resolve(strict=True)
+        key = str(root)
+        if key not in cache:
+            cache[key] = harness_installation_snapshot(root)
+        result.update(cache[key])
+        loader = (project / "AGENTS.md").read_text(encoding="utf-8")
+        managed = re.search(r"<!-- HARNESS:BEGIN[^\n]*-->\s*\n(.*?)<!-- HARNESS:END[^\n]*-->", loader, re.S)
+        if managed:
+            loader = managed.group(1)
+        expected = (root / "dist" / "AGENTS.md").read_text(encoding="utf-8")
+        result["loader_matches"] = bool(expected.strip()) and loader.strip() == expected.strip()
+        if not result["loader_matches"]:
+            result["status"] = "loader_mismatch"
+        elif result["dirty"]:
+            result["status"] = "modified"
+        elif not all(result.get(field) and baseline.get(field) for field in ("version", "revision", "rules_digest")) or result["dirty"] is None or baseline["dirty"] is None:
+            result["status"] = "unknown"
+        elif any(result[field] != baseline[field] for field in ("version", "revision", "rules_digest")):
+            result["status"] = "different"
+        elif baseline["dirty"]:
+            result["status"] = "baseline_modified"
+        else:
+            result["status"] = "synced"
+    except (OSError, UnicodeError, RuntimeError):
+        result["status"] = "unknown"
+    return result
+
+
+def harness_versions_snapshot(descriptors: list[dict[str, Any]], *, baseline_root: Path | None = None) -> dict[str, Any]:
+    root = baseline_root or Path(os.environ.get("MICK_HARNESS_ROOT") or Path(__file__).resolve().parents[1])
+    baseline = harness_installation_snapshot(root)
+    cache = {str(root.resolve()): baseline}
+    return {"checked_at": now_iso(), "baseline": baseline, "projects": {
+        item["project_id"]: project_harness_snapshot(Path(item["path"]), baseline, cache)
+        for item in descriptors if item.get("validation") == "valid"
+    }}
+
+
 def portfolio_snapshot(registry_path: Path | None = None, *, sync: bool = True) -> dict[str, Any]:
     projects = [portfolio_project_record(item, sync=sync) for item in load_registered_projects(registry_path)]
     return {
@@ -4909,6 +4983,9 @@ def serve_runtime(
                         }
                     )
                     self._send_bytes(200, "application/json", json_bytes(value), head_only=head_only)
+                    return
+                if path == "/api/harness/versions.json":
+                    self._send_bytes(200, "application/json", json_bytes(harness_versions_snapshot(descriptors())), head_only=head_only)
                     return
                 if path == "/api/agents.json":
                     self._send_bytes(

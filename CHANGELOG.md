@@ -7,6 +7,39 @@ All notable changes to Mick Agent Harness are documented in this file.
 This project follows Semantic Versioning 2.0. Git tags in the form `vX.Y.Z`
 are the release source of truth.
 
+## [0.23.0] - 2026-09-14
+
+### Project-first Workbench and Traceable Harness Status
+
+- The workbench now leads with actionable project progress. Maintenance
+  operations move behind **Manage**, successful operations collapse to one
+  status line, and only blockers, approvals, sync decisions, and explicit user
+  decisions count as attention items.
+- Operation status updates automatically without a page refresh: active work is
+  queried quickly, idle pages continue to discover work started elsewhere, and
+  disconnects retry with bounded backoff without repeating write operations.
+- Every connected project shows its actual Harness version and consistency with
+  the local installation baseline. Details distinguish version, revision, rule
+  content, loader consistency, and the intentionally unverified live-session
+  load state.
+- Project pages now put the long-term goal before the current version. Current
+  requirements remain compact until selected; task roles, gates, test evidence,
+  and delivery history expand on demand. File paths, Git activity, and execution
+  diagnostics are collapsed by default.
+
+Compatibility: existing projects, loaders, Agent hooks, Brain configuration,
+event ledgers, and the single `127.0.0.1:6425` service remain compatible. The
+new project-version endpoint is read-only and does not claim that a running AI
+session has reloaded its rules.
+
+Migration: run `harness update`. Registered projects and supported Agent
+loaders are refreshed by the existing update path; no project data migration is
+required.
+
+Verification: 243 Python unittests, the focused workbench interaction contract,
+generated-rule consistency, Shell syntax, the public-release audit, context
+budget checks, and a non-interactive clean-project setup smoke test all passed.
+
 ## [0.22.1] - 2026-09-03
 
 ### Update Runtime Reload Hotfix

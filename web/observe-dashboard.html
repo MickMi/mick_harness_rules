@@ -345,6 +345,11 @@
     .project-row-arrow { color: var(--muted); font-size: 18px; transition: transform .15s ease, color .15s ease; }
     .workbench-secondary { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr); gap: 22px; margin-top: 22px; }
     .workbench-projects h2 { margin: 0; font-size: 18px; }
+    .project-open, .harness-version-badge { border: 0; padding: 0; background: transparent; font: inherit; text-align: left; cursor: pointer; color: inherit; }
+    .harness-version-badge { display: block; margin-top: 5px; font-size: 12px; line-height: 1.6; color: var(--muted); overflow-wrap: anywhere; }
+    .harness-version-badge[data-status="synced"] { color: var(--success); }
+    .harness-version-badge:focus-visible, .project-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+    .operation-watch-label { font-size: 12px; color: var(--muted); }
     .workbench-secondary > section { border-top: 1px solid var(--border); padding-top: 15px; }
     .workbench-secondary h2 { margin: 0; font-size: 16px; }
     .settings-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 24px; border-bottom: 1px solid var(--border); }
@@ -755,6 +760,100 @@
     .reporting-history details { padding: 12px 0; border-bottom: 1px solid var(--border); min-width: 0; }
     .reporting-history summary { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 16px; cursor: pointer; font-size: 13px; line-height: 1.6; }
     .reporting-history details p { margin: 8px 0; font-size: 13px; overflow-wrap: anywhere; }
+    /* Project-first workbench: spacing separates sections; borders identify controls. */
+    .workbench-lite [hidden] { display: none !important; }
+    .workbench-lite .topline { align-items: center; margin-bottom: 22px; }
+    .workbench-lite .topline h1 { font-size: 28px; margin: 0; }
+    .workbench-lite .section-help { margin: 6px 0 0; font-size: 13px; }
+    .workbench-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+    .workbench-manage { min-height: 36px; padding: 7px 16px; border: 1px solid var(--border); border-radius: 8px; color: var(--text); background: var(--surface); font: inherit; font-size: 13px; cursor: pointer; }
+    .workbench-manage[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
+    .workbench-lite .workbench-priority { margin: 0 0 18px; padding: 12px 16px; border: 0; border-radius: 10px; background: var(--warning-soft); }
+    .workbench-lite .priority-copy { color: var(--text); font-size: 12px; font-weight: 650; }
+    .workbench-lite .inbox-items { margin-top: 6px; gap: 6px 16px; }
+    .workbench-lite .inbox-item { padding: 4px 0; border: 0; background: transparent; color: var(--warning); text-decoration: underline; text-underline-offset: 3px; }
+    .workbench-lite #operation-status-retry { font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+    .workbench-lite .operation-feedback { margin: 0 0 18px; border: 0; border-radius: 8px; padding: 12px 16px; background: var(--surface); }
+    .workbench-lite .operation-feedback[data-compact="true"] { padding: 8px 0; background: transparent; font-size: 12px; }
+    .workbench-lite .operation-feedback[data-status="succeeded"] .operation-status { color: var(--success); }
+    .workbench-lite .operation-feedback[data-status="failed"], .workbench-lite .operation-feedback[data-status="blocked"] { background: var(--warning-soft); }
+    .workbench-lite .operation-feedback[data-status="failed"] .operation-status, .workbench-lite .operation-feedback[data-status="blocked"] .operation-status { color: var(--warning); }
+    .workbench-lite .operation-result-action { font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
+    .workbench-lite .harness-operations { margin: 0 0 24px; padding: 20px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+    .workbench-lite .operation-action { border-radius: 8px; padding: 12px; }
+    .workbench-lite .operation-action strong { font-size: 13px; }
+    .workbench-lite .operation-action span { font-size: 12px; }
+    .workbench-lite .workbench-projects { margin-top: 24px; }
+    .workbench-lite .workbench-projects h2 { font-size: 17px; }
+    .project-list-head { display: grid; grid-template-columns: minmax(150px, .65fr) minmax(220px, 1.5fr) minmax(90px, .45fr) minmax(120px, .55fr) 32px; gap: 16px; padding: 16px 16px 6px; color: var(--muted); font-size: 12px; }
+    .workbench-lite .project-summary-list { border: 0; gap: 5px; }
+    .workbench-lite .project-summary-row { grid-template-columns: minmax(150px, .65fr) minmax(220px, 1.5fr) minmax(90px, .45fr) minmax(120px, .55fr) 32px; padding: 16px; border: 0; border-radius: 10px; background: var(--surface); cursor: default; }
+    .workbench-lite .project-summary-row > * { min-width: 0; }
+    .workbench-lite .project-open.project-name { font-size: 15px; font-weight: 650; overflow-wrap: anywhere; }
+    .workbench-lite .project-open.project-name:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+    .workbench-lite .project-row-arrow { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--border); border-radius: 8px; font-size: 18px; }
+    .workbench-lite .project-row-arrow:hover { border-color: var(--accent); }
+    .workbench-lite .project-summary-row:hover .project-row-arrow { transform: none; color: var(--muted); }
+    .workbench-lite .project-stage { margin-top: 5px; font-size: 12px; }
+    .harness-version-badge::after { content: " ›"; padding-left: 3px; }
+    .workbench-lite .harness-version-badge { width: fit-content; max-width: 100%; padding: 2px 6px; margin-top: 7px; border: 1px solid var(--border); border-radius: 5px; font-size: 11px; }
+    .workbench-lite .harness-version-badge:hover { background: var(--surface-soft); border-color: var(--muted); }
+    .workbench-lite .project-progress-track { height: 3px; border-radius: 3px; }
+    .workbench-more { margin-top: 24px; }
+    .workbench-more > summary { width: fit-content; color: var(--muted); font-size: 13px; cursor: pointer; padding: 8px 0; }
+    .workbench-lite .workbench-secondary > section { border: 0; padding-top: 0; }
+    @media (max-width: 1100px) {
+      .workbench-lite .project-list-head { display: none; }
+      .workbench-lite .project-summary-row { grid-template-columns: minmax(0, 1fr) auto; gap: 10px 14px; }
+      .workbench-lite .project-identity { grid-column: 1; grid-row: 1; }
+      .workbench-lite .project-row-arrow { grid-column: 2; grid-row: 1; }
+      .workbench-lite .project-next-wrap { grid-column: 1 / -1; grid-row: 2; }
+      .workbench-lite .project-owner { grid-column: 1; grid-row: 3; }
+      .workbench-lite .project-progress { grid-column: 2; grid-row: 3; min-width: 100px; }
+      .workbench-lite .operation-grid, .workbench-lite .operation-grid[data-group="command"] { grid-template-columns: 1fr; }
+    }
+    /* Project overview: goals first, evidence on demand. */
+    .project-lite .topline { margin-bottom: 18px; gap: 16px; }
+    .project-lite h1 { margin: 6px 0; font-size: 28px; line-height: 1.25; overflow-wrap: anywhere; }
+    .project-lite .eyebrow, .project-lite .freshness { font-size: 12px; }
+    .project-lite .harness-version-badge { font-size: 12px; }
+    .project-lite .project-purpose { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 16px; padding: 0; margin: 0 0 22px; border: 0; align-items: baseline; }
+    .project-lite .project-purpose-copy { max-width: none; font-size: 15px; line-height: 1.55; overflow-wrap: anywhere; }
+    .project-lite .project-overview-hero { margin: 0 0 22px; border: 1px solid var(--border); border-radius: 10px; }
+    .project-lite .overview-hero-grid { display: block; }
+    .project-lite .overview-story { padding: 18px 20px; }
+    .project-lite .version-kicker { font-size: 11px; }
+    .project-lite .overview-version-goal { display: block; overflow: visible; max-width: none; margin: 7px 0 0; font-size: 18px; line-height: 1.5; overflow-wrap: anywhere; }
+    .project-lite .overview-progress { margin-top: 14px; max-width: none; }
+    .project-lite .progress-line { font-size: 12px; }
+    .project-lite .progress-track { height: 4px; }
+    .project-lite .overview-status-strip { display: flex; gap: 8px 20px; margin-top: 10px; font-size: 12px; }
+    .project-lite .section-card { padding: 0; margin: 0 0 22px; border: 0; border-radius: 0; background: transparent; }
+    .project-lite .section-card h2 { font-size: 17px; margin: 0; }
+    .project-lite .section-help { margin: 6px 0 0; font-size: 12px; line-height: 1.5; }
+    .project-lite .requirement-card-list { gap: 7px; margin-top: 12px; }
+    .project-lite .current-requirement-card { border-left-width: 3px; border-radius: 9px; }
+    .project-lite .requirement-summary-button { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 54px; gap: 18px; padding: 14px 16px; align-items: center; }
+    .project-lite .requirement-title { font-size: 14px; font-weight: 600; margin-top: 4px; }
+    .project-lite .requirement-state { padding: 2px 7px; margin-top: 6px; }
+    .requirement-brief { min-width: 0; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+    .requirement-expand { color: var(--accent); font-size: 12px; white-space: nowrap; }
+    .requirement-detail-facts { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 20px; padding: 16px; border-top: 1px solid var(--border); }
+    .project-lite .requirement-quality { border: 0; padding: 0; }
+    .project-diagnostics { margin-top: 24px; font-size: 12px; color: var(--muted); }
+    .project-diagnostics > summary { cursor: pointer; width: fit-content; padding: 6px 0; color: var(--text); }
+    .project-diagnostics > summary:hover { color: var(--accent); }
+    .project-diagnostics .section-card { margin: 14px 0; padding: 16px; background: var(--surface); border-radius: 8px; }
+    .project-diagnostics p { overflow-wrap: anywhere; }
+    .project-lite .attention-item { padding: 10px 12px; font-size: 13px; }
+    @media (max-width: 760px) {
+      .project-lite .project-purpose { grid-template-columns: 1fr; gap: 4px; }
+      .project-lite .requirement-summary-button { grid-template-columns: minmax(0, 1fr) 54px; gap: 10px; }
+      .project-lite .requirement-identity { grid-column: 1; }
+      .project-lite .requirement-expand { grid-column: 2; grid-row: 1; }
+      .project-lite .requirement-brief { grid-column: 1 / -1; }
+      .requirement-detail-facts { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+    }
   </style>
 </head>
 <body>
@@ -787,6 +886,11 @@
         { action: "command-e2e", group: "command", label: "推进单条需求", description: "按真实门禁推进一条需求。" }
       ];
       let operationPollTimer = null;
+      let operationRequest = null;
+      let operationFailures = 0;
+      let versionRequest = null;
+      let versionCheckedAt = 0;
+      Object.assign(state, { harnessVersions: null, harnessVersionsError: null });
       Object.assign(state, { operationMessages: {}, operationReadError: null, operationSubmitting: null, operationFocus: null });
       let reportingPollTimer = null;
       Object.assign(state, { reporting: null, reportingLoading: false, reportingError: null, reportingPending: false });
@@ -802,12 +906,12 @@
         return new Promise(resolve => setTimeout(resolve, ms));
       }
 
-      async function fetchWithRetry(url) {
+      async function fetchWithRetry(url, options = {}) {
         let lastError = null;
         for (const delayMs of networkRetryDelaysMs) {
           if (delayMs) await wait(delayMs);
           try {
-            return await fetch(url, { cache: "no-store" });
+            return await fetch(url, { cache: "no-store", ...options });
           } catch (error) {
             lastError = error;
           }
@@ -815,8 +919,8 @@
         throw lastError;
       }
 
-      async function fetchJson(url) {
-        const response = await fetchWithRetry(url);
+      async function fetchJson(url, options = {}) {
+        const response = await fetchWithRetry(url, options);
         if (!response.ok) throw new Error(`${url} returned ${response.status}`);
         return response.json();
       }
@@ -903,7 +1007,7 @@
         box.id = "current-operation-status";
         box.dataset.status = transient ? "unknown" : state.operationReadError ? "unknown" : item.status;
         box.setAttribute("role", "status");
-        const outcome = transient || (state.operationReadError ? { title: "最新状态未确认", message: `上次记录：${operationStatusLabel(item.status)}。`, next: "请重新查询状态。" } : operationOutcome(item));
+        const outcome = transient || (state.operationReadError ? { title: "正在重新连接", message: `上次记录：${operationStatusLabel(item.status)}；正在自动查询，不会重复执行更新。` } : operationOutcome(item));
         const head = el("div", "operation-feedback-head");
         head.append(el("strong", "", focused?.label || item?.label || "当前操作"), el("span", "operation-status", outcome.title));
         if (item && !transient) head.append(el("span", "muted", formattedTime(item.updated_at || item.created_at)));
@@ -915,27 +1019,123 @@
           actions.append(inspect);
         }
         head.append(actions);
-        box.append(head, el("p", "", outcome.message));
+        const compact = !transient && !state.operationReadError && ["succeeded", "cancelled"].includes(item.status);
+        box.dataset.compact = String(compact);
+        box.append(head);
+        if (!compact) box.append(el("p", "", outcome.message));
         if (outcome.next && ["failed", "blocked"].includes(item?.status) && !transient) box.append(el("p", "muted", outcome.next));
         return box;
       }
 
+      function paintOperationStatus() {
+        const host = document.getElementById("operation-live-status");
+        if (!host) return;
+        const current = state.operationFocus || state.operations?.active || (state.operations?.items || []).find(item => item.status !== "prepared");
+        const feedback = current ? renderOperationFeedback(current.action) : null;
+        const nextMarkup = JSON.stringify([current, state.operations?.active, state.operations?.items, state.operationMessages, state.operationReadError]);
+        if (host.dataset.fingerprint !== nextMarkup) {
+          const focused = host.contains(document.activeElement);
+          host.replaceChildren();
+          if (feedback) host.append(feedback);
+          else if (state.operationReadError) host.append(el("p", "muted", state.operationReadError));
+          host.dataset.fingerprint = nextMarkup;
+          if (focused) host.querySelector("button")?.focus();
+        }
+        const label = document.getElementById("operation-watch-label");
+        if (label) label.textContent = state.operationReadError ? "连接中断 · 自动重连中" : "自动跟踪中";
+        const retry = document.getElementById("operation-status-retry");
+        if (retry) { retry.hidden = !state.operationReadError; retry.disabled = false; }
+        document.querySelectorAll(".operation-action[data-action]").forEach(button => {
+          button.disabled = Boolean(state.operations?.active || state.operationSubmitting || state.operationReadError || state.operationMessages[button.dataset.action]);
+        });
+      }
+
+      function scheduleOperationRefresh() {
+        if (operationPollTimer) clearTimeout(operationPollTimer);
+        const delay = document.hidden ? 60000 : operationFailures ? Math.min(30000, 1000 * 2 ** Math.min(operationFailures - 1, 5)) : state.operations?.active ? 1000 : 10000;
+        operationPollTimer = setTimeout(() => refreshOperations(), delay);
+      }
+
       async function refreshOperations() {
+        if (operationRequest) return operationRequest;
         if (operationPollTimer) clearTimeout(operationPollTimer);
         operationPollTimer = null;
-        try {
-          state.operations = await fetchJson("/api/operations.json");
-          state.operationReadError = null;
-        } catch (error) {
-          state.operationReadError = "暂时无法读取最新结果，可能正在重启或连接已中断。上次记录不代表当前状态；可重新查询，不会重新执行操作。";
-        }
-        if (state.operations?.active && !state.operationReadError) {
-          operationPollTimer = setTimeout(async () => {
-            await refreshOperations();
-            render();
-          }, 1000);
-        }
-        return state.operations;
+        operationRequest = (async () => {
+          const previous = state.operations?.active;
+          const reconnecting = Boolean(state.operationReadError);
+          try {
+            state.operations = await fetchJson("/api/operations.json", { signal: AbortSignal.timeout(10000) });
+            state.operationReadError = null;
+            operationFailures = 0;
+            const newest = state.operations?.active || (state.operations?.items || []).find(item => item.status !== "prepared");
+            const focused = (state.operations?.items || []).find(item => item.operation_id === state.operationFocus?.operation_id);
+            if (!state.operationSubmitting && newest && focused && newest.operation_id !== focused.operation_id && String(newest.created_at || "") > String(focused.created_at || "")) state.operationFocus = null;
+            // An accepted operation can recover from a lost execute response by its persisted id.
+            if (state.operationFocus?.operation_id && [state.operations?.active, ...(state.operations?.items || [])].some(item => item?.operation_id === state.operationFocus.operation_id && item.status !== "prepared")) {
+              delete state.operationMessages[state.operationFocus.action];
+            }
+            if (["workbench", "overview", "versions"].includes(state.view)) {
+              refreshHarnessVersions(reconnecting || Boolean(previous && !state.operations?.active));
+            }
+          } catch (error) {
+            operationFailures += 1;
+            state.operationReadError = "暂时无法读取最新结果，正在自动重连；只查询状态，不会重新执行操作。";
+            state.harnessVersionsError = "连接中断，上次版本记录待重新确认。";
+            paintHarnessVersions();
+          } finally {
+            paintOperationStatus();
+            scheduleOperationRefresh();
+          }
+          return state.operations;
+        })();
+        try { return await operationRequest; } finally { operationRequest = null; }
+      }
+
+      const harnessVersionLabels = { synced: "已同步", different: "与本机版本不同", modified: "存在本地修改", loader_mismatch: "规则入口不一致", baseline_modified: "本机基准有改动", unknown: "无法确认" };
+
+      function paintHarnessVersions() {
+        document.querySelectorAll(".harness-version-badge").forEach(badge => {
+          const value = state.harnessVersions?.projects?.[badge.dataset.projectId];
+          const stale = Boolean(state.harnessVersionsError);
+          badge.dataset.status = stale ? "unknown" : value?.status || "unknown";
+          badge.textContent = `Harness ${value?.version ? "v" + value.version.replace(/^v/, "") : "版本未确认"} · ${stale ? "状态待重连确认" : harnessVersionLabels[value?.status] || "读取中"}`;
+        });
+      }
+
+      async function refreshHarnessVersions(force = false) {
+        if (versionRequest || (!force && Date.now() - versionCheckedAt < 15000)) return versionRequest;
+        versionRequest = (async () => {
+          try {
+            state.harnessVersions = await fetchJson("/api/harness/versions.json", { signal: AbortSignal.timeout(10000) });
+            state.harnessVersionsError = null;
+          } catch (error) {
+            state.harnessVersionsError = "无法查询项目版本，正在自动重试。";
+          } finally {
+            versionCheckedAt = Date.now();
+            paintHarnessVersions();
+          }
+        })();
+        try { await versionRequest; } finally { versionRequest = null; }
+      }
+
+      function harnessVersionBadge(projectId) {
+        const badge = el("button", "harness-version-badge", "Harness · 读取中");
+        badge.type = "button";
+        badge.dataset.projectId = projectId;
+        badge.addEventListener("click", async event => {
+          event.stopPropagation();
+          const value = state.harnessVersions?.projects?.[projectId];
+          const baseline = state.harnessVersions?.baseline;
+          await brainDialog({ title: "项目 Harness 版本", confirmLabel: "知道了", description: [
+            state.harnessVersionsError || `项目接入：${value?.version || "未确认"} · ${harnessVersionLabels[value?.status] || "无法确认"}`,
+            `项目提交：${value?.revision?.slice(0, 12) || "未确认"}`,
+            `规则文件位置：${value?.path || "未确认"}`,
+            `本机安装基准：${baseline?.version || "未确认"} · ${baseline?.revision?.slice(0, 12) || "未确认"}`,
+            `检查时间：${formattedTime(state.harnessVersions?.checked_at)}`,
+            "已同步仅表示项目接入文件与本机安装基准一致，不代表 GitHub 最新发布、服务已重启或当前 AI 会话已加载。"
+          ].join("\n"), fields: [] });
+        });
+        return badge;
       }
 
       async function startHarnessOperation(item) {
@@ -1143,6 +1343,7 @@
         const rawView = params.get("view");
         state.view = ALL_VIEWS.includes(rawView) ? rawView : "workbench";
         state.taskId = params.get("task");
+        state.overviewExpandedTask = state.taskId;
         state.selectedRole = params.get("role");
         state.artifactPath = params.get("artifact");
         state.focus = params.get("focus");
@@ -1154,7 +1355,7 @@
         if (state.project) params.set("project", state.project.project_id);
         if (state.run) params.set("run", state.run.run_id);
         params.set("view", state.view);
-        if (state.taskId) params.set("task", state.taskId);
+        if (state.taskId && (state.view !== "overview" || state.overviewExpandedTask === state.taskId)) params.set("task", state.taskId);
         if (state.selectedRole) params.set("role", state.selectedRole);
         if (state.artifactPath) params.set("artifact", state.artifactPath);
         if (state.focus) params.set("focus", state.focus);
@@ -2499,26 +2700,42 @@
         const localStatus = brainHealth.local_write?.status || "unavailable";
         const pendingSync = brainHealth.remote_sync?.pending_local_records || 0;
         const pendingApproval = brainHealth.approval_inbox?.pending || 0;
-        const pendingBlocks = summary.active_blocks || 0;
-        const pendingVerify = validProjects.reduce((sum, project) => sum + (project.summary?.verification_pending || 0), 0);
-        const inboxTotal = pendingBlocks + pendingVerify + pendingApproval + pendingSync + invalidProjects.length;
+        const attentionProjects = validProjects.filter(project => project.summary?.active_blocks || project.execution?.needs_user_decision);
+        const inboxTotal = attentionProjects.length + pendingApproval + pendingSync + invalidProjects.length;
 
         const top = el("div", "topline");
         const titleWrap = el("div", "");
-        titleWrap.append(el("div", "eyebrow", "个人工作指挥台"));
         titleWrap.append(el("h1", "", "工作台"));
-        top.append(titleWrap, el("div", "freshness", `更新于 ${formattedTime(state.portfolio?.generated_at)}`));
+        titleWrap.append(el("p", "section-help", `${validProjects.length} 个已接入项目 · 查看进展，继续下一步`));
+        const toolbar = el("div", "workbench-toolbar");
+        const manage = el("button", "workbench-manage", "管理");
+        manage.type = "button";
+        manage.setAttribute("aria-expanded", String(Boolean(state.workbenchManagementOpen)));
+        manage.setAttribute("aria-controls", "workbench-management");
+        manage.addEventListener("click", () => {
+          state.workbenchManagementOpen = !state.workbenchManagementOpen;
+          operationSection.hidden = !state.workbenchManagementOpen;
+          manage.setAttribute("aria-expanded", String(state.workbenchManagementOpen));
+        });
+        toolbar.append(manage);
+        top.append(titleWrap, toolbar);
         content.append(top);
         if (state.notice) content.append(el("p", "warning-line", state.notice));
 
         const inboxCard = el("section", "workbench-priority");
         const inboxHead = el("div", "inbox-head");
         const prioritySummary = el("div", "priority-summary");
-        prioritySummary.append(el("span", "priority-count", inboxTotal), el("span", "priority-copy", inboxTotal ? "项需要你关注，项目事项已归入下方进度" : "目前没有需要你处理的事项"));
+        prioritySummary.append(el("span", "priority-copy", "需要你处理"));
         inboxHead.append(prioritySummary);
         inboxCard.append(inboxHead);
         if (inboxTotal) {
           const items = el("div", "inbox-items");
+          attentionProjects.forEach(project => {
+            const action = el("button", "inbox-item", `${project.name} · ${project.summary?.active_blocks ? "处理阻塞" : "待你确认"} →`);
+            action.type = "button";
+            action.addEventListener("click", () => selectProject(project.project_id));
+            items.append(action);
+          });
           if (pendingApproval) {
             const approval = el("button", "inbox-item", `${pendingApproval} 条全局/Profile 待审批 →`);
             approval.type = "button";
@@ -2539,16 +2756,20 @@
           }
           inboxCard.append(items);
         }
-        content.append(inboxCard);
+        if (inboxTotal) content.append(inboxCard);
 
         const operationSection = el("section", "harness-operations");
+        operationSection.id = "workbench-management";
+        operationSection.hidden = !state.workbenchManagementOpen;
         const operationHead = el("div", "operation-head");
         const operationTitle = el("div", "");
-        operationTitle.append(el("h2", "", "Harness 操作"));
-        operationTitle.append(el("p", "section-help", "先看影响再确认；执行由本机固定脚本完成，不交给 AI 自由发挥。"));
+        operationTitle.append(el("h2", "", "管理工作台"));
+        operationTitle.append(el("p", "section-help", "接入项目、更新规则或运行命令；执行前会请你确认。"));
         operationHead.append(operationTitle);
         operationSection.append(operationHead);
         const statusRefresh = el("button", "operation-result-action", "重新查询状态");
+        statusRefresh.id = "operation-status-retry";
+        statusRefresh.hidden = !state.operationReadError;
         statusRefresh.type = "button";
         statusRefresh.addEventListener("click", async () => {
           statusRefresh.disabled = true;
@@ -2556,17 +2777,18 @@
           if (!state.operationReadError) state.operationMessages = {};
           render();
         });
-        operationHead.append(statusRefresh);
-        if (state.operationReadError) {
-          const warning = el("p", "operation-feedback", state.operationReadError);
-          warning.setAttribute("role", "status");
-          operationSection.append(warning);
-        }
+        toolbar.append(statusRefresh);
+        const watchLabel = el("span", "operation-watch-label", state.operationReadError ? "连接中断 · 自动重连中" : "自动跟踪中");
+        watchLabel.id = "operation-watch-label";
+        toolbar.prepend(watchLabel);
+        const liveStatus = el("div", "");
+        liveStatus.id = "operation-live-status";
+        content.append(liveStatus);
         const activeOperation = state.operations?.active;
         const currentOperation = state.operationFocus || activeOperation || (state.operations?.items || []).find(item => item.status !== "prepared");
         if (currentOperation) {
           const feedback = renderOperationFeedback(currentOperation.action);
-          if (feedback) operationSection.append(feedback);
+          if (feedback) liveStatus.append(feedback);
         }
         const catalog = state.operations?.catalog?.length ? state.operations.catalog : OPERATION_FALLBACKS;
         [["system", "本机与项目"], ["command", "通用命令"]].forEach(([group, label]) => {
@@ -2577,6 +2799,7 @@
           operationGrid.dataset.group = group;
           groupItems.forEach(item => {
             const button = el("button", "operation-action");
+            button.dataset.action = item.action;
             button.type = "button";
             button.disabled = Boolean(activeOperation || state.operationSubmitting || state.operationReadError || state.operationMessages[item.action]);
             button.append(el("strong", "", item.label), el("span", "", item.description));
@@ -2611,19 +2834,21 @@
         content.append(operationSection);
 
         const projectSection = el("section", "workbench-projects workbench-card");
-        projectSection.append(el("h2", "", "正在推进"));
-        projectSection.append(el("p", "section-help", "先看下一步，再进入项目查看版本与角色详情。"));
+        projectSection.append(el("h2", "", "我的项目"));
+        const columns = el("div", "project-list-head");
+        ["项目", "下一步", "负责人", "进度", ""].forEach(label => columns.append(el("span", "", label)));
+        projectSection.append(columns);
         if (!validProjects.length) {
           projectSection.append(el("div", "empty", "还没有可监控的项目。请先在项目目录运行 harness init。"));
         } else {
           const list = el("div", "project-summary-list");
           validProjects.forEach(project => {
-            const row = el("button", "project-summary-row");
-            row.type = "button";
-            row.setAttribute("aria-label", `查看项目 ${project.name}`);
-            row.addEventListener("click", () => selectProject(project.project_id));
+            const row = el("div", "project-summary-row");
             const identity = el("span", "project-identity");
-            identity.append(el("span", "project-name", project.name), el("span", "project-stage", project.stage || "尚未同步"));
+            const openProject = el("button", "project-name project-open", project.name);
+            openProject.type = "button";
+            openProject.addEventListener("click", () => selectProject(project.project_id));
+            identity.append(openProject, el("span", "project-stage", project.stage || "尚未同步"), harnessVersionBadge(project.project_id));
             row.append(identity);
             const work = project.recent_work;
             const projectSummary = project.summary || {};
@@ -2635,12 +2860,11 @@
             else if (work?.next_role) nextText = `${roleLabel(work.next_role)} 接手${work.objective ? `：${compactText(work.objective)}` : ""}`;
             else if (detectedActivity.has_unstructured_progress) nextText = "PM 将已检测活动归入版本需求";
             const nextWrap = el("span", "project-next-wrap");
-            nextWrap.append(el("span", "project-next-label", "下一步"));
             const next = el("span", "project-next", nextText);
             next.title = nextText;
             nextWrap.append(next);
             row.append(nextWrap);
-            row.append(el("span", "project-owner", `当前负责 · ${roleLabel(project.owner_role)}`));
+            row.append(el("span", "project-owner", roleLabel(project.owner_role)));
             const total = projectSummary.task_total || 0;
             const done = projectSummary.task_completed || 0;
             const verifyCount = projectSummary.verification_pending || 0;
@@ -2661,7 +2885,10 @@
             const fill = el("span", "project-progress-fill");
             fill.style.width = `${ratio}%`;
             track.append(fill); progress.append(track); row.append(progress);
-            row.append(el("span", "project-row-arrow", "›"));
+            const openArrow = el("button", "project-row-arrow project-open", "›");
+            openArrow.setAttribute("aria-label", `查看项目 ${project.name}`);
+            openArrow.addEventListener("click", () => selectProject(project.project_id));
+            row.append(openArrow);
             list.append(row);
           });
           projectSection.append(list);
@@ -2721,7 +2948,9 @@
         skillRow.append(skillButton);
         systemCard.append(skillRow);
         secondary.append(systemCard);
-        content.append(secondary);
+        const more = el("details", "workbench-more");
+        more.append(el("summary", "", "最近交付与系统状态"), secondary);
+        content.append(more);
       }
 
       function renderHeader(root) {
@@ -2730,7 +2959,8 @@
         const titleWrap = el("div", "");
         titleWrap.append(el("div", "eyebrow", `${state.project.stage} · ${roleLabel(state.project.owner_role)} · ${statusLabel(snapshot.run.status)}`));
         titleWrap.append(el("h1", "", state.project.name));
-        titleWrap.append(el("div", "project-path", state.project.path));
+        if (state.view !== "overview") titleWrap.append(el("div", "project-path", state.project.path));
+        titleWrap.append(harnessVersionBadge(state.project.project_id));
         top.append(titleWrap, el("div", "freshness", `更新于 ${formattedTime(snapshot.updated_at)}`));
         root.append(top);
       }
@@ -2959,8 +3189,6 @@
             : (organization.transitions || []).filter(item => item.requirement_id === selectedRequirement?.requirement_id);
         const transition = selectedTransitions[selectedTransitions.length - 1] || null;
         const currentRole = selectedRequirement?.current_role || null;
-        const blockCount = versionRequirements.reduce((total, item) => total + (item.blocks || []).length, 0);
-        const nextStep = selectedRequirement?.next_step || "等待 PM 规划";
         const completionRatio = version?.total ? Math.round(completed / version.total * 100) : 0;
         const requirementStatusNames = { completed: "已完成", in_progress: "进行中", planned: "待开始", blocked: "已阻塞", skipped: "已移出" };
         const requirementRoleMap = new Map((selectedRequirement?.role_path || []).map(item => [item.role, item]));
@@ -2982,35 +3210,41 @@
           };
         }).sort((left, right) => requirementOfficeRoleOrder.indexOf(left.role_id) - requirementOfficeRoleOrder.indexOf(right.role_id));
 
+        const purpose = el("section", "project-purpose");
+        purpose.append(el("div", "project-purpose-label", "长期目标"));
+        purpose.append(el("p", "project-purpose-copy", project.goal || "尚未记录长期目标。"));
+        root.append(purpose);
+        const diagnostics = el("details", "project-diagnostics");
+        diagnostics.append(el("summary", "", "活动与诊断"));
+        const sources = el("div", "project-source-info");
+        sources.append(el("p", "muted", `项目目录：${state.project?.path || "未记录"}`));
+        sources.append(el("p", "muted", project.source ? `目标来源：${project.source}` : "尚未登记长期目标来源"));
+        diagnostics.append(sources);
+
         const hero = el("section", "project-overview-hero");
         const heroGrid = el("div", "overview-hero-grid");
         const story = el("div", "overview-story");
         story.append(el("div", "version-kicker", version?.version ? `当前版本 · v${version.version}` : "当前版本 · 尚未规划"));
-        story.append(el("p", "overview-version-goal", version?.goal || "PM 尚未建立这个版本的目标。"));
-        const progress = el("div", "overview-progress");
-        const progressLine = el("div", "progress-line");
-        progressLine.append(el("span", "", "版本完成度"), el("strong", "", versionRequirements.length ? `${completed}/${versionRequirements.length}` : "尚无需求"));
-        const progressTrack = el("div", "progress-track");
-        const progressFill = el("div", "progress-fill");
-        progressFill.style.width = `${completionRatio}%`;
-        progressTrack.append(progressFill); progress.append(progressLine, progressTrack); story.append(progress);
-        const statusStrip = el("div", "overview-status-strip");
-        [["已完成", String(counts.completed || 0)], ["进行中", String(counts.in_progress || 0)], ["待开始", String(counts.planned || 0)], ["阻塞", String(counts.blocked || 0)]].forEach(([label, value]) => {
-          const item = el("span", "overview-status-item", label);
-          item.append(el("strong", "", value));
-          statusStrip.append(item);
-        });
-        story.append(statusStrip);
-
-        const command = el("aside", "overview-command");
-        [["当前查看", selectedRequirement?.requirement_id || "尚无需求", false], ["当前负责人", currentRole ? roleLabel(currentRole) : "未分配", false], ["下一步", nextStep, false], ["版本阻塞", blockCount ? `${blockCount} 项需要处理` : "无", Boolean(blockCount)]].forEach(([label, value, alert]) => {
-          const item = el("div", "command-item");
-          const commandValue = el("span", "command-value", value);
-          commandValue.dataset.alert = String(alert);
-          item.append(el("span", "command-label", label), commandValue);
-          command.append(item);
-        });
-        heroGrid.append(story, command); hero.append(heroGrid); root.append(hero);
+        story.append(el("p", "overview-version-goal", version?.goal || (version ? "尚未记录版本目标。" : "尚未建立版本计划")));
+        if (versionRequirements.length) {
+          const progress = el("div", "overview-progress");
+          const progressLine = el("div", "progress-line");
+          progressLine.append(el("span", "", "版本完成度"), el("strong", "", `${completed}/${versionRequirements.length}`));
+          const progressTrack = el("div", "progress-track");
+          const progressFill = el("div", "progress-fill");
+          progressFill.style.width = `${completionRatio}%`;
+          progressTrack.append(progressFill); progress.append(progressLine, progressTrack); story.append(progress);
+          const statusStrip = el("div", "overview-status-strip");
+          [["已完成", String(counts.completed || 0)], ["进行中", String(counts.in_progress || 0)], ["待开始", String(counts.planned || 0)], ["阻塞", String(counts.blocked || 0)]].forEach(([label, value]) => {
+            const item = el("span", "overview-status-item", label);
+            item.append(el("strong", "", value));
+            statusStrip.append(item);
+          });
+          story.append(statusStrip);
+        } else {
+          story.append(el("p", "section-help", "下一步：由 PM 明确版本目标与需求；已有开发活动不等于已确认的需求进度。"));
+        }
+        heroGrid.append(story); hero.append(heroGrid); root.append(hero);
 
         const identity = state.workspace?.identity || {};
         const activity = state.workspace?.activity || {};
@@ -3028,7 +3262,7 @@
           }
           if (activity.git_head) evidence.append(el("p", "muted", `最近提交：${activity.git_head} · ${activity.git_head_subject || "未记录说明"}`));
           evidence.append(el("p", "muted", "工作台不会把提交或对话自动伪造成已确认需求；请由 PM 建立版本目标后再进入正式进度。"));
-          root.append(evidence);
+          diagnostics.append(evidence);
         }
 
         const execution = state.workspace?.execution || {};
@@ -3057,7 +3291,7 @@
           if (execution.escalation_reason) runtime.append(el("p", "warning-line", `升级原因：${execution.escalation_reason}`));
           if (execution.needs_user_decision) runtime.append(el("div", "attention-item error", "当前执行等待你的决策。"));
           runtime.append(el("p", "muted", "普通工具调用尚未由宿主提供结构化计数；这里不会把 Agent 回合或 Harness 命令冒充成工具往返。"));
-          root.append(runtime);
+          diagnostics.append(runtime);
         }
 
         const requirementsSection = el("section", "section-card current-version-requirements");
@@ -3065,7 +3299,7 @@
         const requirementsCopy = el("div", "");
         requirementsCopy.append(
           el("h2", "", "当前版本需求"),
-          el("p", "section-help", "每条需求都有自己的任务小队；点击后在卡片内展开角色办公室、交付历史和门禁状态。")
+          el("p", "section-help", "点击需求，展开任务小队、测试范围与交付记录。")
         );
         requirementsHead.append(requirementsCopy, el("span", "requirement-command-summary", version?.total ? `${completed}/${version.total} 已完成` : "尚无需求"));
         requirementsSection.append(requirementsHead);
@@ -3073,7 +3307,8 @@
         versionRequirements.forEach(requirement => {
           const card = el("article", "current-requirement-card");
           card.dataset.status = requirement.effective_status;
-          card.dataset.selected = String(requirement.requirement_id === selectedRequirement?.requirement_id);
+          const expanded = requirement.requirement_id === state.taskId && state.overviewExpandedTask === requirement.requirement_id;
+          card.dataset.selected = String(expanded);
           const summaryButton = el("button", "requirement-summary-button");
           summaryButton.type = "button";
           summaryButton.setAttribute("aria-pressed", card.dataset.selected);
@@ -3146,8 +3381,13 @@
           nextLine.append(el("strong", "", "下一步"), document.createTextNode(` · ${requirement.next_step || "未记录"}`));
           quality.append(nextLine);
 
-          summaryButton.append(identity, rolePath, quality);
+          const next = el("span", "requirement-brief");
+          next.append(el("span", "requirement-section-label", requirement.current_role ? roleLabel(requirement.current_role) : "下一步"));
+          next.append(el("span", "", requirement.next_step || "尚未明确下一步"));
+          const expandHint = el("span", "requirement-expand", expanded ? "收起 −" : "展开 +");
+          summaryButton.append(identity, next, expandHint);
           summaryButton.addEventListener("click", () => {
+            state.overviewExpandedTask = expanded ? null : requirement.requirement_id;
             state.taskId = requirement.requirement_id;
             state.selectedRole = null;
             writeUrlState();
@@ -3155,13 +3395,17 @@
           });
           card.append(summaryButton);
 
-          if (requirement.requirement_id === selectedRequirement?.requirement_id) {
+          if (expanded) {
+            const detail = el("div", "requirement-detail-facts");
+            detail.append(rolePath, quality);
+            card.append(detail);
             const taskOffice = el("div", "task-office");
             taskOffice.dataset.requirement = requirement.requirement_id;
+            taskOffice.setAttribute("aria-label", "任务办公室");
             const taskOfficeHead = el("div", "task-office-head");
             const taskOfficeCopy = el("div", "");
             taskOfficeCopy.append(
-              el("h3", "task-office-title", `${requirement.requirement_id} · 任务办公室`),
+              el("h3", "task-office-title", `${requirement.requirement_id} · 角色办公室`),
               el("p", "task-office-copy", "主流程为 PM → Review → 开发 → 测试 → 待发布；Designer 仅在实际参与时插入。"),
             );
             taskOfficeHead.append(taskOfficeCopy);
@@ -3214,15 +3458,7 @@
           }
           requirementList.append(card);
         });
-        if (!requirementList.childElementCount) requirementList.append(el("div", "empty", "当前版本尚未分配需求。"));
-        requirementsSection.append(requirementList); root.append(requirementsSection);
-
-        const purpose = el("section", "project-purpose");
-        purpose.append(el("div", "project-purpose-label", "长期项目目标"));
-        const purposeBody = el("div", "");
-        purposeBody.append(el("p", "project-purpose-copy", project.goal || "PM 尚未建立稳定项目目标。"));
-        purposeBody.append(el("span", "project-purpose-source", project.source ? `来源：${project.source}` : "尚未登记长期目标来源"));
-        purpose.append(purposeBody); root.append(purpose);
+        requirementsSection.append(requirementList);
 
         const attention = el("section", "section-card");
         attention.append(el("h2", "", "需要你处理"));
@@ -3231,9 +3467,12 @@
         Object.values(snapshot.approvals || {}).filter(item => item.status === "requested").forEach(item => {
           attentionList.append(el("div", "attention-item", item.summary));
         });
-        if (!attentionList.childElementCount) attentionList.append(el("div", "muted", "目前没有需要你处理的事项。"));
+        if (execution.needs_user_decision) attentionList.append(el("div", "attention-item error", "当前执行等待你的决策。"));
+        if (identity.relationship === "ambiguous_nested_repositories") attentionList.append(el("div", "attention-item error", identity.message || "需要选择项目的代码工作区。"));
         attention.append(attentionList);
-        root.append(attention);
+        if (attentionList.childElementCount) root.append(attention);
+        if (versionRequirements.length) root.append(requirementsSection);
+        root.append(diagnostics);
 
         const selectedRole = officeRoles.find(item => item.role_id === state.selectedRole);
         if (selectedRole) {
@@ -3762,13 +4001,16 @@
       }
 
       function render() {
+        content.classList.toggle("project-lite", Boolean(state.project) && state.view === "overview");
         content.classList.toggle("settings-page", state.view === "settings");
+        content.classList.toggle("workbench-lite", state.view !== "settings" && (!state.project || state.view === "workbench"));
         renderNavTree();
         const isGlobalView = ["workbench", "settings"].includes(state.view);
         if (!state.project || isGlobalView) {
           content.replaceChildren();
           if (state.view === "settings") renderSettings();
           else renderPortfolio();
+          paintHarnessVersions();
           return;
         }
         content.replaceChildren();
@@ -3784,6 +4026,7 @@
           return;
         }
         renderHeader(content);
+        paintHarnessVersions();
         if (state.view === "overview") {
           renderOverview(content);
           return;
@@ -3857,6 +4100,7 @@
         state.artifactError = null;
         if (!preserveTask) {
           state.taskId = null;
+          state.overviewExpandedTask = null;
           state.selectedRole = null;
           state.artifactPath = null;
         }
@@ -3942,7 +4186,6 @@
             state.notice = null;
           }
           await selectProject(projectId, requested.runId, true);
-          if (state.operations?.active) refreshOperations().catch(() => {});
         } catch (error) {
           state.settingsBooting = false;
           if (settingsEntry) {
@@ -3962,9 +4205,14 @@
           });
           box.append(retry);
           content.replaceChildren(box);
+        } finally {
+          refreshOperations();
         }
       }
 
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) { versionCheckedAt = 0; refreshOperations(); }
+      });
       window.addEventListener("popstate", load);
       load();
     })();
