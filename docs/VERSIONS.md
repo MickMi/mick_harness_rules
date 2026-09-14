@@ -243,15 +243,32 @@
 
 ## 0.22.1
 
-- Status: in_progress
-- Branch: fix/v0.22.1-update-reload
+- Status: released
+- Branch: main
+- Tag: v0.22.1
+- Work Branches: fix/v0.22.1-update-reload
 - Goal: 让 `harness update` 在取得新提交后真实重载唯一的 6425 常驻服务并取得发布标签，同时保持无更新时的幂等稳定性。
 
 ### Requirements
 
 - [x] `task-212` 固定 tag 获取、变更检测和条件重启合同
 - [x] `task-213` 修复 update 后磁盘版本与运行进程不一致的问题
-- [ ] `task-214` 完成发布、本机部署与 PID、版本、Doctor 复核
+- [x] `task-214` 完成发布、本机部署与 PID、版本、Doctor 复核
+
+## 0.23.0
+
+- Status: released
+- Branch: main
+- Tag: v0.23.0
+- Work Branches: feat/workbench-automation-controls
+- Goal: 让统一工作台把人的注意力放在项目目标、当前需求和真实待办上，并自动追踪操作状态与每个项目实际接入的 Harness 版本。
+
+### Requirements
+
+- [x] `task-226` 自动跟踪操作状态，并展示项目 Harness 版本、规则与加载入口的一致性
+- [x] `task-227` 将全局工作台改为项目优先，收起维护操作和次要系统信息
+- [x] `task-228` 将长期目标和当前版本前置，需求详情与活动诊断按需展开
+- [x] `task-229` 完成发布回归、GitHub 发布、本机更新与 6425 真实验收
 
 ## Backlog
 
