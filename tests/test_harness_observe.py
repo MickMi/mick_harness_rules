@@ -1451,7 +1451,7 @@ class ObserveRuntimeTests(unittest.TestCase):
         self.assertIn("organization", dashboard)
         self.assertIn("selectedRole", dashboard)
         self.assertIn('params.set("role"', dashboard)
-        for removed in ("角色工作", "关键决策", "角色交接", "renderRoleActivity", "flowState"):
+        for removed in ('el("h2", "", "角色工作")', "关键决策", "角色交接", "renderRoleActivity", "flowState"):
             self.assertNotIn(removed, dashboard)
         self.assertNotIn('task.status === "completed") return "Review"', dashboard)
         self.assertNotIn('task.status === "verification_pending") return "测试"', dashboard)
@@ -1488,7 +1488,7 @@ class ObserveRuntimeTests(unittest.TestCase):
         self.assertIn("查看项目记录", dashboard)
         for label in (
             "Brain 连接", "配置来源", "配置仓库", "已生效", "本地写入路径",
-            "项目记录待同步", "全局/Profile 待审批", "当前无需审批",
+            "项目记录待同步", "全局与 Profile 审批", "当前无需审批",
             "跨项目稳定偏好与可复用经验", "Profile 规则或风格的版本变化",
             "本机服务自动记录", "Hook 只负责采集事件", "查看同步清单", "确认并同步", "取消同步",
         ):
@@ -2560,6 +2560,22 @@ class ObserveRuntimeTests(unittest.TestCase):
         ):
             self.assertIn(marker, dashboard)
 
+    def test_dashboard_loads_summary_first_and_details_on_demand(self) -> None:
+        dashboard = DASHBOARD.read_text(encoding="utf-8")
+
+        self.assertIn('state.portfolio = await fetchJson("/api/portfolio.json")', dashboard)
+        self.assertIn('?scope=overview', dashboard)
+        self.assertIn("function viewNeedsFullWorkspace", dashboard)
+        self.assertIn("function loadSecondaryData", dashboard)
+        self.assertNotIn(
+            "const [portfolio, agents, skills, operations, brainHealth, brainCandidates, projectMemories, harnessImprovements] = await Promise.all",
+            dashboard,
+        )
+        self.assertIn("处理阻塞", dashboard)
+        self.assertIn("复制处理指令", dashboard)
+        self.assertIn("问题证据", dashboard)
+        self.assertIn("效果复验", dashboard)
+
     def test_completed_qa_round_is_visible_as_fallback_evidence(self) -> None:
         current = OBSERVE.current_version_snapshot(
             {
@@ -2937,6 +2953,7 @@ class ObserveRuntimeTests(unittest.TestCase):
 
             with urlopen(f"{base}/api/portfolio.json", timeout=1) as response:
                 portfolio = json.loads(response.read())
+            self.assertEqual(portfolio["detail"], "summary")
             self.assertEqual([item["validation"] for item in portfolio["projects"]], ["valid", "missing"])
             with urlopen(f"{base}/api/agents.json", timeout=2) as response:
                 agents = json.loads(response.read())
@@ -2952,6 +2969,11 @@ class ObserveRuntimeTests(unittest.TestCase):
             with urlopen(f"{base}/api/projects/{valid_id}/workspace.json", timeout=1) as response:
                 workspace = json.loads(response.read())
             self.assertIn("demo.py", [item["path"] for item in workspace["artifacts"]])
+            with urlopen(f"{base}/api/projects/{valid_id}/workspace.json?scope=overview", timeout=1) as response:
+                overview = json.loads(response.read())
+            self.assertEqual(overview["detail"], "overview")
+            self.assertEqual(overview["artifacts"], [])
+            self.assertEqual(overview["identity"]["relationship"], "unchecked")
             with urlopen(
                 f"{base}/api/projects/{valid_id}/artifact?path={quote('demo.py')}", timeout=1
             ) as response:

@@ -3594,6 +3594,48 @@ def project_workspace_snapshot(project: Path, snapshot: dict[str, Any] | None = 
     }
 
 
+def project_overview_snapshot(project: Path, snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Return only data used by the default project page; defer Git, artifacts and diagnostics."""
+    if snapshot is None:
+        snapshot = status_runtime(project)["snapshot"]
+    versions_path = project / "docs" / "VERSIONS.md"
+    version_items = parse_versions_markdown(versions_path.read_text(encoding="utf-8")) if versions_path.is_file() else []
+    version_items.sort(key=lambda item: version_sort_key(item.get("version")), reverse=True)
+    versions = {"items": version_items, "unassigned_requirements": [], "detail": "overview"}
+    turns = len(snapshot.get("agent_turns", {}))
+    return {
+        "project_id": project_id(project),
+        "generated_at": now_iso(),
+        "detail": "overview",
+        "project": project_profile_snapshot(project),
+        "identity": {
+            "project_id": project_id(project),
+            "registered_path": str(project.resolve(strict=False)),
+            "workspace_path": None,
+            "relationship": "unchecked",
+            "aligned": None,
+            "candidates": [],
+            "message": "代码工作区关系将在打开活动与诊断时检查。",
+        },
+        "activity": {
+            "agent_session_count": len(snapshot.get("agent_sessions", {})),
+            "agent_turn_count": turns,
+            "git_commit_count": 0,
+            "git_head": None,
+            "git_head_subject": None,
+            "aliases": [],
+            "has_unstructured_progress": bool(turns),
+            "detail_status": "deferred",
+        },
+        "execution": execution_snapshot(snapshot),
+        "organization": organization_snapshot(snapshot),
+        "artifacts": [],
+        "git": {"available": None, "detail_status": "deferred"},
+        "versions": versions,
+        "current_version": current_version_snapshot(snapshot, versions),
+    }
+
+
 def portfolio_project_record(descriptor: dict[str, Any], *, sync: bool = True) -> dict[str, Any]:
     record = dict(descriptor)
     record.update(
@@ -3657,6 +3699,90 @@ def portfolio_project_record(descriptor: dict[str, Any], *, sync: bool = True) -
     except ObserveError as error:
         record.update({"validation": "error", "reason": str(error), "stage": "同步失败", "run_status": "error"})
     return record
+
+
+def portfolio_project_summary_record(descriptor: dict[str, Any]) -> dict[str, Any]:
+    """Build a workbench row without rescanning Git or external agent mirrors."""
+    record = dict(descriptor)
+    record.update(
+        {
+            "stage": "不可用" if descriptor["validation"] != "valid" else "尚未同步",
+            "owner_role": "Unknown",
+            "run_status": "unavailable" if descriptor["validation"] != "valid" else "observing",
+            "summary": {
+                "task_total": 0,
+                "task_completed": 0,
+                "task_blocked": 0,
+                "verification_pending": 0,
+                "active_blocks": 0,
+                "active_agent_sessions": 0,
+            },
+            "runs": [],
+            "recent_work": None,
+            "activity": {"agent_turn_count": 0, "git_commit_count": 0, "has_unstructured_progress": False},
+            "identity": None,
+            "execution": {"recorded": False, "needs_user_decision": False},
+        }
+    )
+    if descriptor["validation"] != "valid":
+        return record
+    project = Path(descriptor["path"])
+    try:
+        status = status_runtime(project)
+        snapshot = status["snapshot"]
+        index = load_json(runtime_root(project) / "index.json", {}) or {}
+        stage, owner_role = snapshot_stage(snapshot)
+        turns = len(snapshot.get("agent_turns", {}))
+        record.update(
+            {
+                "stage": stage,
+                "owner_role": owner_role,
+                "run_status": snapshot.get("run", {}).get("status", "observing"),
+                "summary": snapshot.get("summary", record["summary"]),
+                "runs": index.get("runs", []),
+                "updated_at": snapshot.get("updated_at"),
+                "recent_work": next(
+                    iter(
+                        sorted(
+                            snapshot.get("work_rounds", {}).values(),
+                            key=lambda item: item.get("derived_from_sequence", 0),
+                            reverse=True,
+                        )
+                    ),
+                    None,
+                ),
+                "activity": {
+                    "agent_turn_count": turns,
+                    "git_commit_count": 0,
+                    "has_unstructured_progress": bool(turns),
+                    "detail_status": "project_view_only",
+                },
+                "execution": execution_snapshot(snapshot),
+            }
+        )
+    except ObserveError as error:
+        record.update({"validation": "error", "reason": str(error), "stage": "同步失败", "run_status": "error"})
+    return record
+
+
+def portfolio_summary_snapshot(registry_path: Path | None = None) -> dict[str, Any]:
+    projects = [portfolio_project_summary_record(item) for item in load_registered_projects(registry_path)]
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "generated_at": now_iso(),
+        "detail": "summary",
+        "projects": projects,
+        "summary": {
+            "project_total": len(projects),
+            "project_valid": sum(item["validation"] == "valid" for item in projects),
+            "project_invalid": sum(item["validation"] != "valid" for item in projects),
+            "task_total": sum(item["summary"].get("task_total", 0) for item in projects),
+            "task_completed": sum(item["summary"].get("task_completed", 0) for item in projects),
+            "active_blocks": sum(item["summary"].get("active_blocks", 0) for item in projects),
+            "active_agent_sessions": sum(item["summary"].get("active_agent_sessions", 0) for item in projects),
+            "active_harness_commands": sum(item["summary"].get("active_harness_commands", 0) for item in projects),
+        },
+    }
 
 
 def harness_installation_snapshot(root: Path) -> dict[str, Any]:
@@ -4973,15 +5099,17 @@ def serve_runtime(
                     )
                     return
                 if path == "/api/portfolio.json":
-                    value = (
-                        portfolio_snapshot(registry_path, sync=False)
-                        if registry_path is not None
-                        else {
+                    query = parse_qs(parsed.query)
+                    full_detail = (query.get("detail") or ["summary"])[0] == "full"
+                    if registry_path is not None:
+                        value = portfolio_snapshot(registry_path, sync=False) if full_detail else portfolio_summary_snapshot(registry_path)
+                    else:
+                        value = {
                             "schema_version": SCHEMA_VERSION,
                             "generated_at": now_iso(),
-                            "projects": [portfolio_project_record(descriptors()[0])] if descriptors() else [],
+                            "detail": "full" if full_detail else "summary",
+                            "projects": [portfolio_project_record(descriptors()[0]) if full_detail else portfolio_project_summary_record(descriptors()[0])] if descriptors() else [],
                         }
-                    )
                     self._send_bytes(200, "application/json", json_bytes(value), head_only=head_only)
                     return
                 if path == "/api/harness/versions.json":
@@ -5089,10 +5217,16 @@ def serve_runtime(
                     except ObserveError:
                         init_runtime(selected_project)
                         selected_snapshot = sync_runtime(selected_project)["snapshot"]
+                    query = parse_qs(parsed.query)
+                    overview_only = (query.get("scope") or ["full"])[0] == "overview"
                     self._send_bytes(
                         200,
                         "application/json",
-                        json_bytes(project_workspace_snapshot(selected_project, selected_snapshot)),
+                        json_bytes(
+                            project_overview_snapshot(selected_project, selected_snapshot)
+                            if overview_only
+                            else project_workspace_snapshot(selected_project, selected_snapshot)
+                        ),
                         head_only=head_only,
                     )
                     return
@@ -5360,6 +5494,7 @@ def serve_runtime(
                                 identifier,
                                 artifact_path=str(body.get("artifact_path") or ""),
                                 baseline_count=body.get("baseline_count"),
+                                release_version=str(body.get("release_version") or "") or None,
                             )
                         else:
                             result = brain.verify_harness_improvement_effect(
