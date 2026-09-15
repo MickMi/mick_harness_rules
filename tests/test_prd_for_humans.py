@@ -33,6 +33,26 @@ class PrdForHumansTests(unittest.TestCase):
         self.assertIn("AI-CONTRACT", text)
         self.assertNotIn("必须包含以下章节", text)
 
+    def test_skill_chooses_direct_draft_or_small_multi_round_questions(self) -> None:
+        text = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("If no missing answer would materially change the product direction, draft the PRD immediately", text)
+        self.assertIn("ask at most one or two questions", text)
+        self.assertIn("never repeat a question", text)
+        self.assertIn("Do not confuse PRD readiness with implementation readiness", text)
+
+        clear = (GOLDENS / "dialogue-clear.md").read_text(encoding="utf-8")
+        ambiguous = (GOLDENS / "dialogue-ambiguous.md").read_text(encoding="utf-8")
+        self.assertIn("Draft the PRD immediately", clear)
+        self.assertIn("Do not draft a fake complete PRD yet", ambiguous)
+        self.assertIn("Never ask the two Round 1 questions again", ambiguous)
+
+    def test_skill_keeps_product_facts_profile_and_brain_separate(self) -> None:
+        text = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("define product truth", text)
+        self.assertIn("does not supply product facts", text)
+        self.assertIn("unapproved candidates", text)
+        self.assertIn("stable preference", text)
+
     def test_golden_examples_are_clean_and_adapt_to_the_requirement(self) -> None:
         checker = load_module(CHECKER, "check_prd")
         small = (GOLDENS / "golden-small.md").read_text(encoding="utf-8")

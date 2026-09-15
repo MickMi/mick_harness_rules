@@ -12,7 +12,7 @@
         "extensions": ["anthropic.claude-code", "anthropic.claude"]
       },
       "loader": {"surface": "agent", "target": ".claude/CLAUDE.md", "managed": true},
-      "skills": {"target": ".claude/skills", "managed": ["harness-plan", "harness-goal", "harness-brain", "harness-e2e"]},
+      "skills": {"target": ".claude/skills", "managed": ["harness-plan", "harness-goal", "harness-brain", "harness-e2e", "prd-for-humans"]},
       "lifecycle": {"adapter": "claude-hooks", "events": ["SessionStart", "UserPromptSubmit", "Stop", "SessionEnd"]},
       "adapter": {"support": "managed", "loading": "managed", "skills": "managed", "hooks": "managed", "repair": ["harness agents sync --dry-run", "harness agents hooks --dry-run"]},
       "limitations": []
@@ -28,10 +28,26 @@
         "extensions": ["openai.chatgpt", "openai.codex"]
       },
       "loader": {"surface": "codex", "target": ".codex/AGENTS.md", "managed": true},
-      "skills": {"target": ".codex/skills", "managed": ["harness-plan", "harness-goal", "harness-brain", "harness-e2e"]},
+      "skills": {"target": ".codex/skills", "managed": ["harness-plan", "harness-goal", "harness-brain", "harness-e2e", "prd-for-humans"]},
       "lifecycle": {"adapter": "codex-hooks", "events": ["SessionStart", "UserPromptSubmit", "Stop", "SessionEnd"]},
       "adapter": {"support": "managed", "loading": "managed", "skills": "managed", "hooks": "managed", "repair": ["harness agents sync --dry-run", "harness agents hooks --dry-run"]},
       "limitations": ["Lifecycle hook configuration depends on the installed Codex surface capability."]
+    },
+    {
+      "id": "workbuddy",
+      "name": "WorkBuddy",
+      "tier": 2,
+      "detection": {
+        "commands": ["workbuddy"],
+        "config_dirs": [".workbuddy"],
+        "apps": ["WorkBuddy.app"],
+        "extensions": []
+      },
+      "loader": {"surface": "project", "scope": "project", "target": "AGENTS.md", "managed": true},
+      "skills": {"target": ".workbuddy/skills", "managed": ["harness-plan", "harness-goal", "harness-brain", "harness-e2e", "prd-for-humans"], "only_if_detected": true},
+      "lifecycle": {"adapter": null, "events": []},
+      "adapter": {"support": "managed", "loading": "managed", "skills": "managed", "hooks": "unsupported", "repair": ["harness agents sync --dry-run"]},
+      "limitations": ["WorkBuddy 5.3.14 reads a project-root AGENTS.md and supports personal Skills at ~/.workbuddy/skills; Harness lifecycle Hooks and runtime feedback are not verified."]
     },
     {
       "id": "cursor",

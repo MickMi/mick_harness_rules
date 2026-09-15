@@ -241,6 +241,7 @@ def _root_descriptors(
         (home / ".codex" / "skills" / ".system", "codex_system", "global", None),
         (home / ".codex" / "skills", "codex_external", "global", None),
         (home / ".claude" / "skills", "claude_external", "global", None),
+        (home / ".workbuddy" / "skills", "workbuddy_external", "global", None),
         (home / ".agents" / "skills", "agent_external", "global", None),
         (home / ".codex" / "plugins" / "cache", "codex_plugin", "global", None),
     ]

@@ -37,7 +37,7 @@ class AgentRegistryTests(unittest.TestCase):
         self.assertEqual(registry["schema_version"], "2")
         self.assertEqual(
             {agent["id"] for agent in agents},
-            {"claude-code", "codex", "cursor", "windsurf", "cline", "roo-code", "trae"},
+            {"claude-code", "codex", "workbuddy", "cursor", "windsurf", "cline", "roo-code", "trae"},
         )
         for agent in agents:
             self.assertIn(agent["tier"], {1, 2})
@@ -59,6 +59,8 @@ class AgentRegistryTests(unittest.TestCase):
         support = {agent["id"]: agent["adapter"]["support"] for agent in agents}
         self.assertEqual(support["claude-code"], "managed")
         self.assertEqual(support["codex"], "managed")
+        self.assertEqual(support["workbuddy"], "managed")
+        self.assertEqual(next(agent for agent in agents if agent["id"] == "workbuddy")["adapter"]["hooks"], "unsupported")
         self.assertEqual(support["cursor"], "manual")
         self.assertEqual(support["cline"], "unsupported")
 
@@ -125,6 +127,7 @@ class AgentManagerTests(unittest.TestCase):
         (self.bin_dir / "claude").write_text("", encoding="utf-8")
         (self.home / ".codex").mkdir()
         (self.apps_dir / "Cursor.app").mkdir()
+        (self.apps_dir / "WorkBuddy.app").mkdir()
         extensions = self.home / ".vscode" / "extensions"
         extensions.mkdir(parents=True)
         (extensions / "saoudrizwan.claude-dev-3.0.0").mkdir()
@@ -143,6 +146,8 @@ class AgentManagerTests(unittest.TestCase):
         self.assertIn("config_dir", {signal["kind"] for signal in agents["codex"]["signals"] if signal["found"]})
         self.assertTrue(agents["cursor"]["detected"])
         self.assertIn("app", {signal["kind"] for signal in agents["cursor"]["signals"] if signal["found"]})
+        self.assertTrue(agents["workbuddy"]["detected"])
+        self.assertIn("app", {signal["kind"] for signal in agents["workbuddy"]["signals"] if signal["found"]})
         self.assertTrue(agents["cline"]["detected"])
         self.assertIn("extension", {signal["kind"] for signal in agents["cline"]["signals"] if signal["found"]})
 
@@ -174,7 +179,7 @@ class AgentManagerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
         self.assertEqual(payload["schema_version"], "2")
-        self.assertEqual(len(payload["agents"]), 7)
+        self.assertEqual(len(payload["agents"]), 8)
         self.assertIn("detected", payload["summary"])
         self.assertEqual(payload["agents"][0]["adapter"], self.manager.load_registry(REGISTRY)["agents"][0]["adapter"])
 
@@ -246,7 +251,7 @@ class AgentManagerTests(unittest.TestCase):
         preview_skills = [change for change in preview if change.get("kind") == "skill"]
         self.assertEqual(
             [change["skill"] for change in preview_skills],
-            ["harness-plan", "harness-goal", "harness-brain", "harness-e2e"],
+            ["harness-plan", "harness-goal", "harness-brain", "harness-e2e", "prd-for-humans"],
         )
         self.assertTrue(all(change["changed"] for change in preview_skills))
         self.assertFalse((self.home / ".codex" / "skills").exists())
@@ -258,6 +263,29 @@ class AgentManagerTests(unittest.TestCase):
         self.assertTrue(all(Path(change["target"]).is_symlink() for change in first_skills))
         self.assertTrue(all(change["status"] == "linked" for change in first_skills))
         self.assertTrue(all(not change["changed"] for change in second_skills))
+
+    def test_workbuddy_syncs_managed_skills_only_when_detected(self) -> None:
+        registry = self.tier_one_registry("workbuddy")
+
+        absent = self.manager.sync_agents(registry, home=self.home, dry_run=False, app_dirs=[self.apps_dir])
+        self.assertTrue(all(change["status"] == "not_detected" for change in absent))
+        self.assertFalse((self.home / ".workbuddy").exists())
+
+        (self.home / ".workbuddy").mkdir()
+        first = self.manager.sync_agents(registry, home=self.home, dry_run=False, app_dirs=[self.apps_dir])
+        second = self.manager.sync_agents(registry, home=self.home, dry_run=False, app_dirs=[self.apps_dir])
+
+        self.assertEqual(
+            [change["skill"] for change in first],
+            ["harness-plan", "harness-goal", "harness-brain", "harness-e2e", "prd-for-humans"],
+        )
+        self.assertTrue(all(Path(change["target"]).is_symlink() for change in first))
+        self.assertTrue(all(not change["changed"] for change in second))
+        report = self.manager.build_report(registry, home=self.home, bin_dirs=[self.bin_dir], app_dirs=[self.apps_dir])
+        workbuddy = report["agents"][0]
+        self.assertEqual(workbuddy["injection"]["status"], "project_managed")
+        self.assertEqual(workbuddy["injection"]["target"], "AGENTS.md")
+        self.assertEqual(workbuddy["loading"]["status"], "unsupported")
 
     def test_sync_preserves_user_owned_skill_with_same_name(self) -> None:
         target = self.home / ".codex" / "skills" / "harness-plan"

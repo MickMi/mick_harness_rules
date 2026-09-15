@@ -1,4 +1,26 @@
-> 🧭 状态：发布候选验证中 | 当前归属：QA | 本轮范围：v0.24.0 发布、安装更新与 6425 验收
+> 🧭 状态：需求定义与开发中 | 当前归属：PM → 开发 | 本轮范围：v0.25.0 个性化 PRD 会话与 WorkBuddy 接入
+
+## v0.25.0 · 2026-09-15 · 个性化 PRD 会话与 WorkBuddy 接入
+
+- [x] 236. [原生发现] 将 `prd-for-humans` 纳入受支持 Agent 的托管 Skill，同步时保留用户同名内容并明确冲突，不再依赖 Agent 猜测仓库内路径。
+- [x] 237. [对话收敛] 建立 PRD 就绪判断：信息充分时直接成稿；信息不足时先复述理解与建议，每轮只追问 1–2 个会改变产品判断的问题，并持续记录已确认事实，避免重复提问。
+- [x] 238. [记忆边界] 固定“当前对话/项目事实、个人 Profile、Brain 稳定偏好”的优先级；未经确认的日志、推断和一次性修订不得成为 PRD 事实或自动升级为个人风格。
+- [x] 239. [质量证明] 增加明确需求直接输出、模糊需求多轮收敛、个人 Profile 生效与未确认范围隔离的对话样例和行为测试；技术污染检查继续作为底线，不冒充产品质量判断。
+- [x] 240. [WorkBuddy 接入] 将本机 WorkBuddy 纳入 Agent 注册表与诊断，托管其已验证的个人 Skill 目录；规则 Loader、生命周期 Hook 与执行回写在缺少宿主协议证据时保持未支持或未验证。
+- [ ] 241. [体验与发布门禁] 在工作台展示 WorkBuddy 的检测、Skill 接入、规则加载和 Hook 四层真实状态；完成聚焦测试后先交预览，用户确认再进入完整回归和发布候选。
+- goal: 让用户在支持的 Agent 中稳定启动符合个人风格的 PRD 对话：明确需求不被流程拖慢，模糊需求通过少量关键追问收敛，同时能看见 WorkBuddy 到底接入了哪一层。
+- interaction-contract: PRD 所需信息是产品决策要素，不是固定章节清单；追问必须改变范围、用户路径、规则或验收，不为填模板而提问。
+- evidence-boundary: 本机已确认 WorkBuddy 5.3.14、`~/.workbuddy` 配置目录与 `~/.workbuddy/skills` 个人 Skill 目标；尚未确认其全局规则 Loader、项目规则入口或生命周期 Hook，因此本版本不得把这些能力标成已托管。
+- preservation: 不读取或公开 WorkBuddy 的个人记忆、会话正文与设置密钥；不覆盖用户已有 Skill；不把 WorkBuddy 进程存在等同于 Harness 已加载。
+- preview-gate: 本版本按 standard 流程推进；聚焦自检后停在可体验预览，用户确认前不自动进入完整 QA 或发布。
+
+### Step 240 — 2026-09-15 · PRD 对话与 WorkBuddy 接入预览
+
+- implementation: `prd-for-humans` 已加入 Codex、Claude Code 与检测到的 WorkBuddy 托管 Skill；同名用户目录保持冲突并不覆盖。PM 与 Skill 现在会先判断缺失信息是否真的改变产品决定，充分则直出，不充分则每轮最多追问 1–2 个关键问题并继承历史答案。
+- memory-boundary: 当前对话和确认项目文档提供产品事实；Profile 只控制写作风格；Brain 只提供有来源的稳定偏好或确认决策。未经审批的候选、原始日志和一次性修订不进入产品事实。
+- workbuddy-evidence: 本机 WorkBuddy 5.3.14 的应用包证明项目首轮读取 `AGENTS.md`，个人 Skill 目录为 `~/.workbuddy/skills/`；Agent 注册表因此标记项目规则与 Skill 可管理。未找到生命周期 Hook，加载、执行与回写保持未验证。
+- verify: Agent 与 PRD 两个 subsystem Gate 通过；共 79 项聚焦测试通过，另有 Observer 四层状态合同通过；上下文预算仍为 core 9908 / project 16342 / global 12159 / combined 28501 bytes，全部在上限内。
+- preview: `http://127.0.0.1:6433/?view=agents` 已启动，健康接口为 `ok`、10/10 项目有效；WorkBuddy API 状态为发现已验证、项目注入待真实会话、加载/执行/回写未验证、Hook 不支持。Mac 锁定导致本轮无法完成浏览器可视检查，因此 `task-241` 保持未完成。
 
 ## v0.24.0 · 2026-09-15 · 快速、可操作的项目指挥台
 
@@ -29,6 +51,8 @@
 - candidate-verify: `python3 scripts/harness-verify.py release` → 244 tests / OK，生成一致性与 `git diff --check` 通过；`node tests/test_operation_feedback.cjs` → PASS；Shell 语法、公开内容审计、上下文预算通过；当前发布树复制到临时新项目后，`setup.sh --non-interactive` → exit 0。
 - compatibility: 默认 portfolio 与项目首页改为轻量摘要，完整工作区路由继续按需可用；现有项目、Brain、事件账本、Agent Loader 和操作记录无需数据迁移。
 - remaining-at-commit: GitHub PR、annotated tag、本机 `harness update` 与唯一 6425 真实健康检查属于本次获授权发布事务；任一步失败即停止并保留真实状态。
+- release-result: PR #6 已合并到远端 `main`，merge commit `6e21fbd`，annotated tag `v0.24.0` 已发布；本机安装已更新为 0.24.0，唯一 6425 服务 healthy。
+- live-evidence: 6425 `/healthz` → `ok`；10/10 个登记项目同步；`/api/portfolio.json` → HTTP 200，约 0.789 秒 / 23,317 B。主检出目录存在用户改动，发布过程未覆盖、未 stash、未清理。
 
 ## v0.23.0 · 2026-09-14 · 项目优先工作台发布
 

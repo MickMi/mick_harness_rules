@@ -1045,6 +1045,32 @@ class ObserveRuntimeTests(unittest.TestCase):
         self.assertFalse(any(issue["code"] == "load-proof-missing" for issue in agent["issues"]))
         self.assertNotIn("thr_agent_status", json.dumps(result))
 
+    def test_workbuddy_project_loader_is_configured_without_claiming_session_load(self) -> None:
+        manager_report = {
+            "harness_version": PRODUCT_VERSION,
+            "agents": [{
+                "id": "workbuddy", "name": "WorkBuddy", "tier": 2, "detected": True,
+                "signals": [{"kind": "app", "found": True}],
+                "injection": {"status": "project_managed", "target": "AGENTS.md"},
+                "loading": {"status": "unsupported"},
+                "execution": {"status": "unverified"},
+                "adapter": {
+                    "support": "managed", "loading": "managed", "skills": "managed",
+                    "hooks": "unsupported", "repair": ["harness agents sync --dry-run"],
+                },
+                "issues": [],
+                "limitations": ["Project rules only; no lifecycle Hook."],
+            }],
+        }
+
+        result = OBSERVE.agent_status_snapshot(manager_report=manager_report)
+        agent = result["agents"][0]
+
+        self.assertEqual(agent["layers"]["discovered"]["status"], "verified")
+        self.assertEqual(agent["layers"]["injected"]["status"], "configured")
+        self.assertEqual(agent["layers"]["loaded"]["status"], "unverified")
+        self.assertEqual(agent["layers"]["feedback"]["status"], "unverified")
+
     def test_offline_delivery_keeps_persistent_outbox_until_replay(self) -> None:
         (self.project / "AGENTS.md").write_text("# Harness\n", encoding="utf-8")
         envelope = OBSERVE.build_agent_envelope(
@@ -2957,7 +2983,7 @@ class ObserveRuntimeTests(unittest.TestCase):
             self.assertEqual([item["validation"] for item in portfolio["projects"]], ["valid", "missing"])
             with urlopen(f"{base}/api/agents.json", timeout=2) as response:
                 agents = json.loads(response.read())
-            self.assertEqual(len(agents["agents"]), 7)
+            self.assertEqual(len(agents["agents"]), 8)
             self.assertIn("layers", agents["agents"][0])
             self.assertEqual(
                 set(agents["agents"][0]["adapter"]),

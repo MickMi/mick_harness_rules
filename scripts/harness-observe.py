@@ -3947,7 +3947,11 @@ def agent_status_snapshot(
         layers = {
             "discovered": {"status": "verified" if source.get("detected") else "not_detected"},
             "injected": {
-                "status": "verified" if injection_status == "injected" else ("blocked" if injection_status == "conflict" else "unverified")
+                "status": "verified" if injection_status == "injected" else (
+                    "configured" if injection_status == "project_managed" and source.get("detected") else (
+                        "blocked" if injection_status == "conflict" else "unverified"
+                    )
+                )
             },
             "loaded": {"status": loaded_status},
             "execution": {"status": source.get("execution", {}).get("status", "unverified")},

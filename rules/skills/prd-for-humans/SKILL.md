@@ -1,6 +1,6 @@
 ---
 name: prd-for-humans
-description: Draft, revise, or review a product requirements document for human product review. Use only when the user explicitly asks for a PRD or asks to turn confirmed product requirements into a reviewable PRD. Keep product intent, user behavior, scope, rules, tradeoffs, and acceptance clear while excluding implementation guidance, Prompt design, model/data contracts, machine output formats, and Agent instructions.
+description: Start, draft, revise, or review a product requirements document for human product review. Use when the user explicitly asks to write a PRD, begin PRD discovery, or turn product requirements into a reviewable PRD. Decide whether the requirement is clear enough to draft now; otherwise converge through a few decision-changing questions. Keep product intent, user behavior, scope, rules, tradeoffs, and acceptance clear while excluding implementation guidance, Prompt design, model/data contracts, machine output formats, and Agent instructions.
 ---
 
 # PRD for Humans
@@ -27,6 +27,27 @@ Before drafting, identify:
 - Any unresolved choice that materially changes the product.
 
 Ask at most the smallest set of questions needed to resolve a material product decision. Do not turn PRD creation into a questionnaire, and do not invent missing decisions.
+
+## Decide whether to draft or discuss
+
+Treat PRD readiness as a product judgment, not a mandatory field checklist. Build a working brief from the current conversation and existing product facts: who has the problem, what outcome should change, the main experience or rule under review, the meaningful release boundary, and how people will judge the result. Some requirements will not need every element stated separately.
+
+- If no missing answer would materially change the product direction, draft the PRD immediately. Do not ask confirmation questions merely to perform a process.
+- If a missing answer would change the target user, core journey, business rule, scope, permission, failure behavior, or acceptance, stay in discussion. First state the current understanding and a recommended default, then ask at most one or two questions about the highest-impact unresolved decision.
+- On later rounds, carry forward every confirmed answer. Ask only the next unresolved decision; never repeat a question unless the new answer conflicts with an earlier fact, and name that conflict when asking.
+- If the user explicitly asks to proceed with uncertainty, draft with recommendations and unresolved decisions visibly separated from confirmed facts. Never silently promote a recommendation to a requirement.
+
+Do not confuse PRD readiness with implementation readiness. A human PRD may be ready for product review without APIs, schemas, technical architecture, task breakdowns, or test commands.
+
+See `references/dialogue-clear.md` and `references/dialogue-ambiguous.md` for conversation behavior. They are examples of judgment, not required wording.
+
+## Keep facts and memory separate
+
+- Current user statements and confirmed project documents define product truth for this PRD.
+- The active PRD Profile shapes language, structure, density, and review style; it does not supply product facts.
+- Brain may supply confirmed decisions and stable preferences with a clear source. Raw session logs, unapproved candidates, inferred intent, and unrelated project history are not requirements.
+- A correction in this PRD changes only this document by default. Propose a Profile update only after the user confirms the correction is a stable preference across future PRDs.
+- When sources disagree, surface the conflict and ask for the smallest necessary decision instead of choosing the most recent-looking text.
 
 ## Choose an adaptive outline
 
