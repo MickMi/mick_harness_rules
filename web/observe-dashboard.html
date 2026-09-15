@@ -47,27 +47,31 @@
     body { margin: 0; background: var(--bg); color: var(--text); }
     button { font: inherit; }
     button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
-    .app { min-height: 100vh; display: grid; grid-template-columns: 290px minmax(0, 1fr); }
-    .sidebar { border-right: 1px solid var(--border); background: var(--surface); padding: 22px 16px; }
-    .brand { margin: 0 0 4px; font-size: 18px; font-weight: 650; }
-    .subtitle { margin: 0 0 20px; color: var(--muted); font-size: 13px; }
+    .app { min-height: 100vh; display: grid; grid-template-columns: 252px minmax(0, 1fr); }
+    .sidebar { border-right: 1px solid var(--border); background: var(--surface); padding: 18px 12px; }
+    .brand { margin: 0 0 3px; font-size: 16px; font-weight: 680; }
+    .subtitle { margin: 0 0 15px; color: var(--muted); font-size: 11px; }
     .nav-tree { display: grid; gap: 2px; }
     .nav-project, .nav-view {
       width: 100%; text-align: left; border: 0; border-radius: 8px;
       background: transparent; color: inherit; cursor: pointer; font: inherit;
     }
-    .nav-section-label { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; margin: 14px 10px 5px; padding-top: 13px; border-top: 1px solid var(--border); color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+    .nav-section-label { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; margin: 12px 8px 5px; padding-top: 11px; border-top: 1px solid var(--border); color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
     .nav-section-label .nav-count { font-size: 11px; font-weight: 500; letter-spacing: 0; text-transform: none; }
-    .nav-project { padding: 8px 10px; display: grid; gap: 3px; margin-top: 2px; }
+    .nav-search { width: calc(100% - 12px); margin: 4px 6px 7px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-soft); color: var(--text); padding: 7px 9px; font: inherit; font-size: 12px; }
+    .nav-search::placeholder { color: var(--muted); }
+    .nav-project-group { display: grid; gap: 1px; }
+    .nav-group-label { margin: 9px 8px 3px; color: var(--muted); font-size: 10px; font-weight: 680; }
+    .nav-project { padding: 6px 8px; display: grid; gap: 2px; margin-top: 1px; }
     .nav-project:hover { background: var(--surface-2); }
     .nav-project[aria-current="true"] { background: var(--accent-soft); }
     .nav-project-head { display: flex; gap: 6px; align-items: center; }
     .nav-expander { width: 14px; color: var(--muted); font-size: 11px; flex: none; }
-    .nav-name { font-weight: 600; overflow-wrap: anywhere; }
+    .nav-name { font-size: 13px; font-weight: 620; overflow-wrap: anywhere; }
     .nav-project[data-validation]:not([data-validation="valid"]) .nav-name { color: var(--danger); }
-    .nav-meta { display: flex; gap: 8px; padding-left: 20px; color: var(--muted); font-size: 12px; }
-    .nav-views { display: grid; gap: 1px; margin: 2px 0 8px 22px; padding-left: 8px; border-left: 1px solid var(--border); }
-    .nav-view { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; padding: 6px 8px; color: var(--muted); }
+    .nav-meta { display: flex; gap: 7px; padding-left: 20px; color: var(--muted); font-size: 10.5px; }
+    .nav-views { display: grid; gap: 1px; margin: 2px 0 7px 20px; padding-left: 7px; border-left: 1px solid var(--border); }
+    .nav-view { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; padding: 5px 7px; color: var(--muted); font-size: 12px; }
     .nav-view:hover { background: var(--surface-2); color: var(--text); }
     .nav-view[aria-current="true"] { color: var(--text); font-weight: 650; background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
     .nav-badge { color: var(--danger); font-size: 11px; font-weight: 650; }
@@ -150,6 +154,16 @@
     .attention-list { display: grid; gap: 8px; margin-top: 12px; }
     .attention-item { border-left: 3px solid var(--warning); border-radius: 8px; background: var(--surface-2); padding: 10px 12px; font-size: 13px; }
     .attention-item.error { border-left-color: var(--danger); color: var(--text); }
+    .blocker-card { border: 1px solid var(--border); border-left: 3px solid var(--danger); border-radius: 10px; background: var(--surface-soft); padding: 12px 14px; }
+    .blocker-card[data-kind="decision"] { border-left-color: var(--warning); }
+    .blocker-card-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+    .blocker-kind { color: var(--muted); font-size: 11px; font-weight: 700; }
+    .blocker-summary { margin: 7px 0 0; font-size: 13px; line-height: 1.5; }
+    .blocker-meta { margin-top: 7px; color: var(--muted); font-size: 11px; }
+    .blocker-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .blocker-action { border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text); padding: 6px 9px; cursor: pointer; font-size: 11px; }
+    .blocker-action:hover { border-color: var(--accent); color: var(--accent); }
+    .blocker-action[data-primary="true"] { border-color: var(--accent); color: var(--accent); }
     .role-chip, .material-chip { display: inline-flex; align-items: center; border-radius: 999px; background: var(--surface-2); padding: 5px 9px; color: var(--muted); font-size: 12px; }
     .detail-section { margin-top: 17px; }
     .detail-section h3 { margin: 0 0 7px; color: var(--muted); font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
@@ -323,11 +337,14 @@
     .priority-summary { display: flex; gap: 12px; align-items: baseline; }
     .priority-count { color: var(--accent); font-size: 28px; font-weight: 720; }
     .priority-copy { color: var(--muted); font-size: 13px; }
-    .inbox-items { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-    .inbox-item { border: 0; border-left: 2px solid var(--warning); background: var(--surface-soft); padding: 6px 10px; color: var(--muted); font-size: 12px; }
+    .inbox-items { display: grid; gap: 7px; margin-top: 10px; }
+    .inbox-item { width: 100%; display: grid; grid-template-columns: minmax(150px, .75fr) minmax(220px, 1.4fr) auto; gap: 14px; align-items: center; border: 0; border-left: 2px solid var(--warning); background: var(--surface-soft); padding: 9px 11px; color: var(--text); text-align: left; font-size: 12px; }
     .inbox-item.error { border-left-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
     button.inbox-item { cursor: pointer; }
     button.inbox-item:hover, button.inbox-item:focus-visible { color: var(--accent); background: var(--accent-soft); }
+    .inbox-item-title { font-weight: 680; }
+    .inbox-item-meta { color: var(--muted); line-height: 1.4; }
+    .inbox-item-action { color: var(--accent); font-weight: 650; white-space: nowrap; }
     .project-summary-list { display: grid; margin-top: 7px; border-top: 1px solid var(--border); }
     .project-summary-row { width: 100%; display: grid; grid-template-columns: minmax(150px, .65fr) minmax(220px, 1.5fr) minmax(90px, .45fr) minmax(120px, .55fr) 18px; gap: 16px; align-items: center; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: inherit; padding: 14px 4px; text-align: left; cursor: pointer; }
     .project-summary-row:hover { background: var(--surface-soft); }
@@ -359,6 +376,15 @@
     .skill-summary-item { background: var(--surface); padding: 16px; min-width: 0; }
     .skill-summary-item span { display: block; color: var(--muted); font-size: 12px; }
     .skill-summary-item strong { display: block; margin-top: 5px; font-size: 24px; }
+    .improvement-funnel { display: grid; grid-template-columns: repeat(7, minmax(80px, 1fr)); gap: 6px; margin: 18px 0 22px; }
+    .improvement-stage { position: relative; border-top: 3px solid var(--border); padding: 7px 4px 0; color: var(--muted); font-size: 10px; }
+    .improvement-stage:not(:last-child)::after { content: "›"; position: absolute; right: -6px; top: 3px; color: var(--border); }
+    .improvement-stage[data-active="true"] { border-color: var(--accent); color: var(--text); font-weight: 700; }
+    .improvement-stage[data-complete="true"] { border-color: var(--success); color: var(--success); }
+    .improvement-card-flow { display: flex; flex-wrap: wrap; gap: 4px; margin: 9px 0; }
+    .improvement-card-step { border-radius: 999px; background: var(--surface-2); padding: 3px 7px; color: var(--muted); font-size: 9px; }
+    .improvement-card-step[data-active="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+    .improvement-card-step[data-complete="true"] { color: var(--success); }
     .skill-boundary { border-left: 3px solid var(--accent); padding: 12px 15px; background: var(--accent-soft); color: var(--muted); line-height: 1.55; }
     .skill-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin: 26px 0 12px; }
     .skill-filters { display: flex; flex-wrap: wrap; gap: 7px; }
@@ -853,6 +879,8 @@
       .project-lite .requirement-expand { grid-column: 2; grid-row: 1; }
       .project-lite .requirement-brief { grid-column: 1 / -1; }
       .requirement-detail-facts { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+      .inbox-item { grid-template-columns: 1fr; gap: 4px; }
+      .improvement-funnel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
   </style>
 </head>
@@ -871,7 +899,7 @@
   </div>
   <script>
     (() => {
-      const state = { portfolio: null, agents: null, skills: null, skillFilter: "attention", operations: null, brainHealth: null, brainCandidates: [], projectMemories: [], harnessImprovements: [], brainSyncConfirm: false, brainSyncPreview: null, focus: null, project: null, index: null, run: null, snapshot: null, workspace: null, events: [], view: "overview", taskId: null, selectedRole: null, removeProjectId: null, artifactPath: null, artifactDocument: null, artifactError: null, notice: null };
+      const state = { portfolio: null, agents: null, skills: null, skillFilter: "attention", operations: null, brainHealth: null, brainCandidates: [], projectMemories: [], harnessImprovements: [], brainSyncConfirm: false, brainSyncPreview: null, focus: null, project: null, projectQuery: "", index: null, run: null, snapshot: null, workspace: null, events: [], view: "overview", taskId: null, selectedRole: null, removeProjectId: null, artifactPath: null, artifactDocument: null, artifactError: null, notice: null };
       const navTree = document.getElementById("nav-tree");
       const portfolioSummary = document.getElementById("portfolio-summary");
       const content = document.getElementById("content");
@@ -1138,7 +1166,7 @@
         return badge;
       }
 
-      async function startHarnessOperation(item) {
+      async function startHarnessOperation(item, defaults = {}) {
         if (state.operationSubmitting || state.operations?.active || state.operationReadError) return;
         state.operationSubmitting = item.action;
         state.operationFocus = {action: item.action, label: item.label};
@@ -1170,10 +1198,10 @@
               render();
               return;
             }
-            const fields = [{ name: "project_path", label: "项目", type: "select", options: projectOptions }];
+            const fields = [{ name: "project_path", label: "项目", type: "select", value: defaults.project_path || "", options: projectOptions }];
             if (item.action === "command-plan") fields.push({ name: "title", label: "阶段标题（可选）", placeholder: "例如：0.21 命令工作台" });
             if (item.action === "command-goal") fields.push({ name: "goal", label: "长期产品目标", type: "textarea", required: true, placeholder: "描述长期为谁解决什么问题，不写版本、任务或技术方案" });
-            if (item.action === "command-e2e") fields.push({ name: "requirement_id", label: "需求 ID", required: true, placeholder: "例如 task-201" });
+            if (item.action === "command-e2e") fields.push({ name: "requirement_id", label: "需求 ID", value: defaults.requirement_id || "", required: true, placeholder: "例如 task-201" });
             const values = await brainDialog({
               title: item.label,
               description: "先生成只读预览；不会在这一步写项目文件或推进需求。",
@@ -1415,7 +1443,12 @@
           item.type = "button";
           item.setAttribute("aria-current", String(!state.project && state.view === value));
           item.append(el("span", "", label));
-          item.addEventListener("click", () => { state.view = value; state.focus = null; selectProject(null); });
+          item.addEventListener("click", async () => {
+            state.view = value;
+            state.focus = null;
+            await selectProject(null);
+            loadSecondaryData();
+          });
           global.append(item);
         });
         navTree.append(global);
@@ -1425,52 +1458,90 @@
         const projectLabel = el("div", "nav-section-label");
         projectLabel.append(el("span", "", "项目"), el("span", "nav-count", state.portfolio ? `${validProjects.length} 个可用` : "读取中"));
         navTree.append(projectLabel);
-
-        validProjects.forEach(project => {
-          const expanded = state.project?.project_id === project.project_id;
-          const button = el("button", "nav-project");
-          button.type = "button";
-          button.dataset.validation = project.validation;
-          button.setAttribute("aria-current", String(expanded));
-          button.setAttribute("aria-expanded", String(expanded));
-          const head = el("span", "nav-project-head");
-          head.append(el("span", "nav-expander", expanded ? "▾" : "▸"), el("span", "nav-name", project.name));
-          button.append(head);
-          const meta = el("span", "nav-meta");
-          meta.append(el("span", "", project.stage));
-          meta.append(el("span", "", roleLabel(project.owner_role)));
-          button.append(meta);
-          button.addEventListener("click", () => selectProject(project.project_id));
-          navTree.append(button);
-
-          if (!expanded) return;
-          const views = el("div", "nav-views");
-          PROJECT_VIEWS.forEach(([value, label]) => {
-            const item = el("button", "nav-view");
-            item.type = "button";
-            item.setAttribute("aria-current", String(state.view === value));
-            item.append(el("span", "", label));
-            const blocks = state.snapshot?.summary?.active_blocks ?? project.summary?.active_blocks ?? 0;
-            if (value === "overview" && blocks > 0) item.append(el("span", "nav-badge", `●${blocks} 阻塞`));
-            item.addEventListener("click", () => { state.view = value; writeUrlState(); render(); });
-            views.append(item);
+        const search = el("input", "nav-search");
+        search.type = "search";
+        search.placeholder = "查找项目";
+        search.setAttribute("aria-label", "查找项目");
+        search.value = state.projectQuery || "";
+        search.addEventListener("input", () => {
+          state.projectQuery = search.value.trim().toLocaleLowerCase();
+          navTree.querySelectorAll("[data-project-entry]").forEach(entry => {
+            entry.hidden = Boolean(state.projectQuery) && !entry.dataset.projectName.includes(state.projectQuery);
           });
-          navTree.append(views);
-
-          const more = el("details", "nav-more");
-          more.append(el("summary", "", "更多 · 诊断"));
-          const diag = el("div", "nav-views");
-          DIAG_VIEWS.forEach(([value, label]) => {
-            const item = el("button", "nav-view");
-            item.type = "button";
-            item.setAttribute("aria-current", String(state.view === value));
-            item.append(el("span", "", label));
-            item.addEventListener("click", () => { state.view = value; writeUrlState(); render(); });
-            diag.append(item);
+          navTree.querySelectorAll(".nav-project-group").forEach(group => {
+            group.hidden = !Array.from(group.querySelectorAll("[data-project-entry]")).some(entry => !entry.hidden);
           });
-          more.append(diag);
-          navTree.append(more);
         });
+        navTree.append(search);
+
+        const attentionProjects = validProjects.filter(project => project.summary?.active_blocks || project.execution?.needs_user_decision);
+        const attentionIds = new Set(attentionProjects.map(project => project.project_id));
+        const activeProjects = validProjects.filter(project => !attentionIds.has(project.project_id) && (
+          project.recent_work?.status === "active" || ["角色工作中", "等待角色接手", "Agent 执行中", "Agent 会话中"].includes(project.stage)
+        ));
+        const activeIds = new Set(activeProjects.map(project => project.project_id));
+        const otherProjects = validProjects.filter(project => !attentionIds.has(project.project_id) && !activeIds.has(project.project_id));
+        const renderProjectGroup = (label, groupProjects) => {
+          if (!groupProjects.length) return;
+          const group = el("section", "nav-project-group");
+          group.append(el("div", "nav-group-label", `${label} · ${groupProjects.length}`));
+          groupProjects.forEach(project => {
+            const entry = el("div", "nav-project-entry");
+            entry.dataset.projectEntry = "true";
+            entry.dataset.projectName = String(project.name || "").toLocaleLowerCase();
+            entry.hidden = Boolean(state.projectQuery) && !entry.dataset.projectName.includes(state.projectQuery);
+            const expanded = state.project?.project_id === project.project_id;
+            const button = el("button", "nav-project");
+            button.type = "button";
+            button.dataset.validation = project.validation;
+            button.setAttribute("aria-current", String(expanded));
+            button.setAttribute("aria-expanded", String(expanded));
+            const head = el("span", "nav-project-head");
+            head.append(el("span", "nav-expander", expanded ? "▾" : "▸"), el("span", "nav-name", project.name));
+            button.append(head);
+            const meta = el("span", "nav-meta");
+            meta.append(el("span", "", project.stage), el("span", "", roleLabel(project.owner_role)));
+            button.append(meta);
+            button.addEventListener("click", () => selectProject(project.project_id));
+            entry.append(button);
+
+            if (expanded) {
+              const views = el("div", "nav-views");
+              PROJECT_VIEWS.forEach(([value, viewLabel]) => {
+                const item = el("button", "nav-view");
+                item.type = "button";
+                item.setAttribute("aria-current", String(state.view === value));
+                item.append(el("span", "", viewLabel));
+                const blocks = state.snapshot?.summary?.active_blocks ?? project.summary?.active_blocks ?? 0;
+                if (value === "overview" && blocks > 0) item.append(el("span", "nav-badge", `●${blocks} 阻塞`));
+                item.addEventListener("click", () => selectProjectView(value));
+                views.append(item);
+              });
+              entry.append(views);
+
+              const more = el("details", "nav-more");
+              more.open = DIAG_VIEWS.some(([value]) => value === state.view);
+              more.append(el("summary", "", "更多 · 诊断"));
+              const diag = el("div", "nav-views");
+              DIAG_VIEWS.forEach(([value, viewLabel]) => {
+                const item = el("button", "nav-view");
+                item.type = "button";
+                item.setAttribute("aria-current", String(state.view === value));
+                item.append(el("span", "", viewLabel));
+                item.addEventListener("click", () => selectProjectView(value));
+                diag.append(item);
+              });
+              more.append(diag);
+              entry.append(more);
+            }
+            group.append(entry);
+          });
+          if (!Array.from(group.querySelectorAll("[data-project-entry]")).some(entry => !entry.hidden)) group.hidden = true;
+          navTree.append(group);
+        };
+        renderProjectGroup("需要关注", attentionProjects);
+        renderProjectGroup("正在推进", activeProjects);
+        renderProjectGroup("其他项目", otherProjects);
 
         if (invalidProjects.length) {
           const invalidGroup = el("details", "nav-invalid-group");
@@ -1557,6 +1628,7 @@
         state.focus = focus;
         writeUrlState();
         render();
+        loadSecondaryData();
       }
 
       function openSettingsSection(section) {
@@ -1570,6 +1642,7 @@
         state.focus = ["skills", "improvements", "reporting"].includes(section) ? section : null;
         writeUrlState();
         render();
+        loadSecondaryData();
       }
 
       function renderSettingsTabs(active) {
@@ -2007,6 +2080,30 @@
         })[value] || value || "未知";
       }
 
+      const improvementStages = ["问题证据", "模式归纳", "人工审批", "改进提案", "实现落地", "发布版本", "效果复验"];
+
+      function improvementStageIndex(candidate) {
+        if (["verified", "needs_followup"].includes(candidate.status)) return 6;
+        if (candidate.status === "implemented" && candidate.implementation?.release_version) return 5;
+        if (candidate.status === "implemented") return 4;
+        if (candidate.status === "approved") return 3;
+        if (candidate.status === "pending_approval") return 2;
+        if ((candidate.project_count || 0) >= 2 || (candidate.occurrence_count || 0) >= 3) return 1;
+        return 0;
+      }
+
+      function renderImprovementFlow(candidate, className = "improvement-card-flow") {
+        const flow = el("div", className);
+        const current = improvementStageIndex(candidate);
+        improvementStages.forEach((label, index) => {
+          const item = el("span", className === "improvement-funnel" ? "improvement-stage" : "improvement-card-step", label);
+          item.dataset.active = String(index === current);
+          item.dataset.complete = String(index < current);
+          flow.append(item);
+        });
+        return flow;
+      }
+
       async function runImprovementAction(action) {
         try {
           await action();
@@ -2184,6 +2281,7 @@
         content.append(back);
         renderSettingsTabs("improvements");
         content.append(el("p", "section-help", "项目问题先保留为证据；跨项目重复、同类高频或你明确送审后，才进入中央 Harness 审批。批准只生成 Rule / Skill / Checker / Profile 提案，不会自动改规则。"));
+        content.append(renderImprovementFlow({}, "improvement-funnel"));
         if (state.notice) content.append(el("p", "warning-line", state.notice));
 
         const summary = el("section", "skill-summary");
@@ -2202,6 +2300,7 @@
           card.dataset.status = candidate.status;
           card.append(el("div", "brain-meta", `${improvementTargetLabel(candidate.target)} · ${improvementStatusLabel(candidate.status)}`));
           card.append(el("div", "", candidate.summary));
+          card.append(renderImprovementFlow(candidate));
           const projects = (candidate.source_projects || []).join("、") || "未记录项目";
           card.append(el("p", "muted", `来源项目：${projects} · ${candidate.sources?.length || 0} 条证据 · ${candidate.occurrence_count || 1} 次问题信号`));
           const evidence = el("details", "memory-evidence");
@@ -2223,7 +2322,7 @@
           }
           if (candidate.proposal_path) card.append(el("p", "muted", `提案：${candidate.proposal_path}`));
           if (candidate.implementation?.artifact_path) {
-            card.append(el("p", "muted", `实际产物：${candidate.implementation.artifact_path} · 基线 ${candidate.implementation.baseline_count}`));
+            card.append(el("p", "muted", `实际产物：${candidate.implementation.artifact_path} · 发布版本 ${candidate.implementation.release_version ? `v${candidate.implementation.release_version}` : "待登记"} · 基线 ${candidate.implementation.baseline_count}`));
           }
           if (candidate.effect) {
             card.append(el("p", "muted", `效果：${candidate.effect.result} · 当前同类问题 ${candidate.effect.current_count} 次${candidate.effect.note ? ` · ${candidate.effect.note}` : ""}`));
@@ -2300,12 +2399,14 @@
                 confirmLabel: "登记落地",
                 fields: [
                   { name: "artifact_path", label: "项目相对路径", required: true, placeholder: "verify.d/ui-layout.py" },
+                  { name: "release_version", label: "计划发布版本", value: "0.24.0", required: true, placeholder: "例如 0.24.0" },
                   { name: "baseline_count", label: "落地前同类问题次数", type: "number", value: String(candidate.occurrence_count || 0), required: true },
                 ],
               });
               if (!values) return;
               await postBrain(`/api/harness/improvements/${encodeURIComponent(candidate.improvement_id)}/mark-implemented`, {
                 artifact_path: values.artifact_path,
+                release_version: values.release_version,
                 baseline_count: Number(values.baseline_count),
               });
             }, "primary"));
@@ -2692,6 +2793,7 @@
 
       function renderPortfolio() {
         content.replaceChildren();
+        const portfolioLoading = !state.portfolio;
         const projects = state.portfolio?.projects || [];
         const summary = state.portfolio?.summary || {};
         const validProjects = projects.filter(item => item.validation === "valid");
@@ -2706,7 +2808,7 @@
         const top = el("div", "topline");
         const titleWrap = el("div", "");
         titleWrap.append(el("h1", "", "工作台"));
-        titleWrap.append(el("p", "section-help", `${validProjects.length} 个已接入项目 · 查看进展，继续下一步`));
+        titleWrap.append(el("p", "section-help", portfolioLoading ? "正在读取本机项目摘要…" : `${validProjects.length} 个已接入项目 · 查看进展，继续下一步`));
         const toolbar = el("div", "workbench-toolbar");
         const manage = el("button", "workbench-manage", "管理");
         manage.type = "button";
@@ -2721,6 +2823,10 @@
         top.append(titleWrap, toolbar);
         content.append(top);
         if (state.notice) content.append(el("p", "warning-line", state.notice));
+        if (portfolioLoading) {
+          content.append(el("div", "empty", "正在读取项目进展；详细诊断会在进入项目后按需加载。"));
+          return;
+        }
 
         const inboxCard = el("section", "workbench-priority");
         const inboxHead = el("div", "inbox-head");
@@ -2730,29 +2836,35 @@
         inboxCard.append(inboxHead);
         if (inboxTotal) {
           const items = el("div", "inbox-items");
+          const appendAction = ({ title, meta, actionLabel, severity = "", action }) => {
+            const button = el("button", `inbox-item${severity ? ` ${severity}` : ""}`);
+            button.type = "button";
+            button.append(
+              el("span", "inbox-item-title", title),
+              el("span", "inbox-item-meta", meta),
+              el("span", "inbox-item-action", `${actionLabel} →`),
+            );
+            button.addEventListener("click", action);
+            items.append(button);
+          };
           attentionProjects.forEach(project => {
-            const action = el("button", "inbox-item", `${project.name} · ${project.summary?.active_blocks ? "处理阻塞" : "待你确认"} →`);
-            action.type = "button";
-            action.addEventListener("click", () => selectProject(project.project_id));
-            items.append(action);
+            const blocks = project.summary?.active_blocks || 0;
+            appendAction({
+              title: project.name,
+              meta: blocks ? `${blocks} 项阻塞影响当前版本 · 责任方将在项目内判定` : "当前执行等待你的决定 · 责任方：你",
+              actionLabel: blocks ? "处理阻塞" : "查看待决策",
+              severity: blocks ? "error" : "",
+              action: () => selectProject(project.project_id),
+            });
           });
           if (pendingApproval) {
-            const approval = el("button", "inbox-item", `${pendingApproval} 条全局/Profile 待审批 →`);
-            approval.type = "button";
-            approval.addEventListener("click", () => openBrainFocus("approvals"));
-            items.append(approval);
+            appendAction({ title: "全局与 Profile 审批", meta: `${pendingApproval} 条规则或偏好变更 · 责任方：你`, actionLabel: "进入审批", action: () => openBrainFocus("approvals") });
           }
           if (pendingSync) {
-            const sync = el("button", "inbox-item", `${pendingSync} 条项目记录待同步 →`);
-            sync.type = "button";
-            sync.addEventListener("click", () => openBrainFocus("sync"));
-            items.append(sync);
+            appendAction({ title: "项目记忆待同步", meta: `${pendingSync} 条本地记录等待发送 · 责任方：本机同步器`, actionLabel: "检查并同步", action: () => openBrainFocus("sync") });
           }
           if (invalidProjects.length) {
-            const invalid = el("button", "inbox-item error", `${invalidProjects.length} 个项目无法连接 →`);
-            invalid.type = "button";
-            invalid.addEventListener("click", () => selectProject(invalidProjects[0].project_id));
-            items.append(invalid);
+            appendAction({ title: "项目连接异常", meta: `${invalidProjects.length} 个项目无法读取 · 责任方：项目维护者`, actionLabel: "查看并移出", severity: "error", action: () => selectProject(invalidProjects[0].project_id) });
           }
           inboxCard.append(items);
         }
@@ -2981,6 +3093,81 @@
           if (!block.active) return false;
           return taskId ? block.task_id === taskId : true;
         });
+      }
+
+      function blockResolution(block) {
+        const summary = compactText(block?.summary || block?.reason || "阻塞说明未记录");
+        if (/裁决|确认|选择|授权|批准|需要你|用户决定/.test(summary)) {
+          return { kind: "decision", label: "需要你的裁决", owner: "你", action: "准备裁决" };
+        }
+        if (/环境|服务|网络|权限|证书|端口|模拟器|开发者工具|依赖|无法连接|不可用/.test(summary)) {
+          return { kind: "environment", label: "外部环境阻塞", owner: "环境 / 项目维护者", action: "查看诊断" };
+        }
+        return { kind: "agent", label: "Agent 可处理", owner: "项目 Agent", action: "启动处理" };
+      }
+
+      async function copyBlockInstruction(block) {
+        const summary = compactText(block?.summary || block?.reason || "阻塞说明未记录");
+        const requirement = block?.task_id ? `需求 ${block.task_id}` : "当前项目";
+        const text = `请在项目 ${state.project?.path || state.project?.name || "当前项目"} 中处理 ${requirement} 的阻塞：${summary}。先读取来源与现有证据；完成后运行与阻塞直接对应的验证，并用结构化工作记录关闭阻塞。不要只修改展示状态。`;
+        if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
+        else {
+          const input = el("textarea", ""); input.value = text; document.body.append(input); input.select(); document.execCommand("copy"); input.remove();
+        }
+        state.notice = "已复制带项目、需求和验证要求的处理指令。";
+        render();
+      }
+
+      function renderBlockerCard(block) {
+        const resolution = blockResolution(block);
+        const card = el("article", "blocker-card");
+        card.dataset.kind = resolution.kind;
+        const head = el("div", "blocker-card-head");
+        head.append(el("strong", "", resolution.label), el("span", "blocker-kind", `责任方 · ${resolution.owner}`));
+        card.append(head, el("p", "blocker-summary", block.summary || block.reason || "阻塞说明未记录"));
+        card.append(el("div", "blocker-meta", `${block.task_id ? `影响 ${block.task_id}` : "影响当前项目"} · 解决后必须由项目验证证据关闭`));
+        const actions = el("div", "blocker-actions");
+        if (block.task_id) {
+          const requirementVisible = (state.workspace?.current_version?.requirements || [])
+            .some(item => item.requirement_id === block.task_id);
+          const inspect = el("button", "blocker-action", requirementVisible ? "查看对应需求" : "查看活动与诊断");
+          inspect.type = "button";
+          inspect.addEventListener("click", () => {
+            if (requirementVisible) {
+              state.taskId = block.task_id;
+              state.overviewExpandedTask = block.task_id;
+              writeUrlState(); render();
+              requestAnimationFrame(() => document.querySelector(`[data-requirement="${CSS.escape(block.task_id)}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" }));
+              return;
+            }
+            const diagnostics = document.querySelector(".project-diagnostics");
+            if (diagnostics) {
+              diagnostics.open = true;
+              diagnostics.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
+          });
+          actions.append(inspect);
+        }
+        const copy = el("button", "blocker-action", "复制处理指令");
+        copy.type = "button";
+        copy.addEventListener("click", async () => {
+          copy.disabled = true;
+          try { await copyBlockInstruction(block); }
+          catch (error) { state.notice = `复制失败：${error.message}`; render(); }
+        });
+        actions.append(copy);
+        if (block.task_id && resolution.kind !== "decision") {
+          const start = el("button", "blocker-action", "交给 Agent 处理");
+          start.type = "button";
+          start.dataset.primary = "true";
+          start.addEventListener("click", () => startHarnessOperation(
+            OPERATION_FALLBACKS.find(item => item.action === "command-e2e"),
+            { project_path: state.project?.path, requirement_id: block.task_id },
+          ));
+          actions.append(start);
+        }
+        card.append(actions);
+        return card;
       }
 
       function officeRoleId(value) {
@@ -3307,6 +3494,7 @@
         versionRequirements.forEach(requirement => {
           const card = el("article", "current-requirement-card");
           card.dataset.status = requirement.effective_status;
+          card.dataset.requirement = requirement.requirement_id;
           const expanded = requirement.requirement_id === state.taskId && state.overviewExpandedTask === requirement.requirement_id;
           card.dataset.selected = String(expanded);
           const summaryButton = el("button", "requirement-summary-button");
@@ -3463,7 +3651,7 @@
         const attention = el("section", "section-card");
         attention.append(el("h2", "", "需要你处理"));
         const attentionList = el("div", "attention-list");
-        activeBlocksFor().forEach(block => attentionList.append(el("div", "attention-item error", block.summary)));
+        activeBlocksFor().forEach(block => attentionList.append(renderBlockerCard(block)));
         Object.values(snapshot.approvals || {}).filter(item => item.status === "requested").forEach(item => {
           attentionList.append(el("div", "attention-item", item.summary));
         });
@@ -4051,15 +4239,62 @@
         content.append(workspace);
       }
 
+      function viewNeedsFullWorkspace(view = state.view) {
+        return ["versions", "artifacts", "agents", "timeline", "events", "runs"].includes(view);
+      }
+
+      function viewNeedsEvents(view = state.view) {
+        return ["timeline", "events"].includes(view);
+      }
+
+      function backgroundRenderAllowed() {
+        const focused = document.activeElement;
+        const interacting = focused && focused !== document.body && focused !== document.documentElement;
+        return !interacting && !document.querySelector(".brain-dialog-backdrop") && !content.querySelector("details[open]");
+      }
+
+      async function selectProjectView(view) {
+        state.view = view;
+        state.focus = null;
+        writeUrlState();
+        if (!state.project || state.project.validation !== "valid") {
+          render();
+          return;
+        }
+        const needsWorkspace = viewNeedsFullWorkspace(view) && state.workspace?.detail === "overview";
+        const needsEvents = viewNeedsEvents(view) && state.run && !state.events.length;
+        if (!needsWorkspace && !needsEvents) {
+          render();
+          return;
+        }
+        content.replaceChildren(el("div", "empty", "正在读取这个页面需要的详细数据…"));
+        try {
+          const [workspace, events] = await Promise.all([
+            needsWorkspace
+              ? fetchJson(`/api/projects/${encodeURIComponent(state.project.project_id)}/workspace.json`)
+              : Promise.resolve(state.workspace),
+            needsEvents
+              ? fetchEvents(state.project.project_id, state.run.run_id)
+              : Promise.resolve(state.events),
+          ]);
+          state.workspace = workspace;
+          state.events = events;
+          if (state.view === "artifacts" && state.artifactPath) await loadArtifact(state.artifactPath);
+          else render();
+        } catch (error) {
+          state.notice = `详细数据读取失败：${error.message}`;
+          render();
+        }
+      }
+
       async function selectRun(runId) {
         state.run = state.index.runs.find(item => item.run_id === runId) || state.index.runs[0];
         if (!state.run) return;
-        const [snapshot, events] = await Promise.all([
-          fetchJson(`/api/projects/${encodeURIComponent(state.project.project_id)}/runs/${encodeURIComponent(state.run.run_id)}/snapshot.json`),
-          fetchEvents(state.project.project_id, state.run.run_id)
-        ]);
+        const snapshot = await fetchJson(`/api/projects/${encodeURIComponent(state.project.project_id)}/runs/${encodeURIComponent(state.run.run_id)}/snapshot.json`);
         state.snapshot = snapshot;
-        state.events = events;
+        state.events = viewNeedsEvents()
+          ? await fetchEvents(state.project.project_id, state.run.run_id)
+          : [];
         const currentRequirements = state.workspace?.current_version?.requirements || [];
         const currentRequirementIds = new Set(currentRequirements.map(item => item.requirement_id));
         const taskIsCurrentRequirement = currentRequirementIds.has(state.taskId);
@@ -4117,9 +4352,10 @@
           render();
           return;
         }
+        const workspaceQuery = state.view === "overview" ? "?scope=overview" : "";
         [state.index, state.workspace] = await Promise.all([
           fetchJson(`/api/projects/${encodeURIComponent(state.project.project_id)}/index.json`),
-          fetchJson(`/api/projects/${encodeURIComponent(state.project.project_id)}/workspace.json`)
+          fetchJson(`/api/projects/${encodeURIComponent(state.project.project_id)}/workspace.json${workspaceQuery}`)
         ]);
         const selectedArtifact = (state.workspace.artifacts || []).find(item => item.path === state.artifactPath);
         if (state.artifactPath && !selectedArtifact) state.artifactPath = null;
@@ -4133,44 +4369,61 @@
         if (state.view === "artifacts" && state.artifactPath) await loadArtifact(state.artifactPath);
       }
 
-      async function load() {
-        const requested = readUrlState();
-        const settingsEntry = state.view === "settings";
-        state.settingsBooting = settingsEntry;
-        if (settingsEntry) render();
-        const part = (url, key, items = false) => fetchJson(url).then(value => {
+      function secondarySpecs() {
+        if (state.view === "workbench" || (!state.project && state.view !== "settings")) {
+          return [
+            ["/api/brain/status.json", "brainHealth", false],
+            ["/api/agents.json", "agents", false],
+            ["/api/skills.json", "skills", false],
+          ];
+        }
+        if (state.view !== "settings") {
+          return state.view === "agents" ? [["/api/agents.json", "agents", false]] : [];
+        }
+        if (state.focus === "skills") return [["/api/skills.json", "skills", false]];
+        if (state.focus === "improvements") {
+          return [
+            ["/api/brain/status.json", "brainHealth", false],
+            ["/api/harness/improvements.json", "harnessImprovements", true],
+          ];
+        }
+        if (state.focus === "reporting") return [];
+        return [
+          ["/api/brain/status.json", "brainHealth", false],
+          ["/api/brain/candidates.json", "brainCandidates", true],
+          ["/api/brain/project-memory.json?limit=100&similar=0", "projectMemories", true],
+          ["/api/harness/improvements.json", "harnessImprovements", true],
+        ];
+      }
+
+      async function loadSecondaryData() {
+        const specs = secondarySpecs();
+        if (!specs.length) {
+          state.settingsBooting = false;
+          return;
+        }
+        if (state.view === "settings") state.settingsBooting = true;
+        const results = await Promise.allSettled(specs.map(async ([url, key, items]) => {
+          const value = await fetchJson(url);
           state[key] = items ? value.items || [] : value;
           if (key === "brainCandidates") state.candidatesLoaded = true;
-          if (settingsEntry && state.view === "settings") {
-            if (key === "portfolio") renderNavTree();
-            const focused = document.activeElement;
-            const interacting = focused && focused !== document.body && focused !== document.documentElement;
-            if (!interacting && !document.querySelector(".brain-dialog-backdrop")
-                && !content.querySelector("details[open]")) render();
-          }
-          return value;
-        });
+          if (backgroundRenderAllowed()) render();
+        }));
+        state.settingsBooting = false;
+        const failure = results.find(result => result.status === "rejected");
+        if (failure && state.view === "settings") {
+          state.notice = `部分设置数据未载入：${failure.reason?.message || failure.reason}。已读取的内容仍可使用。`;
+        }
+        if (backgroundRenderAllowed()) render();
+      }
+
+      async function load() {
+        const requested = readUrlState();
+        state.settingsBooting = state.view === "settings";
+        render();
         try {
-          const [portfolio, agents, skills, operations, brainHealth, brainCandidates, projectMemories, harnessImprovements] = await Promise.all([
-            part("/api/portfolio.json", "portfolio"),
-            part("/api/agents.json", "agents"),
-            part("/api/skills.json", "skills"),
-            part("/api/operations.json", "operations"),
-            part("/api/brain/status.json", "brainHealth"),
-            part("/api/brain/candidates.json", "brainCandidates", true),
-            part("/api/brain/project-memory.json?limit=100&similar=0", "projectMemories", true),
-            part("/api/harness/improvements.json", "harnessImprovements", true)
-          ]);
-          state.portfolio = portfolio;
-          state.agents = agents;
-          state.skills = skills;
-          state.operations = operations;
-          state.brainHealth = brainHealth;
-          state.brainCandidates = brainCandidates.items || [];
-          state.projectMemories = projectMemories.items || [];
-          state.harnessImprovements = harnessImprovements.items || [];
-          state.settingsBooting = false;
-          if (settingsEntry) return;
+          state.portfolio = await fetchJson("/api/portfolio.json");
+          renderNavTree();
           let projectId = requested.projectId;
           if (!projectId && requested.runId) {
             projectId = state.portfolio.projects.find(project => project.runs?.some(run => run.run_id === requested.runId))?.project_id || null;
@@ -4185,14 +4438,14 @@
           } else {
             state.notice = null;
           }
-          await selectProject(projectId, requested.runId, true);
+          if (state.view === "settings") {
+            render();
+          } else {
+            await selectProject(projectId, requested.runId, true);
+          }
+          loadSecondaryData();
         } catch (error) {
           state.settingsBooting = false;
-          if (settingsEntry) {
-            state.notice = `部分设置数据未载入：${error.message}。已读取的摘要和来源仍可查看。`;
-            if (state.view === "settings") render();
-            return;
-          }
           const box = el("div", "empty error", "无法读取运行数据。");
           box.append(el("div", "event-summary", error.message));
           box.append(el("p", "muted", "请确认 Mick Harness Observer 正在 127.0.0.1:6425 运行。可执行 harness observe service status；临时模式可运行 harness observe watch --all。"));

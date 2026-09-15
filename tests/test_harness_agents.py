@@ -553,13 +553,15 @@ class BrainBoundaryTests(unittest.TestCase):
         self.assertFalse((ROOT / "rules" / "auto-generated.md").exists())
 
         implemented = self.module.mark_harness_improvement_implemented(
-            approved["improvement_id"], artifact_path="verify.d/ui-layout.py", baseline_count=3
+            approved["improvement_id"], artifact_path="verify.d/ui-layout.py", baseline_count=3,
+            release_version="0.24.0",
         )
         verified = self.module.verify_harness_improvement_effect(
             implemented["improvement_id"], result="improved", current_count=0,
             note="三个项目的同类问题在复验窗口内降为零",
         )
         self.assertEqual(implemented["status"], "implemented")
+        self.assertEqual(implemented["implementation"]["release_version"], "0.24.0")
         self.assertEqual(verified["status"], "verified")
         self.assertEqual(verified["effect"]["result"], "improved")
 

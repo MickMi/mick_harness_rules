@@ -137,7 +137,7 @@ class MemoryDigestTests(unittest.TestCase):
                          "@media (pointer: coarse)", "min-height: 44px", "renderMemoryDigest",
                          "查看处理进度", "保存改进候选", "memory_ids: sources.map", "memory-evidence-list",
                          "memoryDigestError", 'pageSize = 5', "原始记录 · 最近", "limit=100&similar=0",
-                         "if (settingsEntry) render()", "正在读取审批状态", "state.operations?.action_token"]:
+                         'state.settingsBooting = state.view === "settings";', "正在读取审批状态", "state.operations?.action_token"]:
             self.assertIn(contract, text)
         self.assertNotIn("formatTime(", text)
 

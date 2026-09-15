@@ -139,7 +139,8 @@ assert.equal(inspected.operation_id, 'new');
   state.portfolio.projects[0].execution={needs_user_decision:true};
   context.renderPortfolio(); elements=walk(context.content);
   assert.equal(elements.find(x=>x.id==='operation-status-retry').hidden,false);
-  assert.ok(elements.some(x=>x.text==='Fixture · 待你确认 →'));
+  assert.ok(elements.some(x=>x.text==='Fixture'));
+  assert.ok(elements.some(x=>x.text==='查看待决策 →'));
   assert.ok(elements.find(x=>x.id==='operation-live-status').children.length,'connection feedback remains outside closed management');
   // Project overview: goals stay above work, not below diagnostics and empty panels.
   Object.assign(context, {activeBlocksFor:()=>[], writeUrlState(){}, requirementOfficeRoleOrder:[],

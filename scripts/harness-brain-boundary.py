@@ -1098,8 +1098,15 @@ def validate_artifact_path(value: str) -> str:
     return path.as_posix()
 
 
+def validate_release_version(value: str) -> str:
+    version = value.strip().removeprefix("v")
+    if not re.fullmatch(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?", version):
+        raise BrainBoundaryError("Release version must look like 0.24.0 or 0.24.0-rc.1.")
+    return version
+
+
 def mark_harness_improvement_implemented(
-    identifier: str, *, artifact_path: str, baseline_count: int,
+    identifier: str, *, artifact_path: str, baseline_count: int, release_version: str | None = None,
 ) -> dict[str, Any]:
     with simple_lock(harness_improvement_root() / ".write.lock"):
         record = get_harness_improvement(identifier)
@@ -1111,6 +1118,7 @@ def mark_harness_improvement_implemented(
         record["implementation"] = {
             "artifact_path": validate_artifact_path(artifact_path),
             "baseline_count": baseline_count,
+            "release_version": validate_release_version(release_version) if release_version else None,
             "implemented_at": now_iso(),
         }
         return harness_improvement_view(save_harness_improvement(record))

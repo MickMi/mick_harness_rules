@@ -7,6 +7,39 @@ All notable changes to Mick Agent Harness are documented in this file.
 This project follows Semantic Versioning 2.0. Git tags in the form `vX.Y.Z`
 are the release source of truth.
 
+## [0.24.0] - 2026-09-15
+
+### Fast, Actionable Local Project Command Center
+
+- The workbench now loads a lightweight portfolio summary first. Project
+  overview pages defer Git, artifacts, event history, Brain, Agent, and Skill
+  diagnostics until the user opens the view that needs them, removing the
+  previous all-or-nothing startup wait.
+- Attention items now state their impact, responsible party, and next action.
+  Project blockers are classified as a user decision, Agent-addressable work,
+  or an external-environment problem, with evidence, copyable instructions,
+  and controlled handling paths instead of silent project-state edits.
+- The project navigation is smaller, searchable, and grouped by attention,
+  active progress, and other projects. Machine states such as pending tests or
+  synchronization no longer masquerade as user tasks.
+- Harness improvements now expose one traceable lifecycle from project
+  evidence through pattern aggregation, approval, implementation version, and
+  effect verification. Deterministic fixes continue to favor scripts, tests,
+  and checkers over additional prompt instructions.
+
+Compatibility: existing projects, runtime ledgers, Brain data, Agent loaders,
+operation records, and the single `127.0.0.1:6425` service remain compatible.
+Summary responses are additive; existing full workspace routes remain
+available on demand.
+
+Migration: run `harness update`. Registered projects and supported Agent
+loaders are refreshed by the existing update path; no project or Brain data
+migration is required.
+
+Verification: 244 Python unittests, the focused workbench interaction contract,
+generated-rule consistency, Shell syntax, the public-release audit, context
+budget checks, and a non-interactive clean-project setup smoke test passed.
+
 ## [0.23.0] - 2026-09-14
 
 ### Project-first Workbench and Traceable Harness Status
