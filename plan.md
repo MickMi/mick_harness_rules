@@ -1,4 +1,4 @@
-> 🧭 状态：需求定义与开发中 | 当前归属：PM → 开发 | 本轮范围：v0.25.0 个性化 PRD 会话与 WorkBuddy 接入
+> 🧭 状态：发布候选已形成 | 当前归属：QA → 用户发布裁决 | 本轮范围：v0.25.0 个性化 PRD 会话与 WorkBuddy 接入
 
 ## v0.25.0 · 2026-09-15 · 个性化 PRD 会话与 WorkBuddy 接入
 
@@ -18,7 +18,7 @@
 
 ### Step 242 — 2026-09-15 · 多 Worktree 统一进度源基线
 
-- observed: 工作台登记的是主目录 `/Users/mickmi/mick_harness_rules`，它停在 v0.23.0、落后远端 2 个提交且有用户本地改动；实际 v0.25.0 工作位于同仓库的 `feat/v0.25-personal-prd-workflow` Worktree，当前提交为 `d0c323c`。
+- observed: 工作台登记的是主目录 `~/mick_harness_rules`，它停在 v0.23.0、落后远端 2 个提交且有用户本地改动；实际 v0.25.0 工作位于同仓库的 `feat/v0.25-personal-prd-workflow` Worktree，当前提交为 `d0c323c`。
 - failure: Git 图能发现多个 Worktree，但项目概览、版本选择和事件账本仍只读取登记目录；开发 Worktree 因没有独立 Harness 入口而无法 emit，导致旧的 v0.24 → v0.25 交接持续显示为最新进度。
 - acceptance: 同仓库兄弟 Worktree 无需重复注入即可归入唯一项目；API 同时返回已发布、开发中和主目录三类状态及其来源；无关仓库仍被拒绝，所有工作区内容和 Git 状态保持不变。
 - implementation: Observer 现在用 Git common-dir 识别仓库，把兄弟 Worktree 的结构化事件写入登记项目的唯一账本，并保留来源 Worktree、分支、提交和仓库 ID；版本计划按合法工作分支聚合，旧版本回合不会再覆盖新版本摘要。
@@ -31,6 +31,14 @@
 
 - user-confirmation: 用户已确认 6433 工作台预览，并授权提交当前 v0.25.0 功能分支。
 - boundary: 本次只形成版本内提交；不合并 `main`、不发布 v0.25.0、不部署 6425，也不改动主检出目录中的用户本地变更。
+
+### v0.25.0 · 2026-09-16 · 发布候选门禁
+
+- candidate-verify: `python3 scripts/harness-verify.py release --force` 在允许绑定临时 localhost 的本机环境通过，覆盖 252 个 Python unittest、生成一致性和 `git diff --check`；聚焦工作台交互合同、公开发布审计与上下文预算同时通过。
+- install-smoke: 当前候选树复制到隔离的新项目后，`setup.sh --non-interactive` → exit 0；生成的根 `AGENTS.md` 正确指向 Harness 规则，安装版本为 0.25.0，且 Quick 安装没有创建 Brain。
+- release-metadata: `VERSION`、中英文 Changelog 与版本计划统一为 0.25.0；Git Tag 仍是最终发布事实源，因此候选阶段不冒充已发布。
+- compatibility: 现有项目、Brain 数据、运行账本、Agent Loader 和唯一 6425 服务无需数据迁移；多 Worktree 聚合为新增只读能力，不自动 pull、merge、stash 或改写任何工作区。
+- boundary: 本轮只形成干净发布候选；未合并 `main`、未 push、未打 tag、未部署到安装目录，也未重启 6425。
 
 ### Step 240 — 2026-09-15 · PRD 对话与 WorkBuddy 接入预览
 
