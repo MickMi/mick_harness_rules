@@ -360,6 +360,8 @@
     .project-progress-track { height: 4px; overflow: hidden; background: var(--surface-2); }
     .project-progress-fill { height: 100%; background: var(--accent); }
     .project-row-arrow { color: var(--muted); font-size: 18px; transition: transform .15s ease, color .15s ease; }
+    .project-version-state { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .project-version-state[data-warning="true"] { color: var(--warning); }
     .workbench-secondary { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr); gap: 22px; margin-top: 22px; }
     .workbench-projects h2 { margin: 0; font-size: 18px; }
     .project-open, .harness-version-badge { border: 0; padding: 0; background: transparent; font: inherit; text-align: left; cursor: pointer; color: inherit; }
@@ -843,6 +845,10 @@
     .project-lite h1 { margin: 6px 0; font-size: 28px; line-height: 1.25; overflow-wrap: anywhere; }
     .project-lite .eyebrow, .project-lite .freshness { font-size: 12px; }
     .project-lite .harness-version-badge { font-size: 12px; }
+    .repository-version-facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .repository-version-fact { display: inline-flex; align-items: center; min-height: 28px; padding: 4px 9px; border-radius: 999px; background: var(--surface-soft); color: var(--muted); font-size: 12px; }
+    .repository-version-fact[data-kind="active"] { background: var(--accent-soft); color: var(--accent); }
+    .repository-version-fact[data-warning="true"] { background: var(--warning-soft); color: var(--warning); }
     .project-lite .project-purpose { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 16px; padding: 0; margin: 0 0 22px; border: 0; align-items: baseline; }
     .project-lite .project-purpose-copy { max-width: none; font-size: 15px; line-height: 1.55; overflow-wrap: anywhere; }
     .project-lite .project-overview-hero { margin: 0 0 22px; border: 1px solid var(--border); border-radius: 10px; }
@@ -2961,6 +2967,22 @@
             openProject.type = "button";
             openProject.addEventListener("click", () => selectProject(project.project_id));
             identity.append(openProject, el("span", "project-stage", project.stage || "尚未同步"), harnessVersionBadge(project.project_id));
+            const repositoryProgress = project.repository_progress || {};
+            const activeVersion = repositoryProgress.active;
+            const releasedVersion = repositoryProgress.released;
+            const primaryState = repositoryProgress.primary;
+            if (activeVersion || releasedVersion) {
+              const parts = [
+                releasedVersion?.version ? `已发布 v${releasedVersion.version}` : "",
+                activeVersion?.version ? `开发中 v${activeVersion.version}${activeVersion.branch ? ` · ${activeVersion.branch}` : ""}` : "",
+              ].filter(Boolean);
+              identity.append(el("span", "project-version-state", parts.join(" · ")));
+            }
+            if (primaryState && (primaryState.dirty || primaryState.behind)) {
+              const warning = el("span", "project-version-state", `主目录${primaryState.dirty_count ? ` ${primaryState.dirty_count} 处改动` : ""}${primaryState.behind ? ` · 落后 ${primaryState.behind}` : ""}`);
+              warning.dataset.warning = "true";
+              identity.append(warning);
+            }
             row.append(identity);
             const work = project.recent_work;
             const projectSummary = project.summary || {};
@@ -2970,6 +2992,7 @@
             if (blockCount) nextText = `先处理 ${blockCount} 项阻塞`;
             else if (work?.status === "active") nextText = `${roleLabel(work.role)} 正在推进：${compactText(work.objective || work.summary)}`;
             else if (work?.next_role) nextText = `${roleLabel(work.next_role)} 接手${work.objective ? `：${compactText(work.objective)}` : ""}`;
+            else if (activeVersion?.version) nextText = `继续 v${activeVersion.version}${activeVersion.branch ? ` · ${activeVersion.branch}` : ""}`;
             else if (detectedActivity.has_unstructured_progress) nextText = "PM 将已检测活动归入版本需求";
             const nextWrap = el("span", "project-next-wrap");
             const next = el("span", "project-next", nextText);
@@ -3351,6 +3374,7 @@
         const organization = state.workspace?.organization || { roles: [], transitions: [], current_transition: null, current_role: null };
         const project = state.workspace?.project || {};
         const version = state.workspace?.current_version || null;
+        const repositoryProgress = state.workspace?.repository_progress || {};
         const versionRequirements = version?.requirements || [];
         const counts = version?.counts || { completed: 0, in_progress: 0, planned: 0, blocked: 0 };
         const completed = counts.completed || 0;
@@ -3413,6 +3437,32 @@
         const story = el("div", "overview-story");
         story.append(el("div", "version-kicker", version?.version ? `当前版本 · v${version.version}` : "当前版本 · 尚未规划"));
         story.append(el("p", "overview-version-goal", version?.goal || (version ? "尚未记录版本目标。" : "尚未建立版本计划")));
+        if (repositoryProgress.available) {
+          const facts = el("div", "repository-version-facts");
+          if (repositoryProgress.released?.version) {
+            const released = el("span", "repository-version-fact", `已发布 v${repositoryProgress.released.version}`);
+            released.dataset.kind = "released";
+            facts.append(released);
+          }
+          if (repositoryProgress.active?.version) {
+            const active = el("span", "repository-version-fact", `开发中 v${repositoryProgress.active.version}${repositoryProgress.active.branch ? ` · ${repositoryProgress.active.branch}` : ""}`);
+            active.dataset.kind = "active";
+            facts.append(active);
+          }
+          if (repositoryProgress.primary) {
+            const primary = repositoryProgress.primary;
+            const primaryText = [
+              primary.version ? `主目录 v${primary.version}` : "主目录",
+              primary.behind ? `落后 ${primary.behind}` : "",
+              primary.dirty_count ? `${primary.dirty_count} 处本地改动` : "",
+            ].filter(Boolean).join(" · ");
+            const primaryFact = el("span", "repository-version-fact", primaryText);
+            primaryFact.dataset.kind = "primary";
+            primaryFact.dataset.warning = String(Boolean(primary.behind || primary.dirty));
+            facts.append(primaryFact);
+          }
+          story.append(facts);
+        }
         if (versionRequirements.length) {
           const progress = el("div", "overview-progress");
           const progressLine = el("div", "progress-line");

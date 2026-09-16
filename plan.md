@@ -7,12 +7,30 @@
 - [x] 238. [记忆边界] 固定“当前对话/项目事实、个人 Profile、Brain 稳定偏好”的优先级；未经确认的日志、推断和一次性修订不得成为 PRD 事实或自动升级为个人风格。
 - [x] 239. [质量证明] 增加明确需求直接输出、模糊需求多轮收敛、个人 Profile 生效与未确认范围隔离的对话样例和行为测试；技术污染检查继续作为底线，不冒充产品质量判断。
 - [x] 240. [WorkBuddy 接入] 将本机 WorkBuddy 纳入 Agent 注册表与诊断，托管其已验证的个人 Skill 目录；规则 Loader、生命周期 Hook 与执行回写在缺少宿主协议证据时保持未支持或未验证。
-- [ ] 241. [体验与发布门禁] 在工作台展示 WorkBuddy 的检测、Skill 接入、规则加载和 Hook 四层真实状态；完成聚焦测试后先交预览，用户确认再进入完整回归和发布候选。
+- [x] 241. [体验与发布门禁] 在工作台展示 WorkBuddy 的检测、Skill 接入、规则加载和 Hook 四层真实状态；完成聚焦测试后先交预览，用户确认再进入完整回归和发布候选。
+- [x] 242. [P0 多 Worktree 统一进度源] 以同一 Git 仓库为项目身份聚合全部合法 Worktree：已发布版本取 Git Tag，开发中版本取匹配声明工作分支的最新有效计划，主目录脏状态单独展示；允许同仓库兄弟 Worktree 回写到登记项目账本，禁止陈旧主目录进度覆盖真实开发现场。
 - goal: 让用户在支持的 Agent 中稳定启动符合个人风格的 PRD 对话：明确需求不被流程拖慢，模糊需求通过少量关键追问收敛，同时能看见 WorkBuddy 到底接入了哪一层。
 - interaction-contract: PRD 所需信息是产品决策要素，不是固定章节清单；追问必须改变范围、用户路径、规则或验收，不为填模板而提问。
 - evidence-boundary: 本机已确认 WorkBuddy 5.3.14、`~/.workbuddy` 配置目录与 `~/.workbuddy/skills` 个人 Skill 目标；尚未确认其全局规则 Loader、项目规则入口或生命周期 Hook，因此本版本不得把这些能力标成已托管。
 - preservation: 不读取或公开 WorkBuddy 的个人记忆、会话正文与设置密钥；不覆盖用户已有 Skill；不把 WorkBuddy 进程存在等同于 Harness 已加载。
 - preview-gate: 本版本按 standard 流程推进；聚焦自检后停在可体验预览，用户确认前不自动进入完整 QA 或发布。
+- worktree-boundary: 登记路径仍是项目与账本的稳定身份；兄弟 Worktree 只贡献可验证的分支、提交、版本计划与事件来源，不自动注册成多个项目，也不自动 pull、merge、stash 或清理任一工作区。
+
+### Step 242 — 2026-09-15 · 多 Worktree 统一进度源基线
+
+- observed: 工作台登记的是主目录 `/Users/mickmi/mick_harness_rules`，它停在 v0.23.0、落后远端 2 个提交且有用户本地改动；实际 v0.25.0 工作位于同仓库的 `feat/v0.25-personal-prd-workflow` Worktree，当前提交为 `d0c323c`。
+- failure: Git 图能发现多个 Worktree，但项目概览、版本选择和事件账本仍只读取登记目录；开发 Worktree 因没有独立 Harness 入口而无法 emit，导致旧的 v0.24 → v0.25 交接持续显示为最新进度。
+- acceptance: 同仓库兄弟 Worktree 无需重复注入即可归入唯一项目；API 同时返回已发布、开发中和主目录三类状态及其来源；无关仓库仍被拒绝，所有工作区内容和 Git 状态保持不变。
+- implementation: Observer 现在用 Git common-dir 识别仓库，把兄弟 Worktree 的结构化事件写入登记项目的唯一账本，并保留来源 Worktree、分支、提交和仓库 ID；版本计划按合法工作分支聚合，旧版本回合不会再覆盖新版本摘要。
+- interface: 工作台项目行和项目概览分别展示“已发布”“开发中”“主目录”三类状态；主目录落后或有本地改动只作为警告，不会触发 pull、merge、stash 或覆盖。
+- real-state: 6433 API 识别到 `v0.24.0` 已发布、`v0.25.0` 正在 `feat/v0.25-personal-prd-workflow` 开发，以及主目录落后 2 个提交且有 2 处本地改动；项目摘要约 0.58 秒 / 29 KB。
+- verify: Observer 107 项测试通过；新增多 Worktree 选择、同仓库事件归属、无关仓库拒绝、旧交接隔离与工作区内容保持测试；前端操作/布局合同、JSON Schema 与 `git diff --check` 通过。
+- preview: `http://127.0.0.1:6433/?view=workbench` 已由当前开发分支启动。自动浏览器访问连续两次被本机管理策略阻止，未绕过安全控制；真实视觉与点击体验等待用户直接确认，完整发布 QA 尚未开始。
+
+### Step 241 — 2026-09-16 · 体验确认与功能分支提交
+
+- user-confirmation: 用户已确认 6433 工作台预览，并授权提交当前 v0.25.0 功能分支。
+- boundary: 本次只形成版本内提交；不合并 `main`、不发布 v0.25.0、不部署 6425，也不改动主检出目录中的用户本地变更。
 
 ### Step 240 — 2026-09-15 · PRD 对话与 WorkBuddy 接入预览
 

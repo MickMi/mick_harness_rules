@@ -462,6 +462,18 @@ def project_identity_snapshot(project: Path) -> dict[str, Any]:
     }
 
 
+def git_common_dir(project: Path) -> Path | None:
+    """Return the canonical Git storage shared by every worktree in a repository."""
+    try:
+        result = run_git(project, ["rev-parse", "--git-common-dir"])
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+    value = Path(result.stdout.strip()).expanduser()
+    return value.resolve() if value.is_absolute() else (project / value).resolve()
+
+
 def resolve_agent_project(cwd: Path, registry_path: Path | None = None) -> Path | None:
     """Map a vendor session directory to one registered Harness project without guessing."""
     cwd = cwd.resolve(strict=False)
@@ -481,6 +493,21 @@ def resolve_agent_project(cwd: Path, registry_path: Path | None = None) -> Path 
             path_matches.append((len(candidate.parts), registered))
     if path_matches:
         return max(path_matches, key=lambda item: item[0])[1]
+
+    # A linked Git worktree is a peer of the registered checkout, not its child.
+    # Match the shared Git common-dir so every worktree writes to one canonical ledger.
+    cwd_workspace = project_workspace_path(cwd)[0]
+    cwd_repository = git_common_dir(cwd_workspace)
+    if cwd_repository is not None:
+        repository_matches: list[Path] = []
+        for descriptor in descriptors:
+            registered = Path(descriptor["path"]).resolve(strict=False)
+            workspace = Path(descriptor.get("workspace_path") or registered).resolve(strict=False)
+            if git_common_dir(workspace) == cwd_repository:
+                repository_matches.append(registered)
+        unique_matches = sorted(set(repository_matches), key=str)
+        if len(unique_matches) == 1:
+            return unique_matches[0]
 
     mirror_title = chatgpt_project_title(cwd)
     if mirror_title:
@@ -731,7 +758,10 @@ def validate_ingest_envelope(envelope: dict[str, Any], expected_project_id: str 
         raise ObserveError("Ingest source must be an object", 422)
     validate_keys(
         source,
-        allowed={"kind", "producer", "role", "agent_id", "adapter"},
+        allowed={
+            "kind", "producer", "role", "agent_id", "adapter", "repository_id",
+            "source_worktree_path", "source_branch", "source_commit",
+        },
         required={"kind", "producer"},
         label="Ingest source",
     )
@@ -740,7 +770,10 @@ def validate_ingest_envelope(envelope: dict[str, Any], expected_project_id: str 
     require_text(source, "producer", maximum=120)
     if source.get("role") is not None and source["role"] not in ROLES:
         raise ObserveError(f"Unsupported role: {source['role']}", 422)
-    for key, maximum in (("agent_id", 160), ("adapter", 80)):
+    for key, maximum in (
+        ("agent_id", 160), ("adapter", 80), ("repository_id", 160),
+        ("source_worktree_path", 1024), ("source_branch", 300), ("source_commit", 64),
+    ):
         if source.get(key) is not None:
             require_text(source, key, maximum=maximum)
 
@@ -2741,12 +2774,7 @@ def _git_worktree_records(project: Path) -> list[dict[str, Any]]:
 
 
 def _git_repository_identity(project: Path, worktrees: list[dict[str, Any]]) -> tuple[str, str | None]:
-    common_result = run_git(project, ["rev-parse", "--git-common-dir"])
-    if common_result.returncode != 0 or not common_result.stdout.strip():
-        canonical = project.resolve()
-    else:
-        common_value = Path(common_result.stdout.strip()).expanduser()
-        canonical = common_value.resolve() if common_value.is_absolute() else (project / common_value).resolve()
+    canonical = git_common_dir(project) or project.resolve()
     repository_id = f"repository-{hashlib.sha256(str(canonical).encode()).hexdigest()[:12]}"
     repository_path = worktrees[0].get("path") if worktrees else None
     return repository_id, repository_path
@@ -2968,9 +2996,250 @@ def version_sort_key(value: Any) -> tuple[Any, ...]:
     return (*padded, 1 if not separator else 0, prerelease.lower())
 
 
-def version_plan_snapshot(project: Path, snapshot: dict[str, Any], git: dict[str, Any]) -> dict[str, Any]:
+def repository_progress_snapshot(
+    project: Path,
+    git: dict[str, Any] | None = None,
+    *,
+    workspace_path: Path | None = None,
+    include_primary_state: bool = True,
+) -> dict[str, Any]:
+    """Merge version facts from every checked-out worktree without modifying Git state."""
+    registered = project.resolve(strict=False)
+    workspace = (workspace_path or project_workspace_path(registered)[0]).resolve(strict=False)
+    if git is None:
+        try:
+            inside = run_git(workspace, ["rev-parse", "--is-inside-work-tree"])
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            inside = None
+        if inside is None or inside.returncode != 0 or inside.stdout.strip() != "true":
+            source = registered / "docs" / "VERSIONS.md"
+            versions = parse_versions_markdown(source.read_text(encoding="utf-8")) if source.is_file() else []
+            versions.sort(key=lambda item: version_sort_key(item.get("version")), reverse=True)
+            return {
+                "available": False,
+                "repository_id": None,
+                "repository_path": None,
+                "worktrees": [],
+                "versions": versions,
+                "active": next((item for item in versions if item.get("status") == "in_progress"), None),
+                "released": None,
+                "primary": None,
+            }
+        worktrees = _git_worktree_records(workspace)
+        tag_result = run_git(workspace, ["tag", "--sort=-version:refname"])
+        tags = [line for line in tag_result.stdout.splitlines() if line] if tag_result.returncode == 0 else []
+        repository_id, repository_path = _git_repository_identity(workspace, worktrees)
+    else:
+        worktrees = [dict(item) for item in git.get("worktrees", [])]
+        tags = list(git.get("tags", []))
+        repository_id = git.get("repository_id")
+        repository_path = git.get("repository_path")
+        if not worktrees and git.get("available"):
+            worktrees = _git_worktree_records(workspace)
+        if repository_id is None:
+            repository_id, repository_path = _git_repository_identity(workspace, worktrees)
+
+    sources: list[dict[str, Any]] = []
+    candidates: list[dict[str, Any]] = []
+    seen_paths: set[str] = set()
+    inspect_primary_state = include_primary_state or len(worktrees) > 1
+    for index, raw_worktree in enumerate(worktrees):
+        item = dict(raw_worktree)
+        worktree_path = Path(str(item.get("path") or "")).expanduser().resolve(strict=False)
+        if not str(item.get("path") or "") or str(worktree_path) in seen_paths:
+            continue
+        seen_paths.add(str(worktree_path))
+        branch = item.get("branch")
+        primary = bool(item.get("primary", index == 0))
+        source_path = worktree_path / "docs" / "VERSIONS.md"
+        try:
+            versions = parse_versions_markdown(source_path.read_text(encoding="utf-8")) if source_path.is_file() else []
+        except (OSError, UnicodeError):
+            versions = []
+        versions.sort(key=lambda value: version_sort_key(value.get("version")), reverse=True)
+        dirty_count = item.get("dirty_count")
+        if inspect_primary_state and primary and dirty_count is None and worktree_path.is_dir():
+            status_result = run_git(worktree_path, ["status", "--porcelain=v1"])
+            if status_result.returncode == 0:
+                dirty_count = len([line for line in status_result.stdout.splitlines() if line])
+        ahead = behind = None
+        if inspect_primary_state and primary and worktree_path.is_dir():
+            tracking_result = run_git(worktree_path, ["rev-list", "--left-right", "--count", "HEAD...@{upstream}"])
+            if tracking_result.returncode == 0:
+                tracking_parts = tracking_result.stdout.split()
+                if len(tracking_parts) == 2 and all(part.isdigit() for part in tracking_parts):
+                    ahead, behind = (int(tracking_parts[0]), int(tracking_parts[1]))
+        selected_local = (
+            next((value for value in versions if value.get("status") == "in_progress"), None)
+            or next((value for value in versions if value.get("status") == "planned"), None)
+            or (versions[0] if versions else None)
+        )
+        source_record = {
+            "path": str(worktree_path),
+            "branch": branch,
+            "head": item.get("head_full") or item.get("head"),
+            "primary": primary,
+            "registered": worktree_path == workspace.resolve(strict=False),
+            "available": worktree_path.is_dir(),
+            "dirty": None if dirty_count is None else bool(dirty_count),
+            "dirty_count": dirty_count,
+            "ahead": ahead,
+            "behind": behind,
+            "version": selected_local.get("version") if selected_local else None,
+            "version_status": selected_local.get("status") if selected_local else None,
+        }
+        sources.append(source_record)
+        for version in versions:
+            copy = dict(version)
+            work_branches = list(copy.get("work_branches") or [])
+            branch_match = bool(branch and (branch == copy.get("branch") or branch in work_branches))
+            copy.update({
+                "source_worktree_path": str(worktree_path),
+                "source_branch": branch,
+                "source_head": item.get("head_full") or item.get("head"),
+                "source_primary": primary,
+                "source_branch_match": branch_match,
+            })
+            candidates.append(copy)
+
+    # A registered parent may contain the repository rather than be the repository root.
+    registered_versions_path = registered / "docs" / "VERSIONS.md"
+    if str(registered) not in seen_paths and registered_versions_path.is_file():
+        try:
+            registered_versions = parse_versions_markdown(registered_versions_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError):
+            registered_versions = []
+        for version in registered_versions:
+            copy = dict(version)
+            copy.update({
+                "source_worktree_path": str(registered),
+                "source_branch": None,
+                "source_head": None,
+                "source_primary": True,
+                "source_branch_match": False,
+            })
+            candidates.append(copy)
+
+    def candidate_score(item: dict[str, Any]) -> tuple[Any, ...]:
+        return (
+            1 if item.get("source_branch_match") else 0,
+            1 if item.get("source_primary") else 0,
+            str(item.get("source_head") or ""),
+        )
+
+    merged_by_version: dict[str, dict[str, Any]] = {}
+    for candidate in candidates:
+        key = str(candidate.get("version") or "")
+        previous = merged_by_version.get(key)
+        if previous is None or candidate_score(candidate) > candidate_score(previous):
+            merged_by_version[key] = candidate
+    versions = sorted(merged_by_version.values(), key=lambda item: version_sort_key(item.get("version")), reverse=True)
+
+    tagged_versions = {
+        match.group(1)
+        for tag in tags
+        if (match := re.fullmatch(r"v?(\d+(?:\.\d+){1,5}(?:-[0-9A-Za-z.-]+)?)", tag))
+    }
+    active_candidates = [
+        item for item in candidates
+        if item.get("status") in {"in_progress", "planned"}
+        and str(item.get("version")) not in tagged_versions
+    ]
+    matched_active = [item for item in active_candidates if item.get("source_branch_match")]
+    eligible_active = matched_active or active_candidates
+    status_priority = {"in_progress": 2, "planned": 1}
+    selected_active = max(
+        eligible_active,
+        key=lambda item: (status_priority.get(item.get("status"), 0), version_sort_key(item.get("version"))),
+        default=None,
+    )
+    active = None
+    if selected_active is not None:
+        active = {
+            "version": selected_active.get("version"),
+            "status": selected_active.get("status"),
+            "goal": selected_active.get("goal"),
+            "branch": selected_active.get("source_branch"),
+            "declared_branch": selected_active.get("branch"),
+            "worktree_path": selected_active.get("source_worktree_path"),
+            "head": selected_active.get("source_head"),
+        }
+
+    released_tags: list[tuple[tuple[Any, ...], str, str]] = []
+    for tag in tags:
+        match = re.fullmatch(r"v?(\d+(?:\.\d+){1,5}(?:-[0-9A-Za-z.-]+)?)", tag)
+        if match:
+            released_tags.append((version_sort_key(match.group(1)), match.group(1), tag))
+    released = None
+    if released_tags:
+        _, released_version, released_tag = max(released_tags)
+        released = {"version": released_version, "tag": released_tag, "source": "git_tag"}
+        for version in versions:
+            if str(version.get("version")) == released_version:
+                version["status"] = "released"
+                version["tag"] = released_tag
+                version["status_source"] = "git_tag"
+
+    primary_source = next((item for item in sources if item.get("primary")), None)
+    return {
+        "available": True,
+        "repository_id": repository_id,
+        "repository_path": repository_path,
+        "worktrees": sources,
+        "versions": versions,
+        "active": active,
+        "released": released,
+        "primary": primary_source,
+    }
+
+
+def progress_git_snapshot(progress: dict[str, Any]) -> dict[str, Any]:
+    """Provide the branch/tag subset needed to decorate an aggregated version plan."""
+    branches = sorted({item.get("branch") for item in progress.get("worktrees", []) if item.get("branch")})
+    released_tag = (progress.get("released") or {}).get("tag")
+    primary = progress.get("primary") or {}
+    return {
+        "available": progress.get("available", False),
+        "repository_id": progress.get("repository_id"),
+        "repository_path": progress.get("repository_path"),
+        "current_branch": primary.get("branch"),
+        "branches": [{"name": branch} for branch in branches],
+        "worktrees": [
+            {"path": item.get("path"), "branch": item.get("branch")}
+            for item in progress.get("worktrees", [])
+        ],
+        "tags": [released_tag] if released_tag else [],
+    }
+
+
+def source_worktree_provenance(source_project: Path) -> dict[str, Any]:
+    """Describe where an event originated while its ledger stays on the registered project."""
+    workspace = project_workspace_path(source_project.resolve(strict=False))[0]
+    common = git_common_dir(workspace)
+    if common is None:
+        return {}
+    branch_result = run_git(workspace, ["branch", "--show-current"])
+    commit_result = run_git(workspace, ["rev-parse", "HEAD"])
+    repository_id = f"repository-{hashlib.sha256(str(common).encode()).hexdigest()[:12]}"
+    return {
+        "repository_id": repository_id,
+        "source_worktree_path": str(workspace.resolve(strict=False)),
+        **({"source_branch": branch_result.stdout.strip()} if branch_result.returncode == 0 and branch_result.stdout.strip() else {}),
+        **({"source_commit": commit_result.stdout.strip()} if commit_result.returncode == 0 and commit_result.stdout.strip() else {}),
+    }
+
+
+def version_plan_snapshot(
+    project: Path,
+    snapshot: dict[str, Any],
+    git: dict[str, Any],
+    repository_progress: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     source = project / "docs" / "VERSIONS.md"
-    planned = parse_versions_markdown(source.read_text(encoding="utf-8")) if source.is_file() else []
+    progress = repository_progress or repository_progress_snapshot(project, git)
+    planned = [dict(item) for item in progress.get("versions", [])]
+    if not planned:
+        planned = parse_versions_markdown(source.read_text(encoding="utf-8")) if source.is_file() else []
     branch_names = {item.get("name") for item in git.get("branches", [])}
     checked_out_branches = {item.get("branch") for item in git.get("worktrees", []) if item.get("branch")}
     tags = set(git.get("tags", []))
@@ -3013,7 +3282,7 @@ def version_plan_snapshot(project: Path, snapshot: dict[str, Any], git: dict[str
         if task.get("status") != "abandoned" and task_id not in referenced
     ]
     return {
-        "source": "docs/VERSIONS.md" if source.is_file() else None,
+        "source": "repository_worktrees" if progress.get("available") and planned else "docs/VERSIONS.md" if source.is_file() else None,
         "items": planned,
         "unassigned_requirements": unassigned,
     }
@@ -3575,7 +3844,8 @@ def project_workspace_snapshot(project: Path, snapshot: dict[str, Any] | None = 
     identity = project_identity_snapshot(project)
     workspace = Path(identity["workspace_path"])
     git = git_workspace_snapshot(workspace)
-    versions = version_plan_snapshot(project, snapshot, git)
+    repository_progress = repository_progress_snapshot(project, git)
+    versions = version_plan_snapshot(project, snapshot, git, repository_progress)
     profile = project_profile_snapshot(project)
     if not profile.get("source") and workspace != project.resolve(strict=False):
         profile = project_profile_snapshot(workspace)
@@ -3589,6 +3859,7 @@ def project_workspace_snapshot(project: Path, snapshot: dict[str, Any] | None = 
         "organization": organization_snapshot(snapshot),
         "artifacts": artifact_metadata(project, snapshot, versions),
         "git": git,
+        "repository_progress": repository_progress,
         "versions": versions,
         "current_version": current_version_snapshot(snapshot, versions),
     }
@@ -3598,10 +3869,10 @@ def project_overview_snapshot(project: Path, snapshot: dict[str, Any] | None = N
     """Return only data used by the default project page; defer Git, artifacts and diagnostics."""
     if snapshot is None:
         snapshot = status_runtime(project)["snapshot"]
-    versions_path = project / "docs" / "VERSIONS.md"
-    version_items = parse_versions_markdown(versions_path.read_text(encoding="utf-8")) if versions_path.is_file() else []
-    version_items.sort(key=lambda item: version_sort_key(item.get("version")), reverse=True)
-    versions = {"items": version_items, "unassigned_requirements": [], "detail": "overview"}
+    repository_progress = repository_progress_snapshot(project)
+    light_git = progress_git_snapshot(repository_progress)
+    versions = version_plan_snapshot(project, snapshot, light_git, repository_progress)
+    versions["detail"] = "overview"
     turns = len(snapshot.get("agent_turns", {}))
     return {
         "project_id": project_id(project),
@@ -3631,6 +3902,7 @@ def project_overview_snapshot(project: Path, snapshot: dict[str, Any] | None = N
         "organization": organization_snapshot(snapshot),
         "artifacts": [],
         "git": {"available": None, "detail_status": "deferred"},
+        "repository_progress": repository_progress,
         "versions": versions,
         "current_version": current_version_snapshot(snapshot, versions),
     }
@@ -3669,6 +3941,9 @@ def portfolio_project_record(descriptor: dict[str, Any], *, sync: bool = True) -
         stage, owner_role = snapshot_stage(status["snapshot"])
         identity = project_identity_snapshot(project)
         git = git_workspace_snapshot(Path(identity["workspace_path"]))
+        repository_progress = repository_progress_snapshot(project, git)
+        versions = version_plan_snapshot(project, status["snapshot"], git, repository_progress)
+        current_version = current_version_snapshot(status["snapshot"], versions)
         activity = detected_activity_snapshot(project, status["snapshot"], git)
         execution = execution_snapshot(status["snapshot"])
         if stage == "观察中" and activity["has_unstructured_progress"]:
@@ -3694,6 +3969,14 @@ def portfolio_project_record(descriptor: dict[str, Any], *, sync: bool = True) -
                 "activity": activity,
                 "identity": identity,
                 "execution": execution,
+                "repository_progress": {
+                    key: repository_progress.get(key)
+                    for key in ("available", "repository_id", "repository_path", "active", "released", "primary")
+                },
+                "current_version": {
+                    key: current_version.get(key)
+                    for key in ("version", "status", "goal", "branch", "total", "counts")
+                } if current_version else None,
             }
         )
     except ObserveError as error:
@@ -3702,7 +3985,7 @@ def portfolio_project_record(descriptor: dict[str, Any], *, sync: bool = True) -
 
 
 def portfolio_project_summary_record(descriptor: dict[str, Any]) -> dict[str, Any]:
-    """Build a workbench row without rescanning Git or external agent mirrors."""
+    """Build a workbench row from the canonical ledger and lightweight repository facts."""
     record = dict(descriptor)
     record.update(
         {
@@ -3733,6 +4016,40 @@ def portfolio_project_summary_record(descriptor: dict[str, Any]) -> dict[str, An
         index = load_json(runtime_root(project) / "index.json", {}) or {}
         stage, owner_role = snapshot_stage(snapshot)
         turns = len(snapshot.get("agent_turns", {}))
+        repository_progress = repository_progress_snapshot(
+            project,
+            workspace_path=Path(descriptor.get("workspace_path") or project),
+            include_primary_state=False,
+        )
+        light_git = progress_git_snapshot(repository_progress)
+        versions = version_plan_snapshot(project, snapshot, light_git, repository_progress)
+        current_version = current_version_snapshot(snapshot, versions)
+        requirement_ids = {
+            item.get("requirement_id") for item in (current_version or {}).get("requirements", [])
+            if item.get("requirement_id")
+        }
+        matching_rounds = [
+            item for item in snapshot.get("work_rounds", {}).values()
+            if not requirement_ids or (item.get("requirement_id") or item.get("task_id")) in requirement_ids
+        ]
+        recent_work = next(
+            iter(sorted(matching_rounds, key=lambda item: item.get("derived_from_sequence", 0), reverse=True)),
+            None,
+        )
+        if current_version and current_version.get("status") in {"in_progress", "planned"}:
+            focus = next(
+                (item for item in current_version.get("requirements", []) if item.get("effective_status") in {"blocked", "in_progress", "planned"}),
+                None,
+            )
+            if recent_work is not None:
+                stage = ((focus.get("workflow") or {}).get("stage_label") if focus else None) or "版本开发中"
+                owner_role = focus.get("current_role") if focus else "Unknown"
+            elif current_version.get("status") == "in_progress":
+                stage = "开发中 · 流程记录待补"
+                owner_role = "Unknown"
+            else:
+                stage = "规划中"
+                owner_role = focus.get("current_role") if focus else "PM"
         record.update(
             {
                 "stage": stage,
@@ -3741,16 +4058,7 @@ def portfolio_project_summary_record(descriptor: dict[str, Any]) -> dict[str, An
                 "summary": snapshot.get("summary", record["summary"]),
                 "runs": index.get("runs", []),
                 "updated_at": snapshot.get("updated_at"),
-                "recent_work": next(
-                    iter(
-                        sorted(
-                            snapshot.get("work_rounds", {}).values(),
-                            key=lambda item: item.get("derived_from_sequence", 0),
-                            reverse=True,
-                        )
-                    ),
-                    None,
-                ),
+                "recent_work": recent_work,
                 "activity": {
                     "agent_turn_count": turns,
                     "git_commit_count": 0,
@@ -3758,6 +4066,14 @@ def portfolio_project_summary_record(descriptor: dict[str, Any]) -> dict[str, An
                     "detail_status": "project_view_only",
                 },
                 "execution": execution_snapshot(snapshot),
+                "repository_progress": {
+                    key: repository_progress.get(key)
+                    for key in ("available", "repository_id", "repository_path", "active", "released", "primary")
+                },
+                "current_version": {
+                    key: current_version.get(key)
+                    for key in ("version", "status", "goal", "branch", "total", "counts")
+                } if current_version else None,
             }
         )
     except ObserveError as error:
@@ -4026,17 +4342,19 @@ def submit_agent_activity(
     state: str,
     session_ref: str,
     turn_ref: str | None = None,
+    source_project: Path | None = None,
 ) -> dict[str, Any]:
-    return submit_envelope(
+    envelope = build_agent_envelope(
         project,
-        build_agent_envelope(
-            project,
-            platform=platform,
-            state=state,
-            session_ref=session_ref,
-            turn_ref=turn_ref,
-        ),
+        platform=platform,
+        state=state,
+        session_ref=session_ref,
+        turn_ref=turn_ref,
     )
+    if source_project is not None:
+        envelope["source"].update(source_worktree_provenance(source_project))
+        validate_ingest_envelope(envelope, project_id(project))
+    return submit_envelope(project, envelope)
 
 
 def record_harness_command_activity(
@@ -4070,17 +4388,19 @@ def submit_harness_command_activity(
     state: str,
     invocation_ref: str,
     exit_code: int | None = None,
+    source_project: Path | None = None,
 ) -> dict[str, Any]:
-    return submit_envelope(
+    envelope = build_harness_command_envelope(
         project,
-        build_harness_command_envelope(
-            project,
-            command=command,
-            state=state,
-            invocation_ref=invocation_ref,
-            exit_code=exit_code,
-        ),
+        command=command,
+        state=state,
+        invocation_ref=invocation_ref,
+        exit_code=exit_code,
     )
+    if source_project is not None:
+        envelope["source"].update(source_worktree_provenance(source_project))
+        validate_ingest_envelope(envelope, project_id(project))
+    return submit_envelope(project, envelope)
 
 
 def codex_hook_config(platform: str = "codex") -> dict[str, Any]:
@@ -5736,8 +6056,9 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(value, ensure_ascii=False, indent=2))
             return 0 if args.action != "status" or value.get("healthy") else 2
         if args.command == "activity":
-            project = resolve_project(args.project)
-            if not has_harness_entry(project):
+            source_project = resolve_project(args.project)
+            project = resolve_agent_project(source_project)
+            if project is None or not has_harness_entry(project):
                 return 0
             submit_harness_command_activity(
                 project,
@@ -5745,12 +6066,14 @@ def main(argv: list[str] | None = None) -> int:
                 state=args.state,
                 invocation_ref=args.invocation,
                 exit_code=args.exit_code,
+                source_project=source_project,
             )
             return 0
         if args.command == "emit":
-            project = resolve_project(args.project)
-            if not has_harness_entry(project):
-                raise ObserveError("Project does not contain an injected Harness entry", 64)
+            source_project = resolve_project(args.project)
+            project = resolve_agent_project(source_project)
+            if project is None or not has_harness_entry(project):
+                raise ObserveError("Project is not an injected Harness project or a registered worktree", 64)
             idempotency_key = args.idempotency_key or f"emit:{args.event_type}:{args.ref}"
             if args.event_type in {"work.round_started", "work.round_completed"}:
                 if not args.role or not args.objective:
@@ -5808,6 +6131,8 @@ def main(argv: list[str] | None = None) -> int:
                     round_ref=args.round_ref,
                     idempotency_key=idempotency_key,
                 )
+            envelope["source"].update(source_worktree_provenance(source_project))
+            validate_ingest_envelope(envelope, project_id(project))
             result = submit_envelope(project, envelope)
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
