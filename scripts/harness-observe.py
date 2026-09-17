@@ -39,6 +39,7 @@ RUNTIME_DIRNAME = ".harness-runtime"
 SERVICE_NAME = "Mick Harness Observer"
 SERVICE_LABEL = "com.mick.harness.observer"
 DEFAULT_PORT = 6425
+DEVELOPMENT_PORT = 6426
 DEFAULT_SCAN_INTERVAL = 2.0
 INGEST_PATH = "/api/v1/events"
 BRAIN_STATUS_PATH = "/api/brain/status.json"
@@ -462,6 +463,18 @@ def project_identity_snapshot(project: Path) -> dict[str, Any]:
     }
 
 
+def git_common_dir(project: Path) -> Path | None:
+    """Return the canonical Git storage shared by every worktree in a repository."""
+    try:
+        result = run_git(project, ["rev-parse", "--git-common-dir"])
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+    value = Path(result.stdout.strip()).expanduser()
+    return value.resolve() if value.is_absolute() else (project / value).resolve()
+
+
 def resolve_agent_project(cwd: Path, registry_path: Path | None = None) -> Path | None:
     """Map a vendor session directory to one registered Harness project without guessing."""
     cwd = cwd.resolve(strict=False)
@@ -481,6 +494,21 @@ def resolve_agent_project(cwd: Path, registry_path: Path | None = None) -> Path 
             path_matches.append((len(candidate.parts), registered))
     if path_matches:
         return max(path_matches, key=lambda item: item[0])[1]
+
+    # A linked Git worktree is a peer of the registered checkout, not its child.
+    # Match the shared Git common-dir so every worktree writes to one canonical ledger.
+    cwd_workspace = project_workspace_path(cwd)[0]
+    cwd_repository = git_common_dir(cwd_workspace)
+    if cwd_repository is not None:
+        repository_matches: list[Path] = []
+        for descriptor in descriptors:
+            registered = Path(descriptor["path"]).resolve(strict=False)
+            workspace = Path(descriptor.get("workspace_path") or registered).resolve(strict=False)
+            if git_common_dir(workspace) == cwd_repository:
+                repository_matches.append(registered)
+        unique_matches = sorted(set(repository_matches), key=str)
+        if len(unique_matches) == 1:
+            return unique_matches[0]
 
     mirror_title = chatgpt_project_title(cwd)
     if mirror_title:
@@ -731,7 +759,10 @@ def validate_ingest_envelope(envelope: dict[str, Any], expected_project_id: str 
         raise ObserveError("Ingest source must be an object", 422)
     validate_keys(
         source,
-        allowed={"kind", "producer", "role", "agent_id", "adapter"},
+        allowed={
+            "kind", "producer", "role", "agent_id", "adapter", "repository_id",
+            "source_worktree_path", "source_branch", "source_commit",
+        },
         required={"kind", "producer"},
         label="Ingest source",
     )
@@ -740,7 +771,10 @@ def validate_ingest_envelope(envelope: dict[str, Any], expected_project_id: str 
     require_text(source, "producer", maximum=120)
     if source.get("role") is not None and source["role"] not in ROLES:
         raise ObserveError(f"Unsupported role: {source['role']}", 422)
-    for key, maximum in (("agent_id", 160), ("adapter", 80)):
+    for key, maximum in (
+        ("agent_id", 160), ("adapter", 80), ("repository_id", 160),
+        ("source_worktree_path", 1024), ("source_branch", 300), ("source_commit", 64),
+    ):
         if source.get(key) is not None:
             require_text(source, key, maximum=maximum)
 
@@ -2151,7 +2185,9 @@ def status_runtime(project: Path) -> dict[str, Any]:
     run_record, target_run_dir = current_run(project)
     snapshot = load_json(target_run_dir / "snapshot.json")
     if snapshot is None:
-        snapshot = replay_runtime(project)["snapshot"]
+        # Reading a missing projection must not repair production data from a preview.
+        # Explicit sync/replay remains responsible for persisting projections.
+        snapshot = project_events(load_events(target_run_dir / "events.jsonl"))
     return {"run": run_record, "snapshot": snapshot}
 
 
@@ -2703,14 +2739,13 @@ def read_artifact_content(project: Path, snapshot: dict[str, Any], path_value: s
 def run_git(project: Path, arguments: list[str], *, timeout: float = 2.0) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
     environment["GIT_OPTIONAL_LOCKS"] = "0"
-    return subprocess.run(
-        ["git", "-C", str(project), *arguments],
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        env=environment,
-    )
+    command = ["git", "-C", str(project), *arguments]
+    try:
+        return subprocess.run(command, check=False, capture_output=True, text=True,
+                              timeout=timeout, env=environment)
+    except subprocess.TimeoutExpired:
+        # A slow repository is unavailable evidence, not a broken HTTP connection.
+        return subprocess.CompletedProcess(command, 124, "", "Git inspection timed out")
 
 
 def _git_worktree_records(project: Path) -> list[dict[str, Any]]:
@@ -2741,12 +2776,7 @@ def _git_worktree_records(project: Path) -> list[dict[str, Any]]:
 
 
 def _git_repository_identity(project: Path, worktrees: list[dict[str, Any]]) -> tuple[str, str | None]:
-    common_result = run_git(project, ["rev-parse", "--git-common-dir"])
-    if common_result.returncode != 0 or not common_result.stdout.strip():
-        canonical = project.resolve()
-    else:
-        common_value = Path(common_result.stdout.strip()).expanduser()
-        canonical = common_value.resolve() if common_value.is_absolute() else (project / common_value).resolve()
+    canonical = git_common_dir(project) or project.resolve()
     repository_id = f"repository-{hashlib.sha256(str(canonical).encode()).hexdigest()[:12]}"
     repository_path = worktrees[0].get("path") if worktrees else None
     return repository_id, repository_path
@@ -2968,9 +2998,250 @@ def version_sort_key(value: Any) -> tuple[Any, ...]:
     return (*padded, 1 if not separator else 0, prerelease.lower())
 
 
-def version_plan_snapshot(project: Path, snapshot: dict[str, Any], git: dict[str, Any]) -> dict[str, Any]:
+def repository_progress_snapshot(
+    project: Path,
+    git: dict[str, Any] | None = None,
+    *,
+    workspace_path: Path | None = None,
+    include_primary_state: bool = True,
+) -> dict[str, Any]:
+    """Merge version facts from every checked-out worktree without modifying Git state."""
+    registered = project.resolve(strict=False)
+    workspace = (workspace_path or project_workspace_path(registered)[0]).resolve(strict=False)
+    if git is None:
+        try:
+            inside = run_git(workspace, ["rev-parse", "--is-inside-work-tree"])
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            inside = None
+        if inside is None or inside.returncode != 0 or inside.stdout.strip() != "true":
+            source = registered / "docs" / "VERSIONS.md"
+            versions = parse_versions_markdown(source.read_text(encoding="utf-8")) if source.is_file() else []
+            versions.sort(key=lambda item: version_sort_key(item.get("version")), reverse=True)
+            return {
+                "available": False,
+                "repository_id": None,
+                "repository_path": None,
+                "worktrees": [],
+                "versions": versions,
+                "active": next((item for item in versions if item.get("status") == "in_progress"), None),
+                "released": None,
+                "primary": None,
+            }
+        worktrees = _git_worktree_records(workspace)
+        tag_result = run_git(workspace, ["tag", "--sort=-version:refname"])
+        tags = [line for line in tag_result.stdout.splitlines() if line] if tag_result.returncode == 0 else []
+        repository_id, repository_path = _git_repository_identity(workspace, worktrees)
+    else:
+        worktrees = [dict(item) for item in git.get("worktrees", [])]
+        tags = list(git.get("tags", []))
+        repository_id = git.get("repository_id")
+        repository_path = git.get("repository_path")
+        if not worktrees and git.get("available"):
+            worktrees = _git_worktree_records(workspace)
+        if repository_id is None:
+            repository_id, repository_path = _git_repository_identity(workspace, worktrees)
+
+    sources: list[dict[str, Any]] = []
+    candidates: list[dict[str, Any]] = []
+    seen_paths: set[str] = set()
+    inspect_primary_state = include_primary_state or len(worktrees) > 1
+    for index, raw_worktree in enumerate(worktrees):
+        item = dict(raw_worktree)
+        worktree_path = Path(str(item.get("path") or "")).expanduser().resolve(strict=False)
+        if not str(item.get("path") or "") or str(worktree_path) in seen_paths:
+            continue
+        seen_paths.add(str(worktree_path))
+        branch = item.get("branch")
+        primary = bool(item.get("primary", index == 0))
+        source_path = worktree_path / "docs" / "VERSIONS.md"
+        try:
+            versions = parse_versions_markdown(source_path.read_text(encoding="utf-8")) if source_path.is_file() else []
+        except (OSError, UnicodeError):
+            versions = []
+        versions.sort(key=lambda value: version_sort_key(value.get("version")), reverse=True)
+        dirty_count = item.get("dirty_count")
+        if inspect_primary_state and primary and dirty_count is None and worktree_path.is_dir():
+            status_result = run_git(worktree_path, ["status", "--porcelain=v1"])
+            if status_result.returncode == 0:
+                dirty_count = len([line for line in status_result.stdout.splitlines() if line])
+        ahead = behind = None
+        if inspect_primary_state and primary and worktree_path.is_dir():
+            tracking_result = run_git(worktree_path, ["rev-list", "--left-right", "--count", "HEAD...@{upstream}"])
+            if tracking_result.returncode == 0:
+                tracking_parts = tracking_result.stdout.split()
+                if len(tracking_parts) == 2 and all(part.isdigit() for part in tracking_parts):
+                    ahead, behind = (int(tracking_parts[0]), int(tracking_parts[1]))
+        selected_local = (
+            next((value for value in versions if value.get("status") == "in_progress"), None)
+            or next((value for value in versions if value.get("status") == "planned"), None)
+            or (versions[0] if versions else None)
+        )
+        source_record = {
+            "path": str(worktree_path),
+            "branch": branch,
+            "head": item.get("head_full") or item.get("head"),
+            "primary": primary,
+            "registered": worktree_path == workspace.resolve(strict=False),
+            "available": worktree_path.is_dir(),
+            "dirty": None if dirty_count is None else bool(dirty_count),
+            "dirty_count": dirty_count,
+            "ahead": ahead,
+            "behind": behind,
+            "version": selected_local.get("version") if selected_local else None,
+            "version_status": selected_local.get("status") if selected_local else None,
+        }
+        sources.append(source_record)
+        for version in versions:
+            copy = dict(version)
+            work_branches = list(copy.get("work_branches") or [])
+            branch_match = bool(branch and (branch == copy.get("branch") or branch in work_branches))
+            copy.update({
+                "source_worktree_path": str(worktree_path),
+                "source_branch": branch,
+                "source_head": item.get("head_full") or item.get("head"),
+                "source_primary": primary,
+                "source_branch_match": branch_match,
+            })
+            candidates.append(copy)
+
+    # A registered parent may contain the repository rather than be the repository root.
+    registered_versions_path = registered / "docs" / "VERSIONS.md"
+    if str(registered) not in seen_paths and registered_versions_path.is_file():
+        try:
+            registered_versions = parse_versions_markdown(registered_versions_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError):
+            registered_versions = []
+        for version in registered_versions:
+            copy = dict(version)
+            copy.update({
+                "source_worktree_path": str(registered),
+                "source_branch": None,
+                "source_head": None,
+                "source_primary": True,
+                "source_branch_match": False,
+            })
+            candidates.append(copy)
+
+    def candidate_score(item: dict[str, Any]) -> tuple[Any, ...]:
+        return (
+            1 if item.get("source_branch_match") else 0,
+            1 if item.get("source_primary") else 0,
+            str(item.get("source_head") or ""),
+        )
+
+    merged_by_version: dict[str, dict[str, Any]] = {}
+    for candidate in candidates:
+        key = str(candidate.get("version") or "")
+        previous = merged_by_version.get(key)
+        if previous is None or candidate_score(candidate) > candidate_score(previous):
+            merged_by_version[key] = candidate
+    versions = sorted(merged_by_version.values(), key=lambda item: version_sort_key(item.get("version")), reverse=True)
+
+    tagged_versions = {
+        match.group(1)
+        for tag in tags
+        if (match := re.fullmatch(r"v?(\d+(?:\.\d+){1,5}(?:-[0-9A-Za-z.-]+)?)", tag))
+    }
+    active_candidates = [
+        item for item in candidates
+        if item.get("status") in {"in_progress", "planned"}
+        and str(item.get("version")) not in tagged_versions
+    ]
+    matched_active = [item for item in active_candidates if item.get("source_branch_match")]
+    eligible_active = matched_active or active_candidates
+    status_priority = {"in_progress": 2, "planned": 1}
+    selected_active = max(
+        eligible_active,
+        key=lambda item: (status_priority.get(item.get("status"), 0), version_sort_key(item.get("version"))),
+        default=None,
+    )
+    active = None
+    if selected_active is not None:
+        active = {
+            "version": selected_active.get("version"),
+            "status": selected_active.get("status"),
+            "goal": selected_active.get("goal"),
+            "branch": selected_active.get("source_branch"),
+            "declared_branch": selected_active.get("branch"),
+            "worktree_path": selected_active.get("source_worktree_path"),
+            "head": selected_active.get("source_head"),
+        }
+
+    released_tags: list[tuple[tuple[Any, ...], str, str]] = []
+    for tag in tags:
+        match = re.fullmatch(r"v?(\d+(?:\.\d+){1,5}(?:-[0-9A-Za-z.-]+)?)", tag)
+        if match:
+            released_tags.append((version_sort_key(match.group(1)), match.group(1), tag))
+    released = None
+    if released_tags:
+        _, released_version, released_tag = max(released_tags)
+        released = {"version": released_version, "tag": released_tag, "source": "git_tag"}
+        for version in versions:
+            if str(version.get("version")) == released_version:
+                version["status"] = "released"
+                version["tag"] = released_tag
+                version["status_source"] = "git_tag"
+
+    primary_source = next((item for item in sources if item.get("primary")), None)
+    return {
+        "available": True,
+        "repository_id": repository_id,
+        "repository_path": repository_path,
+        "worktrees": sources,
+        "versions": versions,
+        "active": active,
+        "released": released,
+        "primary": primary_source,
+    }
+
+
+def progress_git_snapshot(progress: dict[str, Any]) -> dict[str, Any]:
+    """Provide the branch/tag subset needed to decorate an aggregated version plan."""
+    branches = sorted({item.get("branch") for item in progress.get("worktrees", []) if item.get("branch")})
+    released_tag = (progress.get("released") or {}).get("tag")
+    primary = progress.get("primary") or {}
+    return {
+        "available": progress.get("available", False),
+        "repository_id": progress.get("repository_id"),
+        "repository_path": progress.get("repository_path"),
+        "current_branch": primary.get("branch"),
+        "branches": [{"name": branch} for branch in branches],
+        "worktrees": [
+            {"path": item.get("path"), "branch": item.get("branch")}
+            for item in progress.get("worktrees", [])
+        ],
+        "tags": [released_tag] if released_tag else [],
+    }
+
+
+def source_worktree_provenance(source_project: Path) -> dict[str, Any]:
+    """Describe where an event originated while its ledger stays on the registered project."""
+    workspace = project_workspace_path(source_project.resolve(strict=False))[0]
+    common = git_common_dir(workspace)
+    if common is None:
+        return {}
+    branch_result = run_git(workspace, ["branch", "--show-current"])
+    commit_result = run_git(workspace, ["rev-parse", "HEAD"])
+    repository_id = f"repository-{hashlib.sha256(str(common).encode()).hexdigest()[:12]}"
+    return {
+        "repository_id": repository_id,
+        "source_worktree_path": str(workspace.resolve(strict=False)),
+        **({"source_branch": branch_result.stdout.strip()} if branch_result.returncode == 0 and branch_result.stdout.strip() else {}),
+        **({"source_commit": commit_result.stdout.strip()} if commit_result.returncode == 0 and commit_result.stdout.strip() else {}),
+    }
+
+
+def version_plan_snapshot(
+    project: Path,
+    snapshot: dict[str, Any],
+    git: dict[str, Any],
+    repository_progress: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     source = project / "docs" / "VERSIONS.md"
-    planned = parse_versions_markdown(source.read_text(encoding="utf-8")) if source.is_file() else []
+    progress = repository_progress or repository_progress_snapshot(project, git)
+    planned = [dict(item) for item in progress.get("versions", [])]
+    if not planned:
+        planned = parse_versions_markdown(source.read_text(encoding="utf-8")) if source.is_file() else []
     branch_names = {item.get("name") for item in git.get("branches", [])}
     checked_out_branches = {item.get("branch") for item in git.get("worktrees", []) if item.get("branch")}
     tags = set(git.get("tags", []))
@@ -3013,7 +3284,7 @@ def version_plan_snapshot(project: Path, snapshot: dict[str, Any], git: dict[str
         if task.get("status") != "abandoned" and task_id not in referenced
     ]
     return {
-        "source": "docs/VERSIONS.md" if source.is_file() else None,
+        "source": "repository_worktrees" if progress.get("available") and planned else "docs/VERSIONS.md" if source.is_file() else None,
         "items": planned,
         "unassigned_requirements": unassigned,
     }
@@ -3575,7 +3846,8 @@ def project_workspace_snapshot(project: Path, snapshot: dict[str, Any] | None = 
     identity = project_identity_snapshot(project)
     workspace = Path(identity["workspace_path"])
     git = git_workspace_snapshot(workspace)
-    versions = version_plan_snapshot(project, snapshot, git)
+    repository_progress = repository_progress_snapshot(project, git)
+    versions = version_plan_snapshot(project, snapshot, git, repository_progress)
     profile = project_profile_snapshot(project)
     if not profile.get("source") and workspace != project.resolve(strict=False):
         profile = project_profile_snapshot(workspace)
@@ -3589,6 +3861,7 @@ def project_workspace_snapshot(project: Path, snapshot: dict[str, Any] | None = 
         "organization": organization_snapshot(snapshot),
         "artifacts": artifact_metadata(project, snapshot, versions),
         "git": git,
+        "repository_progress": repository_progress,
         "versions": versions,
         "current_version": current_version_snapshot(snapshot, versions),
     }
@@ -3598,10 +3871,10 @@ def project_overview_snapshot(project: Path, snapshot: dict[str, Any] | None = N
     """Return only data used by the default project page; defer Git, artifacts and diagnostics."""
     if snapshot is None:
         snapshot = status_runtime(project)["snapshot"]
-    versions_path = project / "docs" / "VERSIONS.md"
-    version_items = parse_versions_markdown(versions_path.read_text(encoding="utf-8")) if versions_path.is_file() else []
-    version_items.sort(key=lambda item: version_sort_key(item.get("version")), reverse=True)
-    versions = {"items": version_items, "unassigned_requirements": [], "detail": "overview"}
+    repository_progress = repository_progress_snapshot(project)
+    light_git = progress_git_snapshot(repository_progress)
+    versions = version_plan_snapshot(project, snapshot, light_git, repository_progress)
+    versions["detail"] = "overview"
     turns = len(snapshot.get("agent_turns", {}))
     return {
         "project_id": project_id(project),
@@ -3631,6 +3904,7 @@ def project_overview_snapshot(project: Path, snapshot: dict[str, Any] | None = N
         "organization": organization_snapshot(snapshot),
         "artifacts": [],
         "git": {"available": None, "detail_status": "deferred"},
+        "repository_progress": repository_progress,
         "versions": versions,
         "current_version": current_version_snapshot(snapshot, versions),
     }
@@ -3669,6 +3943,9 @@ def portfolio_project_record(descriptor: dict[str, Any], *, sync: bool = True) -
         stage, owner_role = snapshot_stage(status["snapshot"])
         identity = project_identity_snapshot(project)
         git = git_workspace_snapshot(Path(identity["workspace_path"]))
+        repository_progress = repository_progress_snapshot(project, git)
+        versions = version_plan_snapshot(project, status["snapshot"], git, repository_progress)
+        current_version = current_version_snapshot(status["snapshot"], versions)
         activity = detected_activity_snapshot(project, status["snapshot"], git)
         execution = execution_snapshot(status["snapshot"])
         if stage == "观察中" and activity["has_unstructured_progress"]:
@@ -3694,6 +3971,14 @@ def portfolio_project_record(descriptor: dict[str, Any], *, sync: bool = True) -
                 "activity": activity,
                 "identity": identity,
                 "execution": execution,
+                "repository_progress": {
+                    key: repository_progress.get(key)
+                    for key in ("available", "repository_id", "repository_path", "active", "released", "primary")
+                },
+                "current_version": {
+                    key: current_version.get(key)
+                    for key in ("version", "status", "goal", "branch", "total", "counts")
+                } if current_version else None,
             }
         )
     except ObserveError as error:
@@ -3702,7 +3987,7 @@ def portfolio_project_record(descriptor: dict[str, Any], *, sync: bool = True) -
 
 
 def portfolio_project_summary_record(descriptor: dict[str, Any]) -> dict[str, Any]:
-    """Build a workbench row without rescanning Git or external agent mirrors."""
+    """Build a workbench row from the canonical ledger and lightweight repository facts."""
     record = dict(descriptor)
     record.update(
         {
@@ -3733,6 +4018,40 @@ def portfolio_project_summary_record(descriptor: dict[str, Any]) -> dict[str, An
         index = load_json(runtime_root(project) / "index.json", {}) or {}
         stage, owner_role = snapshot_stage(snapshot)
         turns = len(snapshot.get("agent_turns", {}))
+        repository_progress = repository_progress_snapshot(
+            project,
+            workspace_path=Path(descriptor.get("workspace_path") or project),
+            include_primary_state=False,
+        )
+        light_git = progress_git_snapshot(repository_progress)
+        versions = version_plan_snapshot(project, snapshot, light_git, repository_progress)
+        current_version = current_version_snapshot(snapshot, versions)
+        requirement_ids = {
+            item.get("requirement_id") for item in (current_version or {}).get("requirements", [])
+            if item.get("requirement_id")
+        }
+        matching_rounds = [
+            item for item in snapshot.get("work_rounds", {}).values()
+            if not requirement_ids or (item.get("requirement_id") or item.get("task_id")) in requirement_ids
+        ]
+        recent_work = next(
+            iter(sorted(matching_rounds, key=lambda item: item.get("derived_from_sequence", 0), reverse=True)),
+            None,
+        )
+        if current_version and current_version.get("status") in {"in_progress", "planned"}:
+            focus = next(
+                (item for item in current_version.get("requirements", []) if item.get("effective_status") in {"blocked", "in_progress", "planned"}),
+                None,
+            )
+            if recent_work is not None:
+                stage = ((focus.get("workflow") or {}).get("stage_label") if focus else None) or "版本开发中"
+                owner_role = focus.get("current_role") if focus else "Unknown"
+            elif current_version.get("status") == "in_progress":
+                stage = "开发中 · 流程记录待补"
+                owner_role = "Unknown"
+            else:
+                stage = "规划中"
+                owner_role = focus.get("current_role") if focus else "PM"
         record.update(
             {
                 "stage": stage,
@@ -3741,16 +4060,7 @@ def portfolio_project_summary_record(descriptor: dict[str, Any]) -> dict[str, An
                 "summary": snapshot.get("summary", record["summary"]),
                 "runs": index.get("runs", []),
                 "updated_at": snapshot.get("updated_at"),
-                "recent_work": next(
-                    iter(
-                        sorted(
-                            snapshot.get("work_rounds", {}).values(),
-                            key=lambda item: item.get("derived_from_sequence", 0),
-                            reverse=True,
-                        )
-                    ),
-                    None,
-                ),
+                "recent_work": recent_work,
                 "activity": {
                     "agent_turn_count": turns,
                     "git_commit_count": 0,
@@ -3758,6 +4068,14 @@ def portfolio_project_summary_record(descriptor: dict[str, Any]) -> dict[str, An
                     "detail_status": "project_view_only",
                 },
                 "execution": execution_snapshot(snapshot),
+                "repository_progress": {
+                    key: repository_progress.get(key)
+                    for key in ("available", "repository_id", "repository_path", "active", "released", "primary")
+                },
+                "current_version": {
+                    key: current_version.get(key)
+                    for key in ("version", "status", "goal", "branch", "total", "counts")
+                } if current_version else None,
             }
         )
     except ObserveError as error:
@@ -3947,7 +4265,11 @@ def agent_status_snapshot(
         layers = {
             "discovered": {"status": "verified" if source.get("detected") else "not_detected"},
             "injected": {
-                "status": "verified" if injection_status == "injected" else ("blocked" if injection_status == "conflict" else "unverified")
+                "status": "verified" if injection_status == "injected" else (
+                    "configured" if injection_status == "project_managed" and source.get("detected") else (
+                        "blocked" if injection_status == "conflict" else "unverified"
+                    )
+                )
             },
             "loaded": {"status": loaded_status},
             "execution": {"status": source.get("execution", {}).get("status", "unverified")},
@@ -4022,17 +4344,19 @@ def submit_agent_activity(
     state: str,
     session_ref: str,
     turn_ref: str | None = None,
+    source_project: Path | None = None,
 ) -> dict[str, Any]:
-    return submit_envelope(
+    envelope = build_agent_envelope(
         project,
-        build_agent_envelope(
-            project,
-            platform=platform,
-            state=state,
-            session_ref=session_ref,
-            turn_ref=turn_ref,
-        ),
+        platform=platform,
+        state=state,
+        session_ref=session_ref,
+        turn_ref=turn_ref,
     )
+    if source_project is not None:
+        envelope["source"].update(source_worktree_provenance(source_project))
+        validate_ingest_envelope(envelope, project_id(project))
+    return submit_envelope(project, envelope)
 
 
 def record_harness_command_activity(
@@ -4066,17 +4390,19 @@ def submit_harness_command_activity(
     state: str,
     invocation_ref: str,
     exit_code: int | None = None,
+    source_project: Path | None = None,
 ) -> dict[str, Any]:
-    return submit_envelope(
+    envelope = build_harness_command_envelope(
         project,
-        build_harness_command_envelope(
-            project,
-            command=command,
-            state=state,
-            invocation_ref=invocation_ref,
-            exit_code=exit_code,
-        ),
+        command=command,
+        state=state,
+        invocation_ref=invocation_ref,
+        exit_code=exit_code,
     )
+    if source_project is not None:
+        envelope["source"].update(source_worktree_provenance(source_project))
+        validate_ingest_envelope(envelope, project_id(project))
+    return submit_envelope(project, envelope)
 
 
 def codex_hook_config(platform: str = "codex") -> dict[str, Any]:
@@ -4685,17 +5011,33 @@ def safe_run_id(value: str) -> bool:
     return bool(re.fullmatch(r"run_[A-Za-z0-9._-]{8,}", value))
 
 
-def launch_agent_path(home: Path | None = None) -> Path:
-    return (home or Path.home()) / "Library" / "LaunchAgents" / f"{SERVICE_LABEL}.plist"
+def environment_label(environment: str) -> str:
+    if environment not in {"production", "development"}:
+        raise ObserveError(f"Unknown environment: {environment}", 64)
+    return SERVICE_LABEL + (".dev" if environment == "development" else "")
 
 
-def build_launch_agent_plist(harness_root: Path, state_root: Path, *, port: int = DEFAULT_PORT) -> dict[str, Any]:
+def environment_port(environment: str) -> int:
+    environment_label(environment)
+    return DEVELOPMENT_PORT if environment == "development" else DEFAULT_PORT
+
+
+def observer_log_dir(environment: str) -> Path:
+    return default_state_root() / ("observer-dev" if environment == "development" else "observer")
+
+
+def launch_agent_path(home: Path | None = None, *, environment: str = "production") -> Path:
+    return (home or Path.home()) / "Library" / "LaunchAgents" / f"{environment_label(environment)}.plist"
+
+
+def build_launch_agent_plist(harness_root: Path, state_root: Path, *, port: int = DEFAULT_PORT,
+                             environment: str = "production") -> dict[str, Any]:
     if port < 1 or port > 65535:
         raise ObserveError(f"Invalid port: {port}", 64)
-    observer_dir = state_root / "observer"
+    observer_dir = state_root / ("observer-dev" if environment == "development" else "observer")
     script = harness_root / "scripts" / "harness-observe.py"
     return {
-        "Label": SERVICE_LABEL,
+        "Label": environment_label(environment),
         "ProgramArguments": [
             sys.executable,
             str(script),
@@ -4703,7 +5045,7 @@ def build_launch_agent_plist(harness_root: Path, state_root: Path, *, port: int 
             "--all",
             "--port",
             str(port),
-        ],
+        ] + (["--environment", "development"] if environment == "development" else []),
         "WorkingDirectory": str(harness_root),
         "RunAtLoad": True,
         "KeepAlive": True,
@@ -4713,6 +5055,10 @@ def build_launch_agent_plist(harness_root: Path, state_root: Path, *, port: int 
             "MICK_HARNESS_ROOT": str(harness_root),
             "MICK_HARNESS_STATE_DIR": str(state_root),
             "PYTHONDONTWRITEBYTECODE": "1",
+            "GIT_OPTIONAL_LOCKS": "0",
+            **({"MICK_HARNESS_BASELINE_ROOT": os.environ.get(
+                "MICK_HARNESS_BASELINE_ROOT", str(Path.home() / ".mick-harness")
+            )} if environment == "development" else {}),
         },
         "StandardOutPath": str(observer_dir / "service.log"),
         "StandardErrorPath": str(observer_dir / "service.error.log"),
@@ -4731,8 +5077,8 @@ def installed_service_port(plist_path: Path) -> int:
         raise ObserveError(f"Observer LaunchAgent does not contain a valid --port: {plist_path}") from error
 
 
-def launchctl_target() -> str:
-    return f"gui/{os.getuid()}/{SERVICE_LABEL}"
+def launchctl_target(environment: str = "production") -> str:
+    return f"gui/{os.getuid()}/{environment_label(environment)}"
 
 
 def launchctl_domain() -> str:
@@ -4752,10 +5098,10 @@ def run_launchctl(arguments: list[str], *, check: bool = True) -> subprocess.Com
     return result
 
 
-def launch_agent_loaded() -> bool:
+def launch_agent_loaded(environment: str = "production") -> bool:
     if sys.platform != "darwin":
         return False
-    return run_launchctl(["print", launchctl_target()], check=False).returncode == 0
+    return run_launchctl(["print", launchctl_target(environment)], check=False).returncode == 0
 
 
 def observer_health(port: int, *, timeout: float = 0.5) -> dict[str, Any] | None:
@@ -4769,20 +5115,23 @@ def observer_health(port: int, *, timeout: float = 0.5) -> dict[str, Any] | None
         return None
 
 
-def service_status(*, home: Path | None = None, port: int | None = None) -> dict[str, Any]:
-    plist_path = launch_agent_path(home)
+def service_status(*, home: Path | None = None, port: int | None = None,
+                   environment: str = "production") -> dict[str, Any]:
+    plist_path = launch_agent_path(home, environment=environment)
     selected_port = port
     if selected_port is None and plist_path.is_file():
         with contextlib.suppress(ObserveError):
             selected_port = installed_service_port(plist_path)
-    selected_port = selected_port or DEFAULT_PORT
+    selected_port = selected_port or environment_port(environment)
     health = observer_health(selected_port)
+    matching = health is not None and health.get("service_label", SERVICE_LABEL) == environment_label(environment)
     return {
         "service_name": SERVICE_NAME,
-        "label": SERVICE_LABEL,
+        "label": environment_label(environment),
+        "environment": environment,
         "installed": plist_path.is_file(),
-        "loaded": launch_agent_loaded(),
-        "healthy": health is not None,
+        "loaded": launch_agent_loaded(environment),
+        "healthy": matching,
         "port": selected_port,
         "url": f"http://127.0.0.1:{selected_port}/",
         "plist": str(plist_path),
@@ -4790,11 +5139,12 @@ def service_status(*, home: Path | None = None, port: int | None = None) -> dict
     }
 
 
-def wait_for_observer(port: int, *, timeout: float = 8.0) -> dict[str, Any] | None:
+def wait_for_observer(port: int, *, timeout: float = 8.0,
+                      environment: str = "production") -> dict[str, Any] | None:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         health = observer_health(port)
-        if health is not None:
+        if health is not None and health.get("service_label", SERVICE_LABEL) == environment_label(environment):
             return health
         time.sleep(0.1)
     return None
@@ -4807,8 +5157,9 @@ def restore_previous_service(
     previous_loaded: bool,
     previous_port: int | None,
     previous_healthy: bool,
+    environment: str = "production",
 ) -> str:
-    run_launchctl(["bootout", launchctl_target()], check=False)
+    run_launchctl(["bootout", launchctl_target(environment)], check=False)
     if previous_plist is None:
         with contextlib.suppress(FileNotFoundError):
             plist_path.unlink()
@@ -4819,26 +5170,32 @@ def restore_previous_service(
         return "restored previous service config; previous service was not loaded"
 
     run_launchctl(["bootstrap", launchctl_domain(), str(plist_path)])
-    run_launchctl(["enable", launchctl_target()], check=False)
-    run_launchctl(["kickstart", "-k", launchctl_target()])
-    if previous_healthy and (previous_port is None or wait_for_observer(previous_port) is None):
+    run_launchctl(["enable", launchctl_target(environment)], check=False)
+    run_launchctl(["kickstart", "-k", launchctl_target(environment)])
+    if previous_healthy and (previous_port is None or wait_for_observer(previous_port, environment=environment) is None):
         raise ObserveError("previous service config was restored but did not become healthy")
     return "restored and restarted previous service"
 
 
-def install_service(*, port: int = DEFAULT_PORT, home: Path | None = None) -> dict[str, Any]:
+def install_service(*, port: int | None = None, home: Path | None = None,
+                    environment: str = "production") -> dict[str, Any]:
     if sys.platform != "darwin":
         raise ObserveError("Mick Harness Observer service installation currently requires macOS", 64)
     harness_root = Path(__file__).resolve().parents[1]
+    port = port if port is not None else environment_port(environment)
+    if environment == "development" and port != DEVELOPMENT_PORT:
+        raise ObserveError("The development service uses the stable port 6426", 64)
+    if environment == "production" and port == DEVELOPMENT_PORT:
+        raise ObserveError("Port 6426 is reserved for the read-only development service", 64)
     state_root = default_state_root()
-    observer_dir = state_root / "observer"
+    observer_dir = observer_log_dir(environment)
     observer_dir.mkdir(parents=True, exist_ok=True)
-    plist_path = launch_agent_path(home)
+    plist_path = launch_agent_path(home, environment=environment)
     plist_path.parent.mkdir(parents=True, exist_ok=True)
-    config = build_launch_agent_plist(harness_root, state_root, port=port)
+    config = build_launch_agent_plist(harness_root, state_root, port=port, environment=environment)
     desired_plist = plistlib.dumps(config, fmt=plistlib.FMT_XML, sort_keys=True)
     previous_plist = plist_path.read_bytes() if plist_path.is_file() else None
-    previous_loaded = launch_agent_loaded()
+    previous_loaded = launch_agent_loaded(environment)
     previous_port: int | None = None
     if previous_plist is not None:
         with contextlib.suppress(ObserveError):
@@ -4847,17 +5204,17 @@ def install_service(*, port: int = DEFAULT_PORT, home: Path | None = None) -> di
 
     if previous_plist == desired_plist:
         if previous_loaded and previous_healthy:
-            return service_status(home=home, port=port)
-        return start_service(home=home)
+            return service_status(home=home, port=port, environment=environment)
+        return start_service(home=home, environment=environment)
 
     atomic_write(plist_path, desired_plist)
     try:
         if previous_loaded:
-            run_launchctl(["bootout", launchctl_target()], check=False)
+            run_launchctl(["bootout", launchctl_target(environment)], check=False)
         run_launchctl(["bootstrap", launchctl_domain(), str(plist_path)])
-        run_launchctl(["enable", launchctl_target()], check=False)
-        run_launchctl(["kickstart", "-k", launchctl_target()])
-        health = wait_for_observer(port)
+        run_launchctl(["enable", launchctl_target(environment)], check=False)
+        run_launchctl(["kickstart", "-k", launchctl_target(environment)])
+        health = wait_for_observer(port, environment=environment)
         if health is None:
             raise ObserveError(f"{SERVICE_NAME} was installed but did not become healthy on 127.0.0.1:{port}")
     except (OSError, ObserveError) as error:
@@ -4868,50 +5225,51 @@ def install_service(*, port: int = DEFAULT_PORT, home: Path | None = None) -> di
                 previous_loaded=previous_loaded,
                 previous_port=previous_port,
                 previous_healthy=previous_healthy,
+                environment=environment,
             )
         except (OSError, ObserveError) as rollback_error:
             raise ObserveError(f"{error}; rollback failed: {rollback_error}") from error
         raise ObserveError(f"{error}; rollback succeeded: {rollback}") from error
-    return service_status(home=home, port=port)
+    return service_status(home=home, port=port, environment=environment)
 
 
-def start_service(*, home: Path | None = None) -> dict[str, Any]:
-    plist_path = launch_agent_path(home)
+def start_service(*, home: Path | None = None, environment: str = "production") -> dict[str, Any]:
+    plist_path = launch_agent_path(home, environment=environment)
     if not plist_path.is_file():
         raise ObserveError("Observer service is not installed. Run 'harness observe service install' first.", 2)
     port = installed_service_port(plist_path)
-    if not launch_agent_loaded():
+    if not launch_agent_loaded(environment):
         run_launchctl(["bootstrap", launchctl_domain(), str(plist_path)])
-    run_launchctl(["enable", launchctl_target()], check=False)
-    run_launchctl(["kickstart", "-k", launchctl_target()])
-    if wait_for_observer(port) is None:
+    run_launchctl(["enable", launchctl_target(environment)], check=False)
+    run_launchctl(["kickstart", "-k", launchctl_target(environment)])
+    if wait_for_observer(port, environment=environment) is None:
         raise ObserveError(f"{SERVICE_NAME} did not become healthy on 127.0.0.1:{port}")
-    return service_status(home=home, port=port)
+    return service_status(home=home, port=port, environment=environment)
 
 
-def stop_service(*, home: Path | None = None) -> dict[str, Any]:
-    plist_path = launch_agent_path(home)
-    port = installed_service_port(plist_path) if plist_path.is_file() else DEFAULT_PORT
-    run_launchctl(["bootout", launchctl_target()], check=False)
-    return service_status(home=home, port=port)
+def stop_service(*, home: Path | None = None, environment: str = "production") -> dict[str, Any]:
+    plist_path = launch_agent_path(home, environment=environment)
+    port = installed_service_port(plist_path) if plist_path.is_file() else environment_port(environment)
+    run_launchctl(["bootout", launchctl_target(environment)], check=False)
+    return service_status(home=home, port=port, environment=environment)
 
 
-def restart_service(*, home: Path | None = None) -> dict[str, Any]:
-    stop_service(home=home)
-    return start_service(home=home)
+def restart_service(*, home: Path | None = None, environment: str = "production") -> dict[str, Any]:
+    stop_service(home=home, environment=environment)
+    return start_service(home=home, environment=environment)
 
 
-def uninstall_service(*, home: Path | None = None) -> dict[str, Any]:
-    plist_path = launch_agent_path(home)
-    port = installed_service_port(plist_path) if plist_path.is_file() else DEFAULT_PORT
-    run_launchctl(["bootout", launchctl_target()], check=False)
+def uninstall_service(*, home: Path | None = None, environment: str = "production") -> dict[str, Any]:
+    plist_path = launch_agent_path(home, environment=environment)
+    port = installed_service_port(plist_path) if plist_path.is_file() else environment_port(environment)
+    run_launchctl(["bootout", launchctl_target(environment)], check=False)
     with contextlib.suppress(FileNotFoundError):
         plist_path.unlink()
-    return service_status(home=home, port=port)
+    return service_status(home=home, port=port, environment=environment)
 
 
-def service_logs(*, lines: int = 80) -> dict[str, Any]:
-    observer_dir = default_state_root() / "observer"
+def service_logs(*, lines: int = 80, environment: str = "production") -> dict[str, Any]:
+    observer_dir = observer_log_dir(environment)
     values: dict[str, Any] = {"directory": str(observer_dir), "logs": {}}
     for name in ("service.log", "service.error.log"):
         path = observer_dir / name
@@ -4943,21 +5301,60 @@ def scan_registered_projects(registry_path: Path) -> dict[str, Any]:
     }
 
 
+def runtime_identity(harness_root: Path, environment: str, port: int) -> dict[str, Any]:
+    """Capture code identity at startup, separately from monitored project versions."""
+    version_file = harness_root / "VERSION"
+    value: dict[str, Any] = {
+        "environment": environment,
+        "read_only": environment == "development",
+        "version": version_file.read_text(encoding="utf-8").strip() if version_file.is_file() else None,
+        "source_path": str(harness_root),
+        "branch": None, "commit": None, "dirty": None,
+        "started_at": now_iso(),
+        "url": f"http://127.0.0.1:{port}/",
+        "production_url": f"http://127.0.0.1:{DEFAULT_PORT}/",
+        "development_url": f"http://127.0.0.1:{DEVELOPMENT_PORT}/",
+        "data_source": "registered_projects_read_only" if environment == "development" else "registered_projects",
+    }
+    top = run_git(harness_root, ["rev-parse", "--show-toplevel"])
+    if top.returncode == 0 and Path(top.stdout.strip()).resolve() == harness_root.resolve():
+        for key, arguments in (
+            ("branch", ["symbolic-ref", "--short", "-q", "HEAD"]),
+            ("commit", ["rev-parse", "HEAD"]),
+            ("dirty", ["status", "--porcelain"]),
+        ):
+            result = run_git(harness_root, arguments)
+            if result.returncode == 0:
+                value[key] = bool(result.stdout.strip()) if key == "dirty" else result.stdout.strip()
+    return value
+
+
 def serve_runtime(
     project: Path | None,
     port: int,
     *,
     registry_path: Path | None = None,
     scan_interval: float = DEFAULT_SCAN_INTERVAL,
+    environment: str = "production",
 ) -> None:
+    environment_label(environment)
+    read_only = environment == "development"
     if port < 1 or port > 65535:
         raise ObserveError(f"Invalid port: {port}", 64)
     if scan_interval <= 0:
         raise ObserveError(f"Invalid scan interval: {scan_interval}", 64)
+    if port == DEFAULT_PORT and read_only or port == DEVELOPMENT_PORT and not read_only:
+        raise ObserveError("6425 is production; 6426 requires --environment development", 64)
     harness_root = Path(__file__).resolve().parents[1]
     dashboard_path = harness_root / "web" / "observe-dashboard.html"
     if not dashboard_path.is_file():
         raise ObserveError(f"Dashboard asset missing: {dashboard_path}")
+    identity = runtime_identity(harness_root, environment, port)
+    # Freeze HTML and metadata together; a checkout edit needs an explicit restart.
+    bootstrap = json.dumps(identity, ensure_ascii=False).replace("<", "\\u003c")
+    dashboard_html = dashboard_path.read_text(encoding="utf-8").replace(
+        "/* HARNESS_RUNTIME_BOOTSTRAP */ null", bootstrap
+    ).encode("utf-8")
 
     def descriptors() -> list[dict[str, Any]]:
         if registry_path is not None:
@@ -4982,8 +5379,8 @@ def serve_runtime(
 
     started_at = now_iso()
     started_monotonic = time.monotonic()
-    ingest_token = ensure_ingest_token()
-    action_token = secrets.token_urlsafe(32)
+    ingest_token = "" if read_only else ensure_ingest_token()
+    action_token = "" if read_only else secrets.token_urlsafe(32)
     stop_event = threading.Event()
     service_state_lock = threading.Lock()
     service_state: dict[str, Any] = {
@@ -4993,7 +5390,8 @@ def serve_runtime(
         "project_count": 1 if project is not None else 0,
         "valid_project_count": 1 if project is not None else 0,
         "synced_project_count": 0,
-        "ingest_enabled": True,
+        "ingest_enabled": not read_only,
+        "collector_enabled": not read_only,
         "ingested_event_count": 0,
         "last_ingest_at": None,
     }
@@ -5050,7 +5448,8 @@ def serve_runtime(
         return {
             "status": "degraded" if scan_state.get("last_scan_error") else "ok",
             "service_name": SERVICE_NAME,
-            "service_label": SERVICE_LABEL,
+            "service_label": environment_label(environment),
+            "runtime": identity,
             "mode": "portfolio" if registry_path is not None else "project",
             "host": "127.0.0.1",
             "port": port,
@@ -5088,7 +5487,10 @@ def serve_runtime(
                     self._send_bytes(200, "application/json", json_bytes(value), head_only=head_only)
                     return
                 if path in {"/", "/index.html"}:
-                    self._send_bytes(200, "text/html; charset=utf-8", dashboard_path.read_bytes(), head_only=head_only)
+                    self._send_bytes(200, "text/html; charset=utf-8", dashboard_html, head_only=head_only)
+                    return
+                if path == "/api/runtime.json":
+                    self._send_bytes(200, "application/json", json_bytes(identity), head_only=head_only)
                     return
                 if path == "/healthz":
                     self._send_bytes(
@@ -5108,12 +5510,15 @@ def serve_runtime(
                             "schema_version": SCHEMA_VERSION,
                             "generated_at": now_iso(),
                             "detail": "full" if full_detail else "summary",
-                            "projects": [portfolio_project_record(descriptors()[0]) if full_detail else portfolio_project_summary_record(descriptors()[0])] if descriptors() else [],
+                            "projects": [portfolio_project_record(descriptors()[0], sync=not read_only) if full_detail else portfolio_project_summary_record(descriptors()[0])] if descriptors() else [],
                         }
                     self._send_bytes(200, "application/json", json_bytes(value), head_only=head_only)
                     return
                 if path == "/api/harness/versions.json":
-                    self._send_bytes(200, "application/json", json_bytes(harness_versions_snapshot(descriptors())), head_only=head_only)
+                    # Project injection health is relative to the installed release,
+                    # never to the unreleased preview code.
+                    baseline = Path(os.environ.get("MICK_HARNESS_BASELINE_ROOT", str(Path.home() / ".mick-harness"))) if read_only else None
+                    self._send_bytes(200, "application/json", json_bytes(harness_versions_snapshot(descriptors(), baseline_root=baseline)), head_only=head_only)
                     return
                 if path == "/api/agents.json":
                     self._send_bytes(
@@ -5192,8 +5597,10 @@ def serve_runtime(
                     self._send_bytes(200, "application/json", json_bytes(value), head_only=head_only)
                     return
                 if path == "/api/index.json" and project is not None and registry_path is None:
-                    sync_runtime(project)
-                    self._send_bytes(200, "application/json", (runtime_root(project) / "index.json").read_bytes(), head_only=head_only)
+                    if not read_only:
+                        sync_runtime(project)
+                    value = load_json(runtime_root(project) / "index.json", {"runs": []})
+                    self._send_bytes(200, "application/json", json_bytes(value), head_only=head_only)
                     return
                 project_index_match = re.fullmatch(r"/api/projects/([A-Za-z0-9._-]+)/index\.json", path)
                 if project_index_match:
@@ -5201,10 +5608,10 @@ def serve_runtime(
                     if selected_project is None:
                         self._send_bytes(404, "application/json", json_bytes({"error": "project-not-found"}), head_only=head_only)
                         return
-                    if registry_path is None:
+                    if registry_path is None and not read_only:
                         sync_runtime(selected_project)
                     target = runtime_root(selected_project) / "index.json"
-                    self._send_bytes(200, "application/json", target.read_bytes(), head_only=head_only)
+                    self._send_bytes(200, "application/json", json_bytes(load_json(target, {"runs": []})), head_only=head_only)
                     return
                 project_workspace_match = re.fullmatch(r"/api/projects/([A-Za-z0-9._-]+)/workspace\.json", path)
                 if project_workspace_match:
@@ -5215,6 +5622,8 @@ def serve_runtime(
                     try:
                         selected_snapshot = status_runtime(selected_project)["snapshot"]
                     except ObserveError:
+                        if read_only:
+                            raise ObserveError("尚无正式采集记录；开发预览不会补建项目账本。", 404)
                         init_runtime(selected_project)
                         selected_snapshot = sync_runtime(selected_project)["snapshot"]
                     query = parse_qs(parsed.query)
@@ -5306,6 +5715,13 @@ def serve_runtime(
             return self.headers.get("Host") in hosts and (not origin or origin in {f"http://{host}" for host in hosts})
 
         def do_POST(self) -> None:  # noqa: N802
+            if read_only:
+                self._send_bytes(403, "application/json", json_bytes({
+                    "error": "开发环境仅供只读验收；真实操作请在 6425 正式工作台完成。",
+                    "code": "development-read-only",
+                    "production_url": identity["production_url"],
+                }))
+                return
             parsed = urlparse(self.path)
             if parsed.path == "/api/reporting/configuration":
                 if not self._reporting_origin_allowed():
@@ -5615,9 +6031,16 @@ def serve_runtime(
     except OSError as error:
         raise ObserveError(f"Cannot bind 127.0.0.1:{port}: {error}") from error
     server.daemon_threads = True
-    scan_once()
-    monitor_thread = threading.Thread(target=monitor_loop, name="harness-observer-monitor", daemon=True)
-    monitor_thread.start()
+    monitor_thread = None
+    if not read_only:
+        scan_once()
+        monitor_thread = threading.Thread(target=monitor_loop, name="harness-observer-monitor", daemon=True)
+        monitor_thread.start()
+    else:
+        registered = descriptors()
+        service_state.update(project_count=len(registered), valid_project_count=sum(
+            item["validation"] == "valid" for item in registered
+        ))
     print(f"{SERVICE_NAME}: http://127.0.0.1:{port}/")
     print("Local work server; press Ctrl-C to stop.")
     try:
@@ -5626,7 +6049,8 @@ def serve_runtime(
         pass
     finally:
         stop_event.set()
-        monitor_thread.join(timeout=max(1.0, scan_interval + 0.5))
+        if monitor_thread is not None:
+            monitor_thread.join(timeout=max(1.0, scan_interval + 0.5))
         server.server_close()
 
 
@@ -5638,12 +6062,15 @@ def build_parser() -> argparse.ArgumentParser:
         child.add_argument("project", nargs="?", help="Project directory (default: current directory)")
     watch = subparsers.add_parser("watch")
     watch.add_argument("project", nargs="?", help="Project directory (default: current directory)")
-    watch.add_argument("--port", type=int, default=DEFAULT_PORT)
+    watch.add_argument("--port", type=int, help="Defaults to 6425 (production) or 6426 (development)")
+    watch.add_argument("--environment", choices=("production", "development"), default="production",
+                       help="Development reads real records without collecting or writing")
     watch.add_argument("--all", action="store_true", dest="all_projects", help="Observe all projects in the Harness registry")
     watch.add_argument("--scan-interval", type=float, default=DEFAULT_SCAN_INTERVAL, help="Background scan interval in seconds")
     service = subparsers.add_parser("service", help=f"Manage the {SERVICE_NAME} background service")
     service.add_argument("action", choices=("install", "start", "stop", "restart", "status", "logs", "uninstall"))
     service.add_argument("--port", type=int, help=f"Service port for install (default: {DEFAULT_PORT})")
+    service.add_argument("--environment", choices=("production", "development"), default="production")
     service.add_argument("--lines", type=int, default=80, help="Number of log lines to show")
     activity = subparsers.add_parser("activity", help=argparse.SUPPRESS)
     activity.add_argument("--project", required=True)
@@ -5716,24 +6143,25 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "service":
             if args.action == "install":
-                value = install_service(port=args.port or DEFAULT_PORT)
+                value = install_service(port=args.port, environment=args.environment)
             elif args.action == "start":
-                value = start_service()
+                value = start_service(environment=args.environment)
             elif args.action == "stop":
-                value = stop_service()
+                value = stop_service(environment=args.environment)
             elif args.action == "restart":
-                value = restart_service()
+                value = restart_service(environment=args.environment)
             elif args.action == "uninstall":
-                value = uninstall_service()
+                value = uninstall_service(environment=args.environment)
             elif args.action == "logs":
-                value = service_logs(lines=max(1, args.lines))
+                value = service_logs(lines=max(1, args.lines), environment=args.environment)
             else:
-                value = service_status(port=args.port)
+                value = service_status(port=args.port, environment=args.environment)
             print(json.dumps(value, ensure_ascii=False, indent=2))
             return 0 if args.action != "status" or value.get("healthy") else 2
         if args.command == "activity":
-            project = resolve_project(args.project)
-            if not has_harness_entry(project):
+            source_project = resolve_project(args.project)
+            project = resolve_agent_project(source_project)
+            if project is None or not has_harness_entry(project):
                 return 0
             submit_harness_command_activity(
                 project,
@@ -5741,12 +6169,14 @@ def main(argv: list[str] | None = None) -> int:
                 state=args.state,
                 invocation_ref=args.invocation,
                 exit_code=args.exit_code,
+                source_project=source_project,
             )
             return 0
         if args.command == "emit":
-            project = resolve_project(args.project)
-            if not has_harness_entry(project):
-                raise ObserveError("Project does not contain an injected Harness entry", 64)
+            source_project = resolve_project(args.project)
+            project = resolve_agent_project(source_project)
+            if project is None or not has_harness_entry(project):
+                raise ObserveError("Project is not an injected Harness project or a registered worktree", 64)
             idempotency_key = args.idempotency_key or f"emit:{args.event_type}:{args.ref}"
             if args.event_type in {"work.round_started", "work.round_completed"}:
                 if not args.role or not args.objective:
@@ -5804,13 +6234,17 @@ def main(argv: list[str] | None = None) -> int:
                     round_ref=args.round_ref,
                     idempotency_key=idempotency_key,
                 )
+            envelope["source"].update(source_worktree_provenance(source_project))
+            validate_ingest_envelope(envelope, project_id(project))
             result = submit_envelope(project, envelope)
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
         if args.command == "watch" and args.all_projects:
             if args.project:
                 raise ObserveError("Do not pass a project directory together with --all", 64)
-            serve_runtime(None, args.port, registry_path=default_registry_path(), scan_interval=args.scan_interval)
+            serve_runtime(None, args.port if args.port is not None else environment_port(args.environment),
+                          registry_path=default_registry_path(), scan_interval=args.scan_interval,
+                          environment=args.environment)
             return 0
         project = resolve_project(args.project)
         if args.command == "init":
@@ -5830,7 +6264,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Replayed {summary['run_id']}: snapshot digest {summary['after_digest']} (changed={str(summary['changed']).lower()})")
             return 0
         if args.command == "watch":
-            serve_runtime(project, args.port, scan_interval=args.scan_interval)
+            serve_runtime(project, args.port if args.port is not None else environment_port(args.environment),
+                          scan_interval=args.scan_interval, environment=args.environment)
             return 0
     except ObserveError as error:
         print(f"observe error: {error}", file=sys.stderr)

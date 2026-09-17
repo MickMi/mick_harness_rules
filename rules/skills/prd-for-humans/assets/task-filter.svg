@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="260" viewBox="0 0 360 260" role="img" aria-labelledby="title desc">
+  <title id="title">待办列表筛选示意</title>
+  <desc id="desc">未完成筛选、可选关键词输入、搜索和清空按钮，下方显示两条待办。</desc>
+  <rect x="1" y="1" width="358" height="258" rx="12" fill="#ffffff" stroke="#d9e0e8"/>
+  <g font-family="sans-serif" fill="#263442" font-size="13">
+    <text x="20" y="31" font-size="18" font-weight="600">待办事项</text>
+    <rect x="20" y="48" width="97" height="30" rx="6" fill="#edf4ff"/>
+    <text x="30" y="68">状态：未完成</text>
+    <rect x="20" y="90" width="185" height="32" rx="5" fill="#f6f8fb" stroke="#d9e0e8"/>
+    <text x="30" y="111" fill="#627183">输入标题关键词</text>
+    <rect x="213" y="90" width="53" height="32" rx="5" fill="#2461dd"/>
+    <text x="226" y="111" fill="#fff">搜索</text>
+    <text x="278" y="111" fill="#2461dd">清空筛选</text>
+    <text x="20" y="149" fill="#627183">2 条结果 · 示意数据</text>
+    <path d="M20 161H340 M20 205H340" stroke="#e8edf3"/>
+    <text x="20" y="188">整理会议纪要</text><text x="280" y="188" fill="#627183">未完成</text>
+    <text x="20" y="232">确认活动安排</text><text x="280" y="232" fill="#627183">未完成</text>
+  </g>
+</svg>

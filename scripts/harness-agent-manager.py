@@ -102,7 +102,23 @@ def _marker_counts(text: str, begin_fragment: str, end_fragment: str) -> tuple[i
 
 
 def _loader_diagnosis(agent: dict[str, Any], home: Path) -> tuple[dict[str, Any], list[dict[str, str]]]:
+    if agent["loader"].get("scope") == "project":
+        return ({
+            "status": "project_managed",
+            "target": agent["loader"].get("target"),
+            "managed_blocks": 0,
+            "legacy_blocks": 0,
+            "digest": None,
+        }, [])
     target_value = agent["loader"].get("target")
+    if not target_value:
+        return ({
+            "status": "unsupported",
+            "target": None,
+            "managed_blocks": 0,
+            "legacy_blocks": 0,
+            "digest": None,
+        }, [])
     target = home / target_value if target_value else None
     text = target.read_text(encoding="utf-8", errors="replace") if target and target.exists() else ""
     begin_count, end_count = _marker_counts(text, "MICK-HARNESS-GLOBAL:BEGIN", "MICK-HARNESS-GLOBAL:END")
@@ -291,7 +307,9 @@ def _atomic_write(path: Path, content: str, *, backup: bool) -> None:
             temporary.unlink()
 
 
-def _sync_skill_links(agent: dict[str, Any], *, home: Path, dry_run: bool) -> list[dict[str, Any]]:
+def _sync_skill_links(
+    agent: dict[str, Any], *, home: Path, dry_run: bool, app_dirs: Iterable[Path] = ()
+) -> list[dict[str, Any]]:
     config = agent.get("skills") or {}
     target_value = config.get("target")
     names = config.get("managed") or []
@@ -300,6 +318,17 @@ def _sync_skill_links(agent: dict[str, Any], *, home: Path, dry_run: bool) -> li
     root = harness_root().resolve()
     source_root = root / "rules" / "skills"
     target_root = home / str(target_value)
+    only_if_detected = config.get("only_if_detected") is True
+    detection_app_dirs = list(app_dirs) or [Path("/Applications"), home / "Applications"]
+    detected = not only_if_detected or any(
+        signal["found"]
+        for signal in detect_signals(
+            agent,
+            home=home,
+            bin_dirs=(),
+            app_dirs=detection_app_dirs,
+        )
+    )
     changes: list[dict[str, Any]] = []
     for name in names:
         if not isinstance(name, str) or not re.fullmatch(r"[a-z0-9-]+", name):
@@ -308,6 +337,18 @@ def _sync_skill_links(agent: dict[str, Any], *, home: Path, dry_run: bool) -> li
         if not source.is_dir() or root not in source.parents:
             raise AgentManagerError(f"Managed Skill source is missing or unsafe: {source}")
         target = target_root / name
+        if not detected:
+            changes.append(
+                {
+                    "agent_id": agent["id"],
+                    "kind": "skill",
+                    "skill": name,
+                    "target": str(target),
+                    "changed": False,
+                    "status": "not_detected",
+                }
+            )
+            continue
         status = "missing"
         changed = False
         if target.is_symlink():
@@ -337,27 +378,34 @@ def _sync_skill_links(agent: dict[str, Any], *, home: Path, dry_run: bool) -> li
     return changes
 
 
-def sync_agents(registry: dict[str, Any], *, home: Path, dry_run: bool, migrate: bool = False) -> list[dict[str, Any]]:
+def sync_agents(
+    registry: dict[str, Any],
+    *,
+    home: Path,
+    dry_run: bool,
+    migrate: bool = False,
+    app_dirs: Iterable[Path] = (),
+) -> list[dict[str, Any]]:
     changes: list[dict[str, Any]] = []
     for agent in registry["agents"]:
-        if agent["tier"] != 1 or not agent["loader"].get("managed"):
-            continue
-        target = home / agent["loader"]["target"]
-        current = target.read_text(encoding="utf-8", errors="strict") if target.exists() else ""
-        begin_count, end_count = _marker_counts(current, "MICK-HARNESS-GLOBAL:BEGIN", "MICK-HARNESS-GLOBAL:END")
-        if begin_count != end_count or begin_count > 1:
-            raise AgentManagerError(f"Refusing to modify conflicting managed blocks: {target}")
-        pairs = [("MICK-HARNESS-GLOBAL:BEGIN", "MICK-HARNESS-GLOBAL:END")]
-        if migrate:
-            pairs.extend(LEGACY_MARKERS)
-        preserved, removed = _strip_managed_blocks(current, pairs)
-        rendered = _render_loader(agent, home)
-        desired = f"{rendered}\n{preserved}\n" if preserved else rendered
-        changed = desired.encode("utf-8") != current.encode("utf-8")
-        changes.append({"agent_id": agent["id"], "kind": "loader", "target": str(target), "changed": changed, "removed_blocks": removed})
-        if changed and not dry_run:
-            _atomic_write(target, desired, backup=target.exists())
-        changes.extend(_sync_skill_links(agent, home=home, dry_run=dry_run))
+        if agent["tier"] == 1 and agent["loader"].get("managed"):
+            target = home / agent["loader"]["target"]
+            current = target.read_text(encoding="utf-8", errors="strict") if target.exists() else ""
+            begin_count, end_count = _marker_counts(current, "MICK-HARNESS-GLOBAL:BEGIN", "MICK-HARNESS-GLOBAL:END")
+            if begin_count != end_count or begin_count > 1:
+                raise AgentManagerError(f"Refusing to modify conflicting managed blocks: {target}")
+            pairs = [("MICK-HARNESS-GLOBAL:BEGIN", "MICK-HARNESS-GLOBAL:END")]
+            if migrate:
+                pairs.extend(LEGACY_MARKERS)
+            preserved, removed = _strip_managed_blocks(current, pairs)
+            rendered = _render_loader(agent, home)
+            desired = f"{rendered}\n{preserved}\n" if preserved else rendered
+            changed = desired.encode("utf-8") != current.encode("utf-8")
+            changes.append({"agent_id": agent["id"], "kind": "loader", "target": str(target), "changed": changed, "removed_blocks": removed})
+            if changed and not dry_run:
+                _atomic_write(target, desired, backup=target.exists())
+        if agent.get("adapter", {}).get("skills") == "managed":
+            changes.extend(_sync_skill_links(agent, home=home, dry_run=dry_run, app_dirs=app_dirs))
     return changes
 
 

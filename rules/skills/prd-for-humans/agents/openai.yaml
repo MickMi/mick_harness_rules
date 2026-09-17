@@ -1,4 +1,4 @@
 interface:
-  display_name: "PRD for Humans"
-  short_description: "Write flexible PRDs for human product review"
-  default_prompt: "Use $prd-for-humans to turn this confirmed requirement into a human-readable PRD."
+  display_name: "PRD Collaboration"
+  short_description: "Clarify, draft, and refine human-first PRDs"
+  default_prompt: "Use $prd-for-humans to develop this idea into a PRD in my style, asking only decision-changing questions and drafting directly when it is clear."

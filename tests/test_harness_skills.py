@@ -32,7 +32,7 @@ class SkillManagerTests(unittest.TestCase):
         self.harness = self.root / "harness"
         self.home = self.root / "home"
         self.project = self.root / "project"
-        for path in (self.harness / "rules" / "skills", self.home / ".codex" / "skills", self.home / ".claude" / "skills", self.home / ".agents" / "skills", self.project / ".harness" / "skills"):
+        for path in (self.harness / "rules" / "skills", self.home / ".codex" / "skills", self.home / ".claude" / "skills", self.home / ".workbuddy" / "skills", self.home / ".agents" / "skills", self.project / ".harness" / "skills"):
             path.mkdir(parents=True)
 
     def tearDown(self) -> None:
@@ -125,6 +125,15 @@ class SkillManagerTests(unittest.TestCase):
 
         self.assertEqual(item["name"], "claude-helper")
         self.assertEqual(item["source"], "claude_external")
+        self.assertEqual(item["load_status"], "unverified")
+
+    def test_discovers_workbuddy_personal_skills_without_claiming_load(self) -> None:
+        write_skill(self.home / ".workbuddy" / "skills", "workbuddy-helper", "Summarize a product decision.")
+
+        item = SKILLS.skill_snapshot(harness_root=self.harness, home=self.home)["items"][0]
+
+        self.assertEqual(item["name"], "workbuddy-helper")
+        self.assertEqual(item["source"], "workbuddy_external")
         self.assertEqual(item["load_status"], "unverified")
 
 

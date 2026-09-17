@@ -31,7 +31,7 @@ Harness 默认使用 `auto`，自动选择足以证明结果的最轻流程。�
 
 ## 宿主命令边界
 
-Codex 已有 `/plan` 和 `/goal`。Harness 不覆盖、不伪装这两个原生命令，也不要求用户记住一套冲突的斜杠语义。Codex 中使用 `$harness-plan`、`$harness-goal`、`$harness-brain`、`$harness-e2e`；没有 Skill 入口时，直接使用稳定 CLI。
+Codex 已有 `/plan` 和 `/goal`。Harness 不覆盖、不伪装这两个原生命令，也不要求用户记住一套冲突的斜杠语义。Codex 中使用 `$harness-plan`、`$harness-goal`、`$harness-brain`、`$harness-e2e`；明确要求 PRD 时使用 `$prd-for-humans`。Claude Code 使用对应托管 Skill。检测到 WorkBuddy 后，Harness 将同一组 Skill 安装到其个人 Skill 目录，但不伪造该宿主尚未提供的生命周期 Hook。
 
 “通用”指意图、状态源、写入结果和验证合同一致，不表示每个 Code Agent 都必须支持相同的 `/` 语法。
 

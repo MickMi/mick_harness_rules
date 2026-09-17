@@ -102,8 +102,14 @@ def main(argv: list[str] | None = None) -> int:
         if state.startswith("turn_") and not turn_ref:
             status, reason = "skipped", "missing_turn"
             return 0
-        result = observer.submit_agent_activity(project, platform=args.platform, state=state, session_ref=session_ref,
-                                                turn_ref=turn_ref if isinstance(turn_ref, str) else None)
+        result = observer.submit_agent_activity(
+            project,
+            platform=args.platform,
+            state=state,
+            session_ref=session_ref,
+            turn_ref=turn_ref if isinstance(turn_ref, str) else None,
+            source_project=session_directory,
+        )
         if result.get("skipped"):
             status, reason = "skipped", result["reason"]
         elif result.get("transport") == "service":

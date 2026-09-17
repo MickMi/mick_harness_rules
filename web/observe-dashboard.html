@@ -360,6 +360,8 @@
     .project-progress-track { height: 4px; overflow: hidden; background: var(--surface-2); }
     .project-progress-fill { height: 100%; background: var(--accent); }
     .project-row-arrow { color: var(--muted); font-size: 18px; transition: transform .15s ease, color .15s ease; }
+    .project-version-state { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .project-version-state[data-warning="true"] { color: var(--warning); }
     .workbench-secondary { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr); gap: 22px; margin-top: 22px; }
     .workbench-projects h2 { margin: 0; font-size: 18px; }
     .project-open, .harness-version-badge { border: 0; padding: 0; background: transparent; font: inherit; text-align: left; cursor: pointer; color: inherit; }
@@ -843,6 +845,10 @@
     .project-lite h1 { margin: 6px 0; font-size: 28px; line-height: 1.25; overflow-wrap: anywhere; }
     .project-lite .eyebrow, .project-lite .freshness { font-size: 12px; }
     .project-lite .harness-version-badge { font-size: 12px; }
+    .repository-version-facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .repository-version-fact { display: inline-flex; align-items: center; min-height: 28px; padding: 4px 9px; border-radius: 999px; background: var(--surface-soft); color: var(--muted); font-size: 12px; }
+    .repository-version-fact[data-kind="active"] { background: var(--accent-soft); color: var(--accent); }
+    .repository-version-fact[data-warning="true"] { background: var(--warning-soft); color: var(--warning); }
     .project-lite .project-purpose { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 16px; padding: 0; margin: 0 0 22px; border: 0; align-items: baseline; }
     .project-lite .project-purpose-copy { max-width: none; font-size: 15px; line-height: 1.55; overflow-wrap: anywhere; }
     .project-lite .project-overview-hero { margin: 0 0 22px; border: 1px solid var(--border); border-radius: 10px; }
@@ -883,6 +889,15 @@
       .improvement-funnel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
   </style>
+    <style>
+      .runtime-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; padding: 9px 12px; margin-bottom: 22px; border-radius: 8px; background: #fff5df; color: #735014; font-size: 12px; line-height: 1.6; }
+      .runtime-bar[data-environment="production"] { background: #edf6f0; color: #21613b; }
+      .runtime-bar[hidden] { display: none; }
+      .runtime-bar a { margin-left: auto; white-space: nowrap; font-weight: 600; }
+      .runtime-bar details { flex-basis: 100%; min-width: 0; overflow-wrap: anywhere; }
+      .runtime-bar summary { cursor: pointer; }
+      .runtime-bar p { margin: 4px 0 0; }
+    </style>
 </head>
 <body>
   <div class="app">
@@ -892,6 +907,7 @@
       <nav id="nav-tree" class="nav-tree" aria-label="项目与视图"></nav>
     </aside>
     <main class="main">
+      <section id="runtime-bar" class="runtime-bar" aria-label="工作台运行环境" hidden></section>
       <div id="content" aria-live="polite">
         <div class="empty">正在整理项目进展…</div>
       </div>
@@ -899,6 +915,7 @@
   </div>
   <script>
     (() => {
+      const runtime = /* HARNESS_RUNTIME_BOOTSTRAP */ null;
       const state = { portfolio: null, agents: null, skills: null, skillFilter: "attention", operations: null, brainHealth: null, brainCandidates: [], projectMemories: [], harnessImprovements: [], brainSyncConfirm: false, brainSyncPreview: null, focus: null, project: null, projectQuery: "", index: null, run: null, snapshot: null, workspace: null, events: [], view: "overview", taskId: null, selectedRole: null, removeProjectId: null, artifactPath: null, artifactDocument: null, artifactError: null, notice: null };
       const navTree = document.getElementById("nav-tree");
       const portfolioSummary = document.getElementById("portfolio-summary");
@@ -928,6 +945,28 @@
         if (className) node.className = className;
         if (text !== undefined) node.textContent = String(text);
         return node;
+      }
+
+      function renderRuntimeBar() {
+        const bar = document.getElementById("runtime-bar");
+        if (!bar || !runtime) return;
+        bar.hidden = false;
+        bar.dataset.environment = runtime.environment;
+        const label = runtime.read_only ? "开发验收 · 只读" : "正式工作台";
+        document.title = `${runtime.read_only ? "开发验收 6426" : "正式工作台"} · Mick Harness`;
+        const revision = runtime.commit ? runtime.commit.slice(0, 7) : "提交未知";
+        const version = runtime.version ? `v${runtime.version}` : "版本未知";
+        bar.replaceChildren(el("strong", "", label), el("span", "", `工作台 ${version}`));
+        bar.append(el("span", "", runtime.read_only ? "真实项目数据仅供查看，不执行审批、同步或更新" : "采集与写入已启用"));
+        const other = el("a", "", runtime.read_only ? "打开正式工作台 ↗" : "打开开发验收 ↗");
+        other.href = runtime.read_only ? runtime.production_url : runtime.development_url;
+        bar.append(other);
+        const source = el("details", "");
+        source.append(el("summary", "", `${runtime.branch || "分支未确认"} · ${revision}${runtime.dirty === true ? " · 含未提交修改" : runtime.dirty === false ? "" : " · 工作区状态未知"}`));
+        source.append(el("p", "", `启动于 ${runtime.started_at}；以下来源在启动时确认，修改后需重启开发服务。`));
+        source.append(el("p", "", `代码位置：${runtime.source_path}`));
+        source.append(el("p", "", "这里是工作台自身的版本；各项目的开发版本与注入规则版本仍分别展示。"));
+        bar.append(source);
       }
 
       function wait(ms) {
@@ -2961,6 +3000,22 @@
             openProject.type = "button";
             openProject.addEventListener("click", () => selectProject(project.project_id));
             identity.append(openProject, el("span", "project-stage", project.stage || "尚未同步"), harnessVersionBadge(project.project_id));
+            const repositoryProgress = project.repository_progress || {};
+            const activeVersion = repositoryProgress.active;
+            const releasedVersion = repositoryProgress.released;
+            const primaryState = repositoryProgress.primary;
+            if (activeVersion || releasedVersion) {
+              const parts = [
+                releasedVersion?.version ? `已发布 v${releasedVersion.version}` : "",
+                activeVersion?.version ? `开发中 v${activeVersion.version}${activeVersion.branch ? ` · ${activeVersion.branch}` : ""}` : "",
+              ].filter(Boolean);
+              identity.append(el("span", "project-version-state", parts.join(" · ")));
+            }
+            if (primaryState && (primaryState.dirty || primaryState.behind)) {
+              const warning = el("span", "project-version-state", `主目录${primaryState.dirty_count ? ` ${primaryState.dirty_count} 处改动` : ""}${primaryState.behind ? ` · 落后 ${primaryState.behind}` : ""}`);
+              warning.dataset.warning = "true";
+              identity.append(warning);
+            }
             row.append(identity);
             const work = project.recent_work;
             const projectSummary = project.summary || {};
@@ -2970,6 +3025,7 @@
             if (blockCount) nextText = `先处理 ${blockCount} 项阻塞`;
             else if (work?.status === "active") nextText = `${roleLabel(work.role)} 正在推进：${compactText(work.objective || work.summary)}`;
             else if (work?.next_role) nextText = `${roleLabel(work.next_role)} 接手${work.objective ? `：${compactText(work.objective)}` : ""}`;
+            else if (activeVersion?.version) nextText = `继续 v${activeVersion.version}${activeVersion.branch ? ` · ${activeVersion.branch}` : ""}`;
             else if (detectedActivity.has_unstructured_progress) nextText = "PM 将已检测活动归入版本需求";
             const nextWrap = el("span", "project-next-wrap");
             const next = el("span", "project-next", nextText);
@@ -3351,6 +3407,7 @@
         const organization = state.workspace?.organization || { roles: [], transitions: [], current_transition: null, current_role: null };
         const project = state.workspace?.project || {};
         const version = state.workspace?.current_version || null;
+        const repositoryProgress = state.workspace?.repository_progress || {};
         const versionRequirements = version?.requirements || [];
         const counts = version?.counts || { completed: 0, in_progress: 0, planned: 0, blocked: 0 };
         const completed = counts.completed || 0;
@@ -3413,6 +3470,32 @@
         const story = el("div", "overview-story");
         story.append(el("div", "version-kicker", version?.version ? `当前版本 · v${version.version}` : "当前版本 · 尚未规划"));
         story.append(el("p", "overview-version-goal", version?.goal || (version ? "尚未记录版本目标。" : "尚未建立版本计划")));
+        if (repositoryProgress.available) {
+          const facts = el("div", "repository-version-facts");
+          if (repositoryProgress.released?.version) {
+            const released = el("span", "repository-version-fact", `已发布 v${repositoryProgress.released.version}`);
+            released.dataset.kind = "released";
+            facts.append(released);
+          }
+          if (repositoryProgress.active?.version) {
+            const active = el("span", "repository-version-fact", `开发中 v${repositoryProgress.active.version}${repositoryProgress.active.branch ? ` · ${repositoryProgress.active.branch}` : ""}`);
+            active.dataset.kind = "active";
+            facts.append(active);
+          }
+          if (repositoryProgress.primary) {
+            const primary = repositoryProgress.primary;
+            const primaryText = [
+              primary.version ? `主目录 v${primary.version}` : "主目录",
+              primary.behind ? `落后 ${primary.behind}` : "",
+              primary.dirty_count ? `${primary.dirty_count} 处本地改动` : "",
+            ].filter(Boolean).join(" · ");
+            const primaryFact = el("span", "repository-version-fact", primaryText);
+            primaryFact.dataset.kind = "primary";
+            primaryFact.dataset.warning = String(Boolean(primary.behind || primary.dirty));
+            facts.append(primaryFact);
+          }
+          story.append(facts);
+        }
         if (versionRequirements.length) {
           const progress = el("div", "overview-progress");
           const progressLine = el("div", "progress-line");
@@ -4418,6 +4501,7 @@
       }
 
       async function load() {
+        renderRuntimeBar();
         const requested = readUrlState();
         state.settingsBooting = state.view === "settings";
         render();
@@ -4448,7 +4532,7 @@
           state.settingsBooting = false;
           const box = el("div", "empty error", "无法读取运行数据。");
           box.append(el("div", "event-summary", error.message));
-          box.append(el("p", "muted", "请确认 Mick Harness Observer 正在 127.0.0.1:6425 运行。可执行 harness observe service status；临时模式可运行 harness observe watch --all。"));
+          box.append(el("p", "muted", runtime?.read_only ? "开发验收暂时不可用。请检查 6426 开发服务；正式工作台仍使用 6425。" : "请确认 Mick Harness Observer 正在 127.0.0.1:6425 运行。可执行 harness observe service status。"));
           const retry = el("button", "retry-button", "重新连接");
           retry.type = "button";
           retry.addEventListener("click", () => {

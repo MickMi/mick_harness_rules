@@ -35,6 +35,7 @@ class CommandContractTests(unittest.TestCase):
         self.assertEqual(codex["reserved_commands"], ["/plan", "/goal"])
         self.assertEqual(codex["skills"]["plan"], "harness-plan")
         self.assertEqual(codex["skills"]["goal"], "harness-goal")
+        self.assertEqual(codex["skills"]["prd"], "prd-for-humans")
         self.assertNotIn("/plan", codex["skills"].values())
         self.assertNotIn("/goal", codex["skills"].values())
 
@@ -121,6 +122,8 @@ class CommandContractTests(unittest.TestCase):
         self.assertEqual(budget["checker"], "scripts/harness-context-budget.py")
         self.assertEqual(self.registry["host_adapters"]["codex"]["managed_skill_target"], "~/.codex/skills")
         self.assertEqual(self.registry["host_adapters"]["claude-code"]["managed_skill_target"], "~/.claude/skills")
+        self.assertEqual(self.registry["host_adapters"]["workbuddy"]["managed_skill_target"], "~/.workbuddy/skills")
+        self.assertEqual(self.registry["host_adapters"]["workbuddy"]["skills"]["prd"], "prd-for-humans")
 
     def test_user_document_explains_preview_brain_and_host_boundaries(self):
         for phrase in (

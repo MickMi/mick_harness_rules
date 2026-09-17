@@ -26,6 +26,12 @@ updated: 2026-08-14
 
 The body may describe audience, voice, decision style, stable preferences, prohibited patterns, and deprecated rules. It must not prescribe a universal chapter list. Create a new semantic version after the user confirms a stable preference; do not silently rewrite a released version.
 
+A user's preferred outline may be stored as an adaptive default, not a required module list. Reconcile contradictory older rules in the new version rather than appending competing instructions. User-visible fields and design references are product content; bans on technical fields must name API/storage fields explicitly.
+
+When the user approves a real PRD as an example, keep its snapshot and referenced assets together in a private example directory. A relative link from the Profile can make it available on demand. Preserve the reviewed content, record the approval date, and distinguish the user's approval from automated checks. Do not copy the real example into the public Skill; use a separately authored generic example there.
+
+For multi-document learning, follow `sample-learning.md`. Record provenance and the scope of approval; group revisions of the same requirement instead of counting them as independent preferences. Discovered drafts and memory summaries may inform a provisional analysis, but cannot silently become approved golden examples. Keep uncertain findings out of the active Profile until resolved. A request to learn style is not approval to implement the sample's product proposal.
+
 ## Private pointer
 
 `current.json` contains only metadata:

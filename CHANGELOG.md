@@ -7,6 +7,44 @@ All notable changes to Mick Agent Harness are documented in this file.
 This project follows Semantic Versioning 2.0. Git tags in the form `vX.Y.Z`
 are the release source of truth.
 
+## [0.25.0] - 2026-09-17
+
+### Personal PRD Workflow, WorkBuddy Support, and Unified Worktree Progress
+
+- `prd-for-humans` is now a managed Skill for supported Agents. Clear product
+  requests can proceed directly to a human-facing PRD, while ambiguous requests
+  ask only the few product questions that change scope, behavior, or acceptance.
+- PRD facts, personal writing preferences, and optional Brain memory now have
+  explicit precedence and evidence boundaries. Unapproved logs and transient
+  corrections cannot silently become product facts or personal style rules.
+- WorkBuddy detection and its verified personal Skill directory are supported.
+  The workbench separately reports discovery, Skill installation, rule loading,
+  execution evidence, write-back, and Hook support instead of inferring runtime
+  activation from files or processes.
+- Project progress is unified across Git worktrees by repository identity. The
+  workbench distinguishes the released tag, the active version branch, and the
+  registered primary checkout, while preserving the originating worktree,
+  branch, and commit on structured events.
+- PRD collaboration supports scoped revisions and learning from approved examples,
+  with flexible human-facing sections, illustrated scenario tables, local-image
+  checks, and safeguards against importing outdated scope or technical instructions.
+- Development previews use the stable `127.0.0.1:6426` address, separate from
+  production at `127.0.0.1:6425`. The preview reads real project progress without
+  collecting events or writing records. Both environments expose their actual
+  running version, source branch, commit, and startup time.
+
+Compatibility: existing projects, Brain data, runtime ledgers, Agent loaders,
+and the single `127.0.0.1:6425` service remain compatible. Worktree aggregation
+is additive and never pulls, merges, stashes, or rewrites a checkout.
+
+Migration: run `harness update`. Registered projects and supported Agent Skills
+are refreshed by the existing update path; no project or Brain data migration
+is required.
+
+Verification: 265 Python unittests, generated-rule consistency, both focused
+workbench interaction checks, public-release audit, context-budget checks,
+Shell syntax, release diff validation, and clean-project quick setup passed.
+
 ## [0.24.0] - 2026-09-15
 
 ### Fast, Actionable Local Project Command Center

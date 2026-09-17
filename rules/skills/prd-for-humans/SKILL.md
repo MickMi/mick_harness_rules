@@ -1,70 +1,75 @@
 ---
 name: prd-for-humans
-description: Draft, revise, or review a product requirements document for human product review. Use only when the user explicitly asks for a PRD or asks to turn confirmed product requirements into a reviewable PRD. Keep product intent, user behavior, scope, rules, tradeoffs, and acceptance clear while excluding implementation guidance, Prompt design, model/data contracts, machine output formats, and Agent instructions.
+description: Collaborate on a PRD for human product review, from a rough idea through clarification, drafting, review, and focused revision. Use when the user asks to start, write, revise, or review a PRD, or learn their PRD style from examples. Reuse confirmed answers and writing preferences, ask only questions that change product decisions, and draft directly when the need is clear. Keep product behavior and business detail concrete; exclude technical implementation and AI delivery contracts.
 ---
 
-# PRD for Humans
+# PRD Collaboration for Humans
 
-Write for the people deciding whether the product should be built and what it should do. Keep the product boundary strict and the document shape adaptive to the actual requirement.
+Be a product thinking partner, not a form filler or a development planner. Help the user turn intent into a document people can discuss and decide on. Keep the document adaptive; preserve confirmed decisions across rounds.
 
-## Resolve the writing profile
+## 1. Start from the user and available evidence
 
-1. Apply the user's explicit instructions from the current turn first.
-2. Read an active project profile at `docs/PRD-PROFILE.md` when present.
-3. Resolve the private and generic profiles with `scripts/resolve_profile.py`; read only the returned active profile and any higher-priority layer.
-4. Never copy private profile text into Harness events, public files, or the dashboard. Expose only version and source metadata.
+Identify this turn's intent: discuss, draft, revise, review, or learn style. Discussion is not permission to produce a final PRD; a local revision is not permission to restart discovery or rewrite the whole document.
 
-See `references/profile-contract.md` when creating or changing a profile. Treat a correction as a one-off edit until the user confirms it is a stable preference; only then create a new profile version.
+- Resolve writing guidance: current explicit instructions → active `docs/PRD-PROFILE.md` → private Profile → generic Profile. Use `scripts/resolve_profile.py` and read the returned active Profile and relevant layers. Do not load every historical sample by default.
+- Current user statements and confirmed project documents define product truth. The Profile shapes voice, structure, and density; it does not supply product facts.
+- Brain may provide sourced, confirmed decisions. Raw logs, unapproved candidates, and unrelated history do not become requirements.
+- Separate an existing capability, a requested change, a recommendation, and an unresolved decision. A mockup demonstrates an option; it does not approve that option or prove implementation.
+- When learning from multiple documents, read `references/sample-learning.md`. Check provenance, group revisions of one requirement, and distinguish reusable writing from business-specific rules. Missing originals or approval evidence must stay explicit; do not present a historical summary as a reread original.
 
-## Find the decision spine
+Private samples and Profile text stay out of public Skill files, Harness events, and dashboards. Generic examples illustrate technique, not the user's actual requirements.
 
-Before drafting, identify:
+## 2. Converge only on decisions that matter
 
-- The present problem and the people affected.
-- The outcome this requirement must change.
-- The behavior or product rule people need to review.
-- The boundary of this release and the evidence that will show it works.
-- Any unresolved choice that materially changes the product.
+Keep a lightweight working brief: current problem/outcome, entry and main journey, confirmed behavior and scope, unresolved choices, and relevant evidence. Carry it in the conversation or existing draft; do not create a separate tracking system. Show only the change or the choice the user needs to make, not a repeated round card.
 
-Ask at most the smallest set of questions needed to resolve a material product decision. Do not turn PRD creation into a questionnaire, and do not invent missing decisions.
+- If no missing answer would materially change the product direction, draft the PRD immediately when the user wants a draft. Do not force a confirmation of the outline or ask questions merely to perform a process.
+- Otherwise, briefly explain your understanding and a recommended choice with its consequence, then ask at most one or two questions about the highest-impact gap. Confirm an unknown journey entry rather than assuming a notification, a proactive visit, or an alert.
+- Carry forward confirmed answers; never repeat a question unless a new statement conflicts with them. Point to that specific conflict. Do not choose scope from filenames, modification times, or the largest historical version.
+- If the user wants a draft despite uncertainty, mark recommendations and open choices beside the affected scene. Do not hide a material product decision behind a default or a vague “to be supplied by engineering.”
 
-## Choose an adaptive outline
+Do not confuse PRD readiness with implementation readiness. APIs, schemas, architecture, implementation tasks, and test commands are not prerequisites. Do not ask the user to complete a mandatory questionnaire or supply a success metric for every small change.
 
-Use headings as navigation, not as a completeness score. Start with the shortest document that lets reviewers understand the problem, proposed experience, boundary, and acceptance. Add a module only when its content changes a product decision.
+Use `references/dialogue-clear.md` or `references/dialogue-ambiguous.md` only when a conversation example helps.
 
-Examples of conditional modules:
+## 3. Draft the smallest complete product story
 
-- Add **数据需求** when the product reads, compares, derives, displays, or makes decisions from data. Cover source meaning, business definition, freshness, missing-data behavior, and user-visible confidence in product language.
-- Add **规则说明** when the requirement introduces a new business definition, threshold, priority, eligibility rule, or calculation.
-- Add **异常与边界** when failure, permission, empty, conflicting, or recovery states materially affect the experience.
-- Add **分期** when different releases prove different outcomes or when deferral changes reviewer expectations.
-- Add **角色与权限**, **内容规范**, or **关键状态** only when those are genuine product decisions.
+Start with the problem, a coherent user journey, scene-level behavior, and meaningful boundaries. Follow the active Profile's preferred outline as an adaptive default, not a universal chapter sequence. A journey explains the sequence and motivation; scene detail specifies what people see and what each action changes, without retelling the same story.
 
-For a small requirement, a short document with four natural sections may be enough. For a larger requirement, separate user journeys, rules, data, boundaries, phases, and acceptance when that improves review. Do not create empty sections, “not applicable” filler, or a fixed chapter sequence merely to satisfy a template.
+For each relevant scene, explain the entry, visible information, available action, outcome, and significant failure/recovery behavior. Do not turn these into mandatory columns or force CRUD onto a read-only feature.
 
-Use `references/golden-small.md`, `references/golden-data.md`, and `references/golden-staged.md` as shape examples, not text templates.
+- UI-heavy work: pair images and detail tables using `references/golden-ui.md`. Embed the actual image beside its explanation, label concepts/sample data, and provide a readable view. Never refer to an unlinked “design A”; say when no image is available. A visual does not replace interaction rules.
+- Specify meaningful product fields: names, units, time ranges, comparison basis, choices, required input, or editability as relevant. Business formulas and visible fields are allowed; API/storage fields are not.
+- For data-heavy work, compare coverage across scenarios rather than pretending every object supports identical analysis. Explain unavailable information and where the user can go next. Do not copy historic sample numbers, thresholds, or capability claims into the new requirement.
+- Use worked examples when a rule is hard to understand. Keep them consistent with the declared scope and label illustrative values; do not turn an example answer into a Prompt or machine-output specification.
 
-## Write product truth
+Use coherent paragraphs and compact tables. Simplify structure and repetition without deleting necessary metrics, fields, interactions, or boundary logic. Do not break every sentence into its own paragraph or nest lists merely for appearance.
 
-- Lead with current user friction and the concrete change, not a slogan.
-- Describe journeys as what the user sees, decides, and can recover from.
-- State scope with enough precision to prevent different human interpretations.
-- Use business thresholds, formulas, examples, and user-visible states when they define the product. These are not technical pollution.
-- Separate confirmed facts, recommendations, and unresolved decisions. Do not expand “later” into unconfirmed roadmap promises.
-- Prefer prose before lists. Use tables only when comparison or mapping is easier to review in rows.
-- Keep the language natural for the product and audience; do not force every requirement into identical wording or length.
+Separate **数据需求** for substantial business definitions or data limitations, **规则说明** for new product rules, **角色与权限** for real permission decisions, and **分期** for confirmed release differences. Otherwise keep the detail with its scene. Distinguish proposed boundary advice from committed behavior; do not invent later phases.
 
-## Protect the artifact boundary
+Do not create empty sections, “not applicable” filler, or mandatory acceptance, evaluation, test-case, and decision appendices. Small changes may need only a few paragraphs. Shape references: `golden-small.md`, `golden-data.md`, `golden-staged.md` in `references/`; load only the relevant one.
 
-Exclude file paths, functions, classes, component trees, interfaces or fields, databases, frameworks, CSS or pixel specifications, implementation steps, test commands, System Prompts, model parameters, Reasoning Pipelines, Data Contracts, JSON schemas, machine output formats, and Agent instructions.
+## 4. Check product logic without starting a delivery pipeline
+
+Read the proposal as its user: can they enter, understand the information, act, see the result, and recover? Consider only material alternate paths—missing data, a failed interpretation, unsupported scope, permission, cancellation, or returning to a previous view. Put the resulting product behavior in the relevant scene or boundary section, not a test script.
+
+Check scope consistency across the journey, details, examples, and exclusions. If an example uses an excluded capability, correct it or label it as an optional proposal. Never convert a hypothesis about a user's problem into a demonstrated cause.
+
+For an existing PRD review, lead with the important contradictions or missing decisions and a proposed correction. Do not rewrite it without authorization or claim independent Reviewer approval from this self-check.
+
+## 5. Revise locally and learn deliberately
+
+- For feedback, preserve accepted content and change the affected sections and their dependent references. A request for a table must not introduce features; “shorter” must not remove essential behavior. Read `references/dialogue-revision.md` for a concrete example.
+- Carry the revised decision forward and briefly explain any effect on another scene. Do not restart the whole interview after every correction.
+- Treat a correction as local unless the user confirms a stable preference. A request to “learn this style for future PRDs” authorizes a scoped preference update, not approval of every claim in the source.
+- When maintaining a Profile, follow `references/profile-contract.md`: version confirmed preferences, reconcile obsolete ones, retain source/approval boundaries, and keep private examples private. Do not write Brain during ordinary drafting.
+
+## 6. Protect the artifact and deliver
+
+Exclude implementation source paths, functions, classes, component trees, API/storage fields, databases, frameworks, CSS or pixel specifications, implementation steps, test commands, System Prompts, model parameters, Reasoning Pipelines, Data Contracts, JSON schemas, machine output formats, and Agent instructions. Design-image references and visible product fields are allowed.
 
 When an AI feature also needs an execution contract, create `docs/AI-CONTRACT-<feature>.md` only after the user explicitly requests that separate artifact. Do not embed it in the PRD, generate it automatically, or link a contract that does not exist.
 
-## Review and deliver
+Run `python3 scripts/check_prd.py <prd-path>` from this Skill directory for a file deliverable. Resolve findings or explain false positives. For conversational drafts without a file, perform the same boundary review and do not claim the script ran. Return the requested document or revision and only material unresolved choices. A PRD handoff does not start implementation, full testing, or release.
 
-1. Read the draft once as a product reviewer: can a human decide why, for whom, what, how far, and how to judge success?
-2. Remove sections that add ceremony but no decision value.
-3. Run `python3 scripts/check_prd.py <prd-path>` from this Skill directory. Resolve every finding or explain a documented false positive before delivery.
-4. Return the PRD and a short list of unresolved product decisions. Do not append a developer handoff unless requested.
-
-The checker enforces the technical boundary; it does not grade product quality or require specific headings.
+The checker flags technical content and missing local image targets; it does not validate remote images, grade product quality, or require headings. Static tests and sample walkthroughs are not proof of real multi-round behavior or Agent loading.

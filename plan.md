@@ -1,4 +1,90 @@
-> 🧭 状态：发布候选验证中 | 当前归属：QA | 本轮范围：v0.24.0 发布、安装更新与 6425 验收
+> 🧭 状态：v0.25.0 最终回归通过，发布资料就绪；线上发布事实以 Git Tag 为准 | 当前归属：发布执行 | 本轮范围：GitHub Flow 发布与 6425 更新；自进化新需求不混入本版
+
+## v0.25.0 · 2026-09-15 · 个性化 PRD 会话与 WorkBuddy 接入
+
+- [x] 236. [原生发现] 将 `prd-for-humans` 纳入受支持 Agent 的托管 Skill，同步时保留用户同名内容并明确冲突，不再依赖 Agent 猜测仓库内路径。
+- [x] 237. [对话收敛] 建立 PRD 就绪判断：信息充分时直接成稿；信息不足时先复述理解与建议，每轮只追问 1–2 个会改变产品判断的问题，并持续记录已确认事实，避免重复提问。
+- [x] 238. [记忆边界] 固定“当前对话/项目事实、个人 Profile、Brain 稳定偏好”的优先级；未经确认的日志、推断和一次性修订不得成为 PRD 事实或自动升级为个人风格。
+- [x] 239. [质量证明] 增加明确需求直接输出、模糊需求多轮收敛、个人 Profile 生效与未确认范围隔离的对话样例和行为测试；技术污染检查继续作为底线，不冒充产品质量判断。
+- [x] 240. [WorkBuddy 接入] 将本机 WorkBuddy 纳入 Agent 注册表与诊断，托管其已验证的个人 Skill 目录；规则 Loader、生命周期 Hook 与执行回写在缺少宿主协议证据时保持未支持或未验证。
+- [x] 241. [体验与发布门禁] 在工作台展示 WorkBuddy 的检测、Skill 接入、规则加载和 Hook 四层真实状态；完成聚焦测试后先交预览，用户确认再进入完整回归和发布候选。
+- [x] 242. [P0 多 Worktree 统一进度源] 以同一 Git 仓库为项目身份聚合全部合法 Worktree：已发布版本取 Git Tag，开发中版本取匹配声明工作分支的最新有效计划，主目录脏状态单独展示；允许同仓库兄弟 Worktree 回写到登记项目账本，禁止陈旧主目录进度覆盖真实开发现场。
+- [x] 243. [验收入口澄清] 固定正式 6425、开发 6426；开发服务只读真实进度，禁止采集、补建账本和写操作，显示实际版本/分支/提交/启动时间，验证后停用本项目旧临时预览。
+- goal: 让用户在支持的 Agent 中稳定启动符合个人风格的 PRD 对话：明确需求不被流程拖慢，模糊需求通过少量关键追问收敛，同时能看见 WorkBuddy 到底接入了哪一层。
+- interaction-contract: PRD 所需信息是产品决策要素，不是固定章节清单；追问必须改变范围、用户路径、规则或验收，不为填模板而提问。
+- evidence-boundary: 本机已确认 WorkBuddy 5.3.14、`~/.workbuddy` 配置目录与 `~/.workbuddy/skills` 个人 Skill 目标；尚未确认其全局规则 Loader、项目规则入口或生命周期 Hook，因此本版本不得把这些能力标成已托管。
+- preservation: 不读取或公开 WorkBuddy 的个人记忆、会话正文与设置密钥；不覆盖用户已有 Skill；不把 WorkBuddy 进程存在等同于 Harness 已加载。
+- preview-gate: 本版本按 standard 流程推进；聚焦自检后停在可体验预览，用户确认前不自动进入完整 QA 或发布。
+- worktree-boundary: 登记路径仍是项目与账本的稳定身份；兄弟 Worktree 只贡献可验证的分支、提交、版本计划与事件来源，不自动注册成多个项目，也不自动 pull、merge、stash 或清理任一工作区。
+
+### v0.25.0 · 2026-09-17 · 发布授权与最终回归
+
+- authorization: 用户明确要求发布 0.25，然后讨论 Brain 与 Harness 自进化；本轮允许提交、PR 合并、发布标签与更新正式安装，保留主检出目录的用户改动。
+- regression: 首轮 265 项中 1 个静态文案断言仍要求旧的临时启动命令；新界面已改为正式服务诊断及独立开发环境提示。更新该合同断言后重新验证，不删除恢复按钮或降低网络恢复检查。
+- verified: 最终 release Gate 覆盖 265 个 Python 测试、生成一致性与差异检查，全部通过；两个 Node 检查、Shell 语法、公开发布审计、上下文预算和临时全新项目 Quick 安装通过。Quick 安装未生成 Brain。
+- release-boundary: 发布资料标记目标 v0.25.0；远端合并、Tag、GitHub Release 和 6425 部署分别核验后才可对外声称发布完成。主检出目录本地改动保留，WorkBuddy 宿主执行和 Hook 未验证项不升级为已生效。
+- next-scope: Brain 与 Harness 自进化先核验现状、明确闭环缺口，不扩入 v0.25 的发布范围。
+
+### v0.25.0 · 2026-09-17 · 固定开发验收地址与环境边界
+
+- authorization: 用户确认环境隔离，并要求稳定长期开发地址后授权继续；本轮不发布 v0.25，不覆盖主检出目录或正式安装。
+- scope: 复用 Observer 服务管理与工作台，增加独立开发服务身份、固定 6426 和只读保护；真实进度仍来自登记项目，界面版本不等于项目版本。
+- baseline: 6425 健康，运行安装版 0.24.0；6431 是旧 Node 临时预览；6426、6432、6433 无监听。旧主目录中的陈旧版本计划不代表开发 Worktree 的最新状态。
+- verification: 工作台聚焦交互基线通过；新增环境隔离检查，覆盖 GET 不补建、POST 拒绝、独立服务配置与启动身份，再验证真实 6426，保留 6425 进程。
+- preview-result: 6426 已安装独立 LaunchAgent，重启后 healthy，读到 10 个真实项目与 v0.25 开发分支；collector_enabled=false、ingest_enabled=false。浏览器实点展开/收起运行来源，刷新后环境标识与项目列表正常，标签页明确为“开发验收 6426”。
+- verify-result: 环境隔离与正式服务兼容共 13 tests / OK；工作台交互和运行环境两个 Node 检查通过；git diff --check 通过。真实 Git 查询曾超时造成连接中断，新增超时降级测试，查询失败不伪造 Git 状态。
+- preservation-result: 6425 仍为原 PID 47659、healthy；正式 LaunchAgent 与安装 VERSION 的 SHA-256 均与改动前相同。仅停止旧 6431 Node 预览进程，未删除文件；6432/6433 本轮检查时无监听。
+- limitations: 冷启动项目摘要曾约 9 秒；既有进度计数/角色门禁仍依赖正式账本，不因开发地址固定就自动校正。本轮不宣称完成性能优化、整版验收或宿主加载验证，task-243 保持待体验确认。
+- remaining: PRD Skill 原有未提交修改保留；完整发布回归、合并和发布不在本轮。
+
+### v0.25.0 · 2026-09-16 · 将认可的 PRD 写法沉淀为可复用能力
+
+- scope: 继续 task-239，仅修订 PRD Skill、通用样例、产品字段与本地配图检查；用户明确授权后另存私有 Profile 新版本和真实样例，不发布私人原稿。
+- evidence: 用户已认可本次真实 PRD 的结构和图文细节，并要求沉淀；这证明本次写作效果，不等同于所有宿主已能原生发现 Skill，也不等同于原稿中的产品方案已批准实施。
+- baseline: 原有 PRD 聚焦测试 10 项通过；新增检查先复现 1 个产品字段误报及 2 个缺少新检查入口的错误，随后 13 项聚焦测试通过。
+- verify: PRD 与既有 Profile 发布兼容检查共 14 tests / 0 failures；Skill Creator 校验通过；开发版和已安装版本的 Profile 解析均为 private_brain v1.1.0、diagnostics 为空；真实样例正文仅迁移图片引用，七张配图逐一校验一致。
+- status: 本轮仅完成写作能力的定向沉淀；私有 Profile 已切换，Skill 源码仍在当前功能分支，尚未同步安装目录或验证宿主原生发现。工作台回写仍未完成，不将本地文件验证表述为工作台已更新。
+- boundary: 不恢复整版“可发布”结论；不合并、不提交、不部署、不改其他 Agent 配置。结构化事件回写因安装版不能识别当前开发 Worktree 而失败，不以文档记录冒充工作台已同步。
+
+### v0.25.0 · 2026-09-16 · 从写作模板改为持续协作
+
+- scope: 继续 task-237 至 task-239，重定义 `prd-for-humans` 的讨论、成稿、评审、局部修改与样例学习；保持 Skill ID，不更改项目调度或发布流程。
+- evidence: 对照三个本地历史修订稿、用户认可的最新案例及历史风格反馈；三个旧稿属于同一需求家族，作者及认可状态尚待确认，不冒充三个独立黄金样例，也不将其中的产品范围继承到当前需求。
+- implementation: 增加来源分级、修订家族归类、过期风格冲突消解、范围一致性检查及局部修改原则；保留明确直出、少量关键追问、图文场景细节和人类 PRD 边界。样例学习按需加载，不增加常驻上下文。
+- verify: `python3 -B -m unittest tests.test_prd_for_humans -q` → 16 tests / OK；Skill Creator 校验与 `git diff --check` 通过。新增检查为静态协作合同检查，不声称完成新的模型行为实测或宿主加载验证。
+- boundary: 私人学习记录留在本地交付目录；未修改原稿、未将来源待确认稿复制到公开 Skill、未更新私人 Profile、未同步安装目录、未提交或发布。安装版无法识别当前开发 Worktree 的回写限制仍在，不重复尝试并不冒充工作台已同步。
+
+### Step 242 — 2026-09-15 · 多 Worktree 统一进度源基线
+
+- observed: 工作台登记的是主目录 `~/mick_harness_rules`，它停在 v0.23.0、落后远端 2 个提交且有用户本地改动；实际 v0.25.0 工作位于同仓库的 `feat/v0.25-personal-prd-workflow` Worktree，当前提交为 `d0c323c`。
+- failure: Git 图能发现多个 Worktree，但项目概览、版本选择和事件账本仍只读取登记目录；开发 Worktree 因没有独立 Harness 入口而无法 emit，导致旧的 v0.24 → v0.25 交接持续显示为最新进度。
+- acceptance: 同仓库兄弟 Worktree 无需重复注入即可归入唯一项目；API 同时返回已发布、开发中和主目录三类状态及其来源；无关仓库仍被拒绝，所有工作区内容和 Git 状态保持不变。
+- implementation: Observer 现在用 Git common-dir 识别仓库，把兄弟 Worktree 的结构化事件写入登记项目的唯一账本，并保留来源 Worktree、分支、提交和仓库 ID；版本计划按合法工作分支聚合，旧版本回合不会再覆盖新版本摘要。
+- interface: 工作台项目行和项目概览分别展示“已发布”“开发中”“主目录”三类状态；主目录落后或有本地改动只作为警告，不会触发 pull、merge、stash 或覆盖。
+- real-state: 6433 API 识别到 `v0.24.0` 已发布、`v0.25.0` 正在 `feat/v0.25-personal-prd-workflow` 开发，以及主目录落后 2 个提交且有 2 处本地改动；项目摘要约 0.58 秒 / 29 KB。
+- verify: Observer 107 项测试通过；新增多 Worktree 选择、同仓库事件归属、无关仓库拒绝、旧交接隔离与工作区内容保持测试；前端操作/布局合同、JSON Schema 与 `git diff --check` 通过。
+- preview: `http://127.0.0.1:6433/?view=workbench` 已由当前开发分支启动。自动浏览器访问连续两次被本机管理策略阻止，未绕过安全控制；真实视觉与点击体验等待用户直接确认，完整发布 QA 尚未开始。
+
+### Step 241 — 2026-09-16 · 体验确认与功能分支提交
+
+- user-confirmation: 用户已确认 6433 工作台预览，并授权提交当前 v0.25.0 功能分支。
+- boundary: 本次只形成版本内提交；不合并 `main`、不发布 v0.25.0、不部署 6425，也不改动主检出目录中的用户本地变更。
+
+### v0.25.0 · 2026-09-16 · 发布候选门禁
+
+- candidate-verify: `python3 scripts/harness-verify.py release --force` 在允许绑定临时 localhost 的本机环境通过，覆盖 252 个 Python unittest、生成一致性和 `git diff --check`；聚焦工作台交互合同、公开发布审计与上下文预算同时通过。
+- install-smoke: 当前候选树复制到隔离的新项目后，`setup.sh --non-interactive` → exit 0；生成的根 `AGENTS.md` 正确指向 Harness 规则，安装版本为 0.25.0，且 Quick 安装没有创建 Brain。
+- release-metadata: `VERSION`、中英文 Changelog 与版本计划统一为 0.25.0；Git Tag 仍是最终发布事实源，因此候选阶段不冒充已发布。
+- compatibility: 现有项目、Brain 数据、运行账本、Agent Loader 和唯一 6425 服务无需数据迁移；多 Worktree 聚合为新增只读能力，不自动 pull、merge、stash 或改写任何工作区。
+- boundary: 本轮只形成干净发布候选；未合并 `main`、未 push、未打 tag、未部署到安装目录，也未重启 6425。
+
+### Step 240 — 2026-09-15 · PRD 对话与 WorkBuddy 接入预览
+
+- implementation: `prd-for-humans` 已加入 Codex、Claude Code 与检测到的 WorkBuddy 托管 Skill；同名用户目录保持冲突并不覆盖。PM 与 Skill 现在会先判断缺失信息是否真的改变产品决定，充分则直出，不充分则每轮最多追问 1–2 个关键问题并继承历史答案。
+- memory-boundary: 当前对话和确认项目文档提供产品事实；Profile 只控制写作风格；Brain 只提供有来源的稳定偏好或确认决策。未经审批的候选、原始日志和一次性修订不进入产品事实。
+- workbuddy-evidence: 本机 WorkBuddy 5.3.14 的应用包证明项目首轮读取 `AGENTS.md`，个人 Skill 目录为 `~/.workbuddy/skills/`；Agent 注册表因此标记项目规则与 Skill 可管理。未找到生命周期 Hook，加载、执行与回写保持未验证。
+- verify: Agent 与 PRD 两个 subsystem Gate 通过；共 79 项聚焦测试通过，另有 Observer 四层状态合同通过；上下文预算仍为 core 9908 / project 16342 / global 12159 / combined 28501 bytes，全部在上限内。
+- preview: `http://127.0.0.1:6433/?view=agents` 已启动，健康接口为 `ok`、10/10 项目有效；WorkBuddy API 状态为发现已验证、项目注入待真实会话、加载/执行/回写未验证、Hook 不支持。Mac 锁定导致本轮无法完成浏览器可视检查，因此 `task-241` 保持未完成。
 
 ## v0.24.0 · 2026-09-15 · 快速、可操作的项目指挥台
 
@@ -29,6 +115,8 @@
 - candidate-verify: `python3 scripts/harness-verify.py release` → 244 tests / OK，生成一致性与 `git diff --check` 通过；`node tests/test_operation_feedback.cjs` → PASS；Shell 语法、公开内容审计、上下文预算通过；当前发布树复制到临时新项目后，`setup.sh --non-interactive` → exit 0。
 - compatibility: 默认 portfolio 与项目首页改为轻量摘要，完整工作区路由继续按需可用；现有项目、Brain、事件账本、Agent Loader 和操作记录无需数据迁移。
 - remaining-at-commit: GitHub PR、annotated tag、本机 `harness update` 与唯一 6425 真实健康检查属于本次获授权发布事务；任一步失败即停止并保留真实状态。
+- release-result: PR #6 已合并到远端 `main`，merge commit `6e21fbd`，annotated tag `v0.24.0` 已发布；本机安装已更新为 0.24.0，唯一 6425 服务 healthy。
+- live-evidence: 6425 `/healthz` → `ok`；10/10 个登记项目同步；`/api/portfolio.json` → HTTP 200，约 0.789 秒 / 23,317 B。主检出目录存在用户改动，发布过程未覆盖、未 stash、未清理。
 
 ## v0.23.0 · 2026-09-14 · 项目优先工作台发布
 

@@ -17,20 +17,42 @@ harness observe service status
 
 浏览器打开 `http://127.0.0.1:6425/`。服务只监听本机；读取接口使用 `GET` / `HEAD`，结构化回写只开放带本机令牌的 `POST /api/v1/events`。`6425` 对应电话键盘上的 `MICK`。
 
-开发或排错时可以使用临时前台模式：
+## v0.25.0 · 2026-09-17 · 固定正式与开发入口
+
+端口代表环境，不代表版本。日常使用固定 `http://127.0.0.1:6425/`；开发验收固定 `http://127.0.0.1:6426/`，不再为 v0.26、v0.27 等版本增加端口。
+
+| 入口 | 运行代码 | 数据与权限 |
+|---|---|---|
+| 6425 正式工作台 | 已发布的安装版本 | 唯一真实采集、回写、审批和同步入口 |
+| 6426 开发验收 | 当前版本开发 Worktree | 只读登记项目的真实账本和各 Worktree 计划，不采集、不补建、不接受 POST |
+
+开发服务拥有独立的 `com.mick.harness.observer.dev` LaunchAgent 和日志目录，开机登录自动恢复、退出后自动拉起；停止或重装它不会重启正式服务。请从**待验收代码所在 Worktree**运行源码入口（全局 `harness` 仍指向已安装版本）：
 
 ```bash
-harness observe watch --all
+python3 -B scripts/harness-observe.py service install --environment development
+python3 -B scripts/harness-observe.py service status --environment development
 ```
 
-也可以显式指定项目和端口：
+修改开发代码后显式重启；下一版本从新的集成 Worktree 再执行 `install --environment development`，会更新同一份开发服务配置、保留 6426 地址。安装失败沿用既有回滚机制恢复原开发服务。
 
 ```bash
-harness observe init /path/to/project
-harness observe watch /path/to/project --port 6426
+python3 -B scripts/harness-observe.py service restart --environment development
+python3 -B scripts/harness-observe.py service logs --environment development
 ```
 
-前台端口只用于开发对照，不是第二套工作台。产品状态以 LaunchAgent 管理的 `6425` 为准；前台 `watch --all` 与后台服务读取同一份项目注册表并执行同一套扫描逻辑。
+工作台顶部和 `GET /api/runtime.json` 显示启动时的环境、版本、分支、提交、未提交状态与代码位置；显示的是**启动时间**，不冒充发布日期。工作台自身版本、项目开发版本、项目注入规则版本是三件事。开发页能够用新代码解释真实进度，不代表旧正式版已经具备相同能力；正式升级必须通过正常发布。
+
+开发页的项目规则同步检查仍与已安装版本 `~/.mick-harness` 对照，不会因为预览版本较新而把所有项目误报成落后。自定义安装目录可在安装开发服务前设置 `MICK_HARNESS_BASELINE_ROOT`，此值会保存到开发服务配置。
+
+多个 Agent 可以并行使用不同功能 Worktree，但长期验收入口一次只运行一个明确的集成 Worktree。需要测审批、同步等写行为时，使用临时项目与隔离的状态/Brain 目录执行测试，不能绕过 6426 的只读边界。旧的 6431/6432/6433 是临时历史地址，不再作为长期入口。
+
+只读前台排错也使用明确的开发环境：
+
+```bash
+python3 -B scripts/harness-observe.py watch --all --environment development
+```
+
+后台开发服务已占用 6426 时不要同时运行该命令。默认生产 `watch --all` 会采集与回写，不能用作开发只读预览。临时自动测试仍可显式选随机端口，但开发常驻服务只允许 6426。
 
 ## 项目身份与真实活动
 

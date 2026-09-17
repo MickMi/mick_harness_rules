@@ -160,6 +160,10 @@
         "role": {"enum": ["PM", "Planner", "Executor", "QA", "Reviewer", "Designer", "Orchestrator", "Unknown"]},
         "agent_id": {"type": "string", "minLength": 1, "maxLength": 160},
         "adapter": {"type": "string", "minLength": 1, "maxLength": 80},
+        "repository_id": {"type": "string", "minLength": 1, "maxLength": 160},
+        "source_worktree_path": {"type": "string", "minLength": 1, "maxLength": 1024},
+        "source_branch": {"type": "string", "minLength": 1, "maxLength": 300},
+        "source_commit": {"type": "string", "minLength": 1, "maxLength": 64},
         "path": {"$ref": "#/$defs/relativePath"},
         "revision": {"type": "string", "minLength": 1, "maxLength": 160}
       }

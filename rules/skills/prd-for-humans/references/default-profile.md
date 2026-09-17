@@ -1,8 +1,8 @@
 ---
 profile: prd-for-humans
-version: 1.0.0
+version: 1.1.0
 status: active
-updated: 2026-08-14
+updated: 2026-09-16
 ---
 
 # Generic Human PRD Profile
@@ -14,13 +14,14 @@ Write for human product review across product, business, design, engineering, an
 ## Stable preferences
 
 - Begin from the current problem and the concrete product outcome.
-- Make the user journey, release boundary, and acceptance observable.
+- Explain the user journey, visible behavior, and release boundary concretely.
 - Add only the sections required by the decisions in this requirement.
-- Use product rules, business formulas, thresholds, and examples when they define behavior.
+- Use product rules, visible fields, metrics, units, choices, and examples when they define behavior; these are not API or storage specifications.
+- Place relevant images beside scene details; use coherent paragraphs and readable tables instead of fragmented one-sentence blocks.
 - Mark confirmed facts, recommendations, exclusions, and unresolved decisions honestly.
 
 ## Prohibited patterns
 
-- No development guide, architecture, source path, component, interface, storage, styling, or test instructions.
+- No development guide, architecture, implementation source path, component, API/storage fields, styling, or test instructions.
 - No Prompt, model, Data Contract, machine-output, or Agent execution content.
-- No empty sections, universal chapter checklist, or invented future scope.
+- No empty sections, universal chapter checklist, mandatory acceptance/decision appendix, or invented future scope.

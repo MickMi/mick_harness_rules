@@ -614,7 +614,9 @@ class ObserveRuntimeTests(unittest.TestCase):
         self.assertIn("async function fetchWithRetry", dashboard)
         self.assertIn("networkRetryDelaysMs", dashboard)
         self.assertIn("重新连接", dashboard)
-        self.assertIn("harness observe watch --all", dashboard)
+        self.assertIn("harness observe service status", dashboard)
+        self.assertIn("runtime?.read_only", dashboard)
+        self.assertIn("请检查 6426 开发服务；正式工作台仍使用 6425", dashboard)
 
     def test_dashboard_falls_back_from_invalid_url_project(self) -> None:
         dashboard = DASHBOARD.read_text(encoding="utf-8")
@@ -1044,6 +1046,32 @@ class ObserveRuntimeTests(unittest.TestCase):
         self.assertEqual(agent["evidence"]["event_count"], 1)
         self.assertFalse(any(issue["code"] == "load-proof-missing" for issue in agent["issues"]))
         self.assertNotIn("thr_agent_status", json.dumps(result))
+
+    def test_workbuddy_project_loader_is_configured_without_claiming_session_load(self) -> None:
+        manager_report = {
+            "harness_version": PRODUCT_VERSION,
+            "agents": [{
+                "id": "workbuddy", "name": "WorkBuddy", "tier": 2, "detected": True,
+                "signals": [{"kind": "app", "found": True}],
+                "injection": {"status": "project_managed", "target": "AGENTS.md"},
+                "loading": {"status": "unsupported"},
+                "execution": {"status": "unverified"},
+                "adapter": {
+                    "support": "managed", "loading": "managed", "skills": "managed",
+                    "hooks": "unsupported", "repair": ["harness agents sync --dry-run"],
+                },
+                "issues": [],
+                "limitations": ["Project rules only; no lifecycle Hook."],
+            }],
+        }
+
+        result = OBSERVE.agent_status_snapshot(manager_report=manager_report)
+        agent = result["agents"][0]
+
+        self.assertEqual(agent["layers"]["discovered"]["status"], "verified")
+        self.assertEqual(agent["layers"]["injected"]["status"], "configured")
+        self.assertEqual(agent["layers"]["loaded"]["status"], "unverified")
+        self.assertEqual(agent["layers"]["feedback"]["status"], "unverified")
 
     def test_offline_delivery_keeps_persistent_outbox_until_replay(self) -> None:
         (self.project / "AGENTS.md").write_text("# Harness\n", encoding="utf-8")
@@ -1981,6 +2009,147 @@ class ObserveRuntimeTests(unittest.TestCase):
         self.assertEqual(version["checked_out_work_branches"], ["feat/design-refactor"])
         self.assertFalse(version["branch_mismatch"])
 
+    def test_repository_progress_prefers_newer_declared_worktree_and_preserves_primary(self) -> None:
+        (self.project / "AGENTS.md").write_text("# Harness\n", encoding="utf-8")
+        docs = self.project / "docs"
+        docs.mkdir()
+        primary_versions = (
+            "# Versions\n\n## 0.23.0\n\n- Status: released\n- Branch: main\n"
+            "- Tag: v0.23.0\n- Goal: 已发布基线。\n\n### Requirements\n\n"
+            "- [x] `task-old` 旧版本交付\n"
+        )
+        (docs / "VERSIONS.md").write_text(primary_versions, encoding="utf-8")
+        self.write_plan(
+            "> 🧭 状态：已完成 | 当前归属：Reviewer\n\n"
+            "- [x] 1. 旧版本工作\n"
+        )
+        subprocess.run(["git", "init", "-q", "-b", "main"], cwd=self.project, check=True)
+        subprocess.run(["git", "config", "user.email", "fixture@example.test"], cwd=self.project, check=True)
+        subprocess.run(["git", "config", "user.name", "Fixture"], cwd=self.project, check=True)
+        subprocess.run(["git", "add", "AGENTS.md", "docs/VERSIONS.md", "plan.md"], cwd=self.project, check=True)
+        subprocess.run(["git", "commit", "-qm", "release 0.23"], cwd=self.project, check=True)
+        subprocess.run(["git", "tag", "v0.23.0"], cwd=self.project, check=True)
+        dev_worktree = self.project.parent / f"{self.project.name}-v025"
+        subprocess.run(
+            ["git", "worktree", "add", "-q", "-b", "feat/v0.25-progress", str(dev_worktree)],
+            cwd=self.project,
+            check=True,
+        )
+        self.extra_worktrees.append(dev_worktree)
+        (dev_worktree / "docs" / "VERSIONS.md").write_text(
+            "# Versions\n\n## 0.25.0\n\n- Status: in_progress\n- Branch: main\n"
+            "- Work Branches: feat/v0.25-progress\n- Goal: 统一多个 Worktree 的进度。\n\n"
+            "### Requirements\n\n- [ ] `task-new` 聚合真实开发现场\n\n"
+            + primary_versions.split("# Versions\n\n", 1)[1],
+            encoding="utf-8",
+        )
+        subprocess.run(["git", "add", "docs/VERSIONS.md"], cwd=dev_worktree, check=True)
+        subprocess.run(["git", "commit", "-qm", "plan 0.25"], cwd=dev_worktree, check=True)
+        user_file = self.project / "user-note.txt"
+        user_file.write_text("keep me\n", encoding="utf-8")
+        before_versions = (docs / "VERSIONS.md").read_bytes()
+        before_note = user_file.read_bytes()
+
+        progress = OBSERVE.repository_progress_snapshot(self.project)
+        OBSERVE.init_runtime(self.project)
+        OBSERVE.ingest_envelope(
+            self.project,
+            OBSERVE.build_work_envelope(
+                self.project,
+                event_type="work.round_completed",
+                role="Reviewer",
+                round_ref="old-release-review",
+                requirement_id="task-old",
+                objective="审查旧版本",
+                summary="旧版本已发布",
+                status="completed",
+                idempotency_key="old-release-review",
+            ),
+        )
+        overview = OBSERVE.project_overview_snapshot(self.project)
+        descriptor = {
+            "project_id": OBSERVE.project_id(self.project),
+            "name": self.project.name,
+            "path": str(self.project),
+            "workspace_path": str(self.project),
+            "validation": "valid",
+            "reason": None,
+        }
+        summary = OBSERVE.portfolio_project_summary_record(descriptor)
+
+        self.assertEqual(progress["released"]["version"], "0.23.0")
+        self.assertEqual(next(item for item in progress["versions"] if item["version"] == "0.23.0")["status"], "released")
+        self.assertEqual(progress["active"]["version"], "0.25.0")
+        self.assertEqual(progress["active"]["branch"], "feat/v0.25-progress")
+        self.assertEqual(Path(progress["active"]["worktree_path"]), dev_worktree.resolve())
+        self.assertEqual(progress["primary"]["version"], "0.23.0")
+        self.assertTrue(progress["primary"]["dirty"])
+        self.assertEqual(overview["current_version"]["version"], "0.25.0")
+        self.assertEqual(summary["current_version"]["version"], "0.25.0")
+        self.assertIsNone(summary["recent_work"])
+        self.assertEqual(summary["stage"], "开发中 · 流程记录待补")
+        self.assertEqual(summary["owner_role"], "Unknown")
+        self.assertEqual((docs / "VERSIONS.md").read_bytes(), before_versions)
+        self.assertEqual(user_file.read_bytes(), before_note)
+
+    def test_sibling_worktree_emit_routes_to_registered_project_with_provenance(self) -> None:
+        (self.project / "AGENTS.md").write_text("# Harness\n", encoding="utf-8")
+        self.write_plan(plan_text())
+        subprocess.run(["git", "init", "-q", "-b", "main"], cwd=self.project, check=True)
+        subprocess.run(["git", "config", "user.email", "fixture@example.test"], cwd=self.project, check=True)
+        subprocess.run(["git", "config", "user.name", "Fixture"], cwd=self.project, check=True)
+        subprocess.run(["git", "add", "AGENTS.md", "plan.md"], cwd=self.project, check=True)
+        subprocess.run(["git", "commit", "-qm", "fixture baseline"], cwd=self.project, check=True)
+        worktree = self.project.parent / f"{self.project.name}-worker"
+        subprocess.run(
+            ["git", "worktree", "add", "-q", "-b", "feat/worker", str(worktree)],
+            cwd=self.project,
+            check=True,
+        )
+        self.extra_worktrees.append(worktree)
+        state_dir = self.project / "private-state"
+        state_dir.mkdir(exist_ok=True)
+        (state_dir / "registered-projects").write_text(f"{self.project}\n", encoding="utf-8")
+
+        with mock.patch.object(OBSERVE, "submit_envelope", return_value={"transport": "service", "appended": 1}) as submit:
+            exit_code = OBSERVE.main([
+                "emit", "work.round_started", "--project", str(worktree),
+                "--ref", "worktree-round", "--requirement", "task-new",
+                "--role", "Executor", "--objective", "实现统一进度源",
+                "--requested-mode", "auto", "--effective-mode", "standard",
+                "--mode-reason", "多文件 P0 修复",
+            ])
+
+        self.assertEqual(exit_code, 0)
+        canonical_project, envelope = submit.call_args.args[:2]
+        self.assertEqual(canonical_project, self.project.resolve())
+        self.assertEqual(envelope["project_id"], OBSERVE.project_id(self.project))
+        self.assertEqual(envelope["source"]["source_worktree_path"], str(worktree.resolve()))
+        self.assertEqual(envelope["source"]["source_branch"], "feat/worker")
+        self.assertEqual(len(envelope["source"]["source_commit"]), 40)
+        self.assertEqual(
+            envelope["source"]["repository_id"],
+            OBSERVE.git_workspace_snapshot(self.project)["repository_id"],
+        )
+
+        with mock.patch.object(OBSERVE, "submit_envelope", return_value={"transport": "service", "appended": 1}) as activity_submit:
+            OBSERVE.submit_agent_activity(
+                self.project,
+                platform="codex",
+                state="turn_started",
+                session_ref="thread-worktree",
+                turn_ref="turn-worktree",
+                source_project=worktree,
+            )
+        activity_envelope = activity_submit.call_args.args[1]
+        self.assertEqual(activity_envelope["project_id"], OBSERVE.project_id(self.project))
+        self.assertEqual(activity_envelope["source"]["source_worktree_path"], str(worktree.resolve()))
+
+        unrelated = self.project.parent / f"{self.project.name}-unrelated"
+        unrelated.mkdir()
+        subprocess.run(["git", "init", "-q", "-b", "main"], cwd=unrelated, check=True)
+        self.assertIsNone(OBSERVE.resolve_agent_project(unrelated))
+
     def test_dashboard_presents_one_repository_with_multiple_checked_out_workspaces(self) -> None:
         dashboard = DASHBOARD.read_text(encoding="utf-8")
 
@@ -1989,6 +2158,14 @@ class ObserveRuntimeTests(unittest.TestCase):
         for contract in ("git.repository_id", "git.worktrees", "version.work_branches"):
             self.assertIn(contract, dashboard)
         self.assertNotIn("活跃 Agent", dashboard)
+
+    def test_dashboard_separates_released_active_and_primary_worktree_versions(self) -> None:
+        dashboard = DASHBOARD.read_text(encoding="utf-8")
+
+        for marker in ("repository_progress", "repository-version-facts", "repositoryProgress.active", "repositoryProgress.primary"):
+            self.assertIn(marker, dashboard)
+        for label in ("已发布 v", "开发中 v", "主目录", "处本地改动"):
+            self.assertIn(label, dashboard)
 
     def test_version_plan_sorts_newest_first_by_semantic_version(self) -> None:
         docs = self.project / "docs"
@@ -2957,7 +3134,7 @@ class ObserveRuntimeTests(unittest.TestCase):
             self.assertEqual([item["validation"] for item in portfolio["projects"]], ["valid", "missing"])
             with urlopen(f"{base}/api/agents.json", timeout=2) as response:
                 agents = json.loads(response.read())
-            self.assertEqual(len(agents["agents"]), 7)
+            self.assertEqual(len(agents["agents"]), 8)
             self.assertIn("layers", agents["agents"][0])
             self.assertEqual(
                 set(agents["agents"][0]["adapter"]),

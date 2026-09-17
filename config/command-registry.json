@@ -87,7 +87,8 @@
         "plan": "harness-plan",
         "goal": "harness-goal",
         "brain": "harness-brain",
-        "e2e": "harness-e2e"
+        "e2e": "harness-e2e",
+        "prd": "prd-for-humans"
       }
     },
     "claude-code": {
@@ -98,7 +99,20 @@
         "plan": "harness-plan",
         "goal": "harness-goal",
         "brain": "harness-brain",
-        "e2e": "harness-e2e"
+        "e2e": "harness-e2e",
+        "prd": "prd-for-humans"
+      }
+    },
+    "workbuddy": {
+      "reserved_commands": [],
+      "invocation": "personal Skill",
+      "managed_skill_target": "~/.workbuddy/skills",
+      "skills": {
+        "plan": "harness-plan",
+        "goal": "harness-goal",
+        "brain": "harness-brain",
+        "e2e": "harness-e2e",
+        "prd": "prd-for-humans"
       }
     }
   },
