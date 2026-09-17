@@ -7,7 +7,7 @@ All notable changes to Mick Agent Harness are documented in this file.
 This project follows Semantic Versioning 2.0. Git tags in the form `vX.Y.Z`
 are the release source of truth.
 
-## [0.25.0] - 2026-09-16
+## [0.25.0] - 2026-09-17
 
 ### Personal PRD Workflow, WorkBuddy Support, and Unified Worktree Progress
 
@@ -25,6 +25,13 @@ are the release source of truth.
   workbench distinguishes the released tag, the active version branch, and the
   registered primary checkout, while preserving the originating worktree,
   branch, and commit on structured events.
+- PRD collaboration supports scoped revisions and learning from approved examples,
+  with flexible human-facing sections, illustrated scenario tables, local-image
+  checks, and safeguards against importing outdated scope or technical instructions.
+- Development previews use the stable `127.0.0.1:6426` address, separate from
+  production at `127.0.0.1:6425`. The preview reads real project progress without
+  collecting events or writing records. Both environments expose their actual
+  running version, source branch, commit, and startup time.
 
 Compatibility: existing projects, Brain data, runtime ledgers, Agent loaders,
 and the single `127.0.0.1:6425` service remain compatible. Worktree aggregation
@@ -34,9 +41,9 @@ Migration: run `harness update`. Registered projects and supported Agent Skills
 are refreshed by the existing update path; no project or Brain data migration
 is required.
 
-Verification: 252 Python unittests, generated-rule consistency, the focused
-workbench interaction contract, public-release audit, context-budget checks,
-and release diff validation passed.
+Verification: 265 Python unittests, generated-rule consistency, both focused
+workbench interaction checks, public-release audit, context-budget checks,
+Shell syntax, release diff validation, and clean-project quick setup passed.
 
 ## [0.24.0] - 2026-09-15
 

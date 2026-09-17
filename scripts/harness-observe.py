@@ -39,6 +39,7 @@ RUNTIME_DIRNAME = ".harness-runtime"
 SERVICE_NAME = "Mick Harness Observer"
 SERVICE_LABEL = "com.mick.harness.observer"
 DEFAULT_PORT = 6425
+DEVELOPMENT_PORT = 6426
 DEFAULT_SCAN_INTERVAL = 2.0
 INGEST_PATH = "/api/v1/events"
 BRAIN_STATUS_PATH = "/api/brain/status.json"
@@ -2184,7 +2185,9 @@ def status_runtime(project: Path) -> dict[str, Any]:
     run_record, target_run_dir = current_run(project)
     snapshot = load_json(target_run_dir / "snapshot.json")
     if snapshot is None:
-        snapshot = replay_runtime(project)["snapshot"]
+        # Reading a missing projection must not repair production data from a preview.
+        # Explicit sync/replay remains responsible for persisting projections.
+        snapshot = project_events(load_events(target_run_dir / "events.jsonl"))
     return {"run": run_record, "snapshot": snapshot}
 
 
@@ -2736,14 +2739,13 @@ def read_artifact_content(project: Path, snapshot: dict[str, Any], path_value: s
 def run_git(project: Path, arguments: list[str], *, timeout: float = 2.0) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
     environment["GIT_OPTIONAL_LOCKS"] = "0"
-    return subprocess.run(
-        ["git", "-C", str(project), *arguments],
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        env=environment,
-    )
+    command = ["git", "-C", str(project), *arguments]
+    try:
+        return subprocess.run(command, check=False, capture_output=True, text=True,
+                              timeout=timeout, env=environment)
+    except subprocess.TimeoutExpired:
+        # A slow repository is unavailable evidence, not a broken HTTP connection.
+        return subprocess.CompletedProcess(command, 124, "", "Git inspection timed out")
 
 
 def _git_worktree_records(project: Path) -> list[dict[str, Any]]:
@@ -5009,17 +5011,33 @@ def safe_run_id(value: str) -> bool:
     return bool(re.fullmatch(r"run_[A-Za-z0-9._-]{8,}", value))
 
 
-def launch_agent_path(home: Path | None = None) -> Path:
-    return (home or Path.home()) / "Library" / "LaunchAgents" / f"{SERVICE_LABEL}.plist"
+def environment_label(environment: str) -> str:
+    if environment not in {"production", "development"}:
+        raise ObserveError(f"Unknown environment: {environment}", 64)
+    return SERVICE_LABEL + (".dev" if environment == "development" else "")
 
 
-def build_launch_agent_plist(harness_root: Path, state_root: Path, *, port: int = DEFAULT_PORT) -> dict[str, Any]:
+def environment_port(environment: str) -> int:
+    environment_label(environment)
+    return DEVELOPMENT_PORT if environment == "development" else DEFAULT_PORT
+
+
+def observer_log_dir(environment: str) -> Path:
+    return default_state_root() / ("observer-dev" if environment == "development" else "observer")
+
+
+def launch_agent_path(home: Path | None = None, *, environment: str = "production") -> Path:
+    return (home or Path.home()) / "Library" / "LaunchAgents" / f"{environment_label(environment)}.plist"
+
+
+def build_launch_agent_plist(harness_root: Path, state_root: Path, *, port: int = DEFAULT_PORT,
+                             environment: str = "production") -> dict[str, Any]:
     if port < 1 or port > 65535:
         raise ObserveError(f"Invalid port: {port}", 64)
-    observer_dir = state_root / "observer"
+    observer_dir = state_root / ("observer-dev" if environment == "development" else "observer")
     script = harness_root / "scripts" / "harness-observe.py"
     return {
-        "Label": SERVICE_LABEL,
+        "Label": environment_label(environment),
         "ProgramArguments": [
             sys.executable,
             str(script),
@@ -5027,7 +5045,7 @@ def build_launch_agent_plist(harness_root: Path, state_root: Path, *, port: int 
             "--all",
             "--port",
             str(port),
-        ],
+        ] + (["--environment", "development"] if environment == "development" else []),
         "WorkingDirectory": str(harness_root),
         "RunAtLoad": True,
         "KeepAlive": True,
@@ -5037,6 +5055,10 @@ def build_launch_agent_plist(harness_root: Path, state_root: Path, *, port: int 
             "MICK_HARNESS_ROOT": str(harness_root),
             "MICK_HARNESS_STATE_DIR": str(state_root),
             "PYTHONDONTWRITEBYTECODE": "1",
+            "GIT_OPTIONAL_LOCKS": "0",
+            **({"MICK_HARNESS_BASELINE_ROOT": os.environ.get(
+                "MICK_HARNESS_BASELINE_ROOT", str(Path.home() / ".mick-harness")
+            )} if environment == "development" else {}),
         },
         "StandardOutPath": str(observer_dir / "service.log"),
         "StandardErrorPath": str(observer_dir / "service.error.log"),
@@ -5055,8 +5077,8 @@ def installed_service_port(plist_path: Path) -> int:
         raise ObserveError(f"Observer LaunchAgent does not contain a valid --port: {plist_path}") from error
 
 
-def launchctl_target() -> str:
-    return f"gui/{os.getuid()}/{SERVICE_LABEL}"
+def launchctl_target(environment: str = "production") -> str:
+    return f"gui/{os.getuid()}/{environment_label(environment)}"
 
 
 def launchctl_domain() -> str:
@@ -5076,10 +5098,10 @@ def run_launchctl(arguments: list[str], *, check: bool = True) -> subprocess.Com
     return result
 
 
-def launch_agent_loaded() -> bool:
+def launch_agent_loaded(environment: str = "production") -> bool:
     if sys.platform != "darwin":
         return False
-    return run_launchctl(["print", launchctl_target()], check=False).returncode == 0
+    return run_launchctl(["print", launchctl_target(environment)], check=False).returncode == 0
 
 
 def observer_health(port: int, *, timeout: float = 0.5) -> dict[str, Any] | None:
@@ -5093,20 +5115,23 @@ def observer_health(port: int, *, timeout: float = 0.5) -> dict[str, Any] | None
         return None
 
 
-def service_status(*, home: Path | None = None, port: int | None = None) -> dict[str, Any]:
-    plist_path = launch_agent_path(home)
+def service_status(*, home: Path | None = None, port: int | None = None,
+                   environment: str = "production") -> dict[str, Any]:
+    plist_path = launch_agent_path(home, environment=environment)
     selected_port = port
     if selected_port is None and plist_path.is_file():
         with contextlib.suppress(ObserveError):
             selected_port = installed_service_port(plist_path)
-    selected_port = selected_port or DEFAULT_PORT
+    selected_port = selected_port or environment_port(environment)
     health = observer_health(selected_port)
+    matching = health is not None and health.get("service_label", SERVICE_LABEL) == environment_label(environment)
     return {
         "service_name": SERVICE_NAME,
-        "label": SERVICE_LABEL,
+        "label": environment_label(environment),
+        "environment": environment,
         "installed": plist_path.is_file(),
-        "loaded": launch_agent_loaded(),
-        "healthy": health is not None,
+        "loaded": launch_agent_loaded(environment),
+        "healthy": matching,
         "port": selected_port,
         "url": f"http://127.0.0.1:{selected_port}/",
         "plist": str(plist_path),
@@ -5114,11 +5139,12 @@ def service_status(*, home: Path | None = None, port: int | None = None) -> dict
     }
 
 
-def wait_for_observer(port: int, *, timeout: float = 8.0) -> dict[str, Any] | None:
+def wait_for_observer(port: int, *, timeout: float = 8.0,
+                      environment: str = "production") -> dict[str, Any] | None:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         health = observer_health(port)
-        if health is not None:
+        if health is not None and health.get("service_label", SERVICE_LABEL) == environment_label(environment):
             return health
         time.sleep(0.1)
     return None
@@ -5131,8 +5157,9 @@ def restore_previous_service(
     previous_loaded: bool,
     previous_port: int | None,
     previous_healthy: bool,
+    environment: str = "production",
 ) -> str:
-    run_launchctl(["bootout", launchctl_target()], check=False)
+    run_launchctl(["bootout", launchctl_target(environment)], check=False)
     if previous_plist is None:
         with contextlib.suppress(FileNotFoundError):
             plist_path.unlink()
@@ -5143,26 +5170,32 @@ def restore_previous_service(
         return "restored previous service config; previous service was not loaded"
 
     run_launchctl(["bootstrap", launchctl_domain(), str(plist_path)])
-    run_launchctl(["enable", launchctl_target()], check=False)
-    run_launchctl(["kickstart", "-k", launchctl_target()])
-    if previous_healthy and (previous_port is None or wait_for_observer(previous_port) is None):
+    run_launchctl(["enable", launchctl_target(environment)], check=False)
+    run_launchctl(["kickstart", "-k", launchctl_target(environment)])
+    if previous_healthy and (previous_port is None or wait_for_observer(previous_port, environment=environment) is None):
         raise ObserveError("previous service config was restored but did not become healthy")
     return "restored and restarted previous service"
 
 
-def install_service(*, port: int = DEFAULT_PORT, home: Path | None = None) -> dict[str, Any]:
+def install_service(*, port: int | None = None, home: Path | None = None,
+                    environment: str = "production") -> dict[str, Any]:
     if sys.platform != "darwin":
         raise ObserveError("Mick Harness Observer service installation currently requires macOS", 64)
     harness_root = Path(__file__).resolve().parents[1]
+    port = port if port is not None else environment_port(environment)
+    if environment == "development" and port != DEVELOPMENT_PORT:
+        raise ObserveError("The development service uses the stable port 6426", 64)
+    if environment == "production" and port == DEVELOPMENT_PORT:
+        raise ObserveError("Port 6426 is reserved for the read-only development service", 64)
     state_root = default_state_root()
-    observer_dir = state_root / "observer"
+    observer_dir = observer_log_dir(environment)
     observer_dir.mkdir(parents=True, exist_ok=True)
-    plist_path = launch_agent_path(home)
+    plist_path = launch_agent_path(home, environment=environment)
     plist_path.parent.mkdir(parents=True, exist_ok=True)
-    config = build_launch_agent_plist(harness_root, state_root, port=port)
+    config = build_launch_agent_plist(harness_root, state_root, port=port, environment=environment)
     desired_plist = plistlib.dumps(config, fmt=plistlib.FMT_XML, sort_keys=True)
     previous_plist = plist_path.read_bytes() if plist_path.is_file() else None
-    previous_loaded = launch_agent_loaded()
+    previous_loaded = launch_agent_loaded(environment)
     previous_port: int | None = None
     if previous_plist is not None:
         with contextlib.suppress(ObserveError):
@@ -5171,17 +5204,17 @@ def install_service(*, port: int = DEFAULT_PORT, home: Path | None = None) -> di
 
     if previous_plist == desired_plist:
         if previous_loaded and previous_healthy:
-            return service_status(home=home, port=port)
-        return start_service(home=home)
+            return service_status(home=home, port=port, environment=environment)
+        return start_service(home=home, environment=environment)
 
     atomic_write(plist_path, desired_plist)
     try:
         if previous_loaded:
-            run_launchctl(["bootout", launchctl_target()], check=False)
+            run_launchctl(["bootout", launchctl_target(environment)], check=False)
         run_launchctl(["bootstrap", launchctl_domain(), str(plist_path)])
-        run_launchctl(["enable", launchctl_target()], check=False)
-        run_launchctl(["kickstart", "-k", launchctl_target()])
-        health = wait_for_observer(port)
+        run_launchctl(["enable", launchctl_target(environment)], check=False)
+        run_launchctl(["kickstart", "-k", launchctl_target(environment)])
+        health = wait_for_observer(port, environment=environment)
         if health is None:
             raise ObserveError(f"{SERVICE_NAME} was installed but did not become healthy on 127.0.0.1:{port}")
     except (OSError, ObserveError) as error:
@@ -5192,50 +5225,51 @@ def install_service(*, port: int = DEFAULT_PORT, home: Path | None = None) -> di
                 previous_loaded=previous_loaded,
                 previous_port=previous_port,
                 previous_healthy=previous_healthy,
+                environment=environment,
             )
         except (OSError, ObserveError) as rollback_error:
             raise ObserveError(f"{error}; rollback failed: {rollback_error}") from error
         raise ObserveError(f"{error}; rollback succeeded: {rollback}") from error
-    return service_status(home=home, port=port)
+    return service_status(home=home, port=port, environment=environment)
 
 
-def start_service(*, home: Path | None = None) -> dict[str, Any]:
-    plist_path = launch_agent_path(home)
+def start_service(*, home: Path | None = None, environment: str = "production") -> dict[str, Any]:
+    plist_path = launch_agent_path(home, environment=environment)
     if not plist_path.is_file():
         raise ObserveError("Observer service is not installed. Run 'harness observe service install' first.", 2)
     port = installed_service_port(plist_path)
-    if not launch_agent_loaded():
+    if not launch_agent_loaded(environment):
         run_launchctl(["bootstrap", launchctl_domain(), str(plist_path)])
-    run_launchctl(["enable", launchctl_target()], check=False)
-    run_launchctl(["kickstart", "-k", launchctl_target()])
-    if wait_for_observer(port) is None:
+    run_launchctl(["enable", launchctl_target(environment)], check=False)
+    run_launchctl(["kickstart", "-k", launchctl_target(environment)])
+    if wait_for_observer(port, environment=environment) is None:
         raise ObserveError(f"{SERVICE_NAME} did not become healthy on 127.0.0.1:{port}")
-    return service_status(home=home, port=port)
+    return service_status(home=home, port=port, environment=environment)
 
 
-def stop_service(*, home: Path | None = None) -> dict[str, Any]:
-    plist_path = launch_agent_path(home)
-    port = installed_service_port(plist_path) if plist_path.is_file() else DEFAULT_PORT
-    run_launchctl(["bootout", launchctl_target()], check=False)
-    return service_status(home=home, port=port)
+def stop_service(*, home: Path | None = None, environment: str = "production") -> dict[str, Any]:
+    plist_path = launch_agent_path(home, environment=environment)
+    port = installed_service_port(plist_path) if plist_path.is_file() else environment_port(environment)
+    run_launchctl(["bootout", launchctl_target(environment)], check=False)
+    return service_status(home=home, port=port, environment=environment)
 
 
-def restart_service(*, home: Path | None = None) -> dict[str, Any]:
-    stop_service(home=home)
-    return start_service(home=home)
+def restart_service(*, home: Path | None = None, environment: str = "production") -> dict[str, Any]:
+    stop_service(home=home, environment=environment)
+    return start_service(home=home, environment=environment)
 
 
-def uninstall_service(*, home: Path | None = None) -> dict[str, Any]:
-    plist_path = launch_agent_path(home)
-    port = installed_service_port(plist_path) if plist_path.is_file() else DEFAULT_PORT
-    run_launchctl(["bootout", launchctl_target()], check=False)
+def uninstall_service(*, home: Path | None = None, environment: str = "production") -> dict[str, Any]:
+    plist_path = launch_agent_path(home, environment=environment)
+    port = installed_service_port(plist_path) if plist_path.is_file() else environment_port(environment)
+    run_launchctl(["bootout", launchctl_target(environment)], check=False)
     with contextlib.suppress(FileNotFoundError):
         plist_path.unlink()
-    return service_status(home=home, port=port)
+    return service_status(home=home, port=port, environment=environment)
 
 
-def service_logs(*, lines: int = 80) -> dict[str, Any]:
-    observer_dir = default_state_root() / "observer"
+def service_logs(*, lines: int = 80, environment: str = "production") -> dict[str, Any]:
+    observer_dir = observer_log_dir(environment)
     values: dict[str, Any] = {"directory": str(observer_dir), "logs": {}}
     for name in ("service.log", "service.error.log"):
         path = observer_dir / name
@@ -5267,21 +5301,60 @@ def scan_registered_projects(registry_path: Path) -> dict[str, Any]:
     }
 
 
+def runtime_identity(harness_root: Path, environment: str, port: int) -> dict[str, Any]:
+    """Capture code identity at startup, separately from monitored project versions."""
+    version_file = harness_root / "VERSION"
+    value: dict[str, Any] = {
+        "environment": environment,
+        "read_only": environment == "development",
+        "version": version_file.read_text(encoding="utf-8").strip() if version_file.is_file() else None,
+        "source_path": str(harness_root),
+        "branch": None, "commit": None, "dirty": None,
+        "started_at": now_iso(),
+        "url": f"http://127.0.0.1:{port}/",
+        "production_url": f"http://127.0.0.1:{DEFAULT_PORT}/",
+        "development_url": f"http://127.0.0.1:{DEVELOPMENT_PORT}/",
+        "data_source": "registered_projects_read_only" if environment == "development" else "registered_projects",
+    }
+    top = run_git(harness_root, ["rev-parse", "--show-toplevel"])
+    if top.returncode == 0 and Path(top.stdout.strip()).resolve() == harness_root.resolve():
+        for key, arguments in (
+            ("branch", ["symbolic-ref", "--short", "-q", "HEAD"]),
+            ("commit", ["rev-parse", "HEAD"]),
+            ("dirty", ["status", "--porcelain"]),
+        ):
+            result = run_git(harness_root, arguments)
+            if result.returncode == 0:
+                value[key] = bool(result.stdout.strip()) if key == "dirty" else result.stdout.strip()
+    return value
+
+
 def serve_runtime(
     project: Path | None,
     port: int,
     *,
     registry_path: Path | None = None,
     scan_interval: float = DEFAULT_SCAN_INTERVAL,
+    environment: str = "production",
 ) -> None:
+    environment_label(environment)
+    read_only = environment == "development"
     if port < 1 or port > 65535:
         raise ObserveError(f"Invalid port: {port}", 64)
     if scan_interval <= 0:
         raise ObserveError(f"Invalid scan interval: {scan_interval}", 64)
+    if port == DEFAULT_PORT and read_only or port == DEVELOPMENT_PORT and not read_only:
+        raise ObserveError("6425 is production; 6426 requires --environment development", 64)
     harness_root = Path(__file__).resolve().parents[1]
     dashboard_path = harness_root / "web" / "observe-dashboard.html"
     if not dashboard_path.is_file():
         raise ObserveError(f"Dashboard asset missing: {dashboard_path}")
+    identity = runtime_identity(harness_root, environment, port)
+    # Freeze HTML and metadata together; a checkout edit needs an explicit restart.
+    bootstrap = json.dumps(identity, ensure_ascii=False).replace("<", "\\u003c")
+    dashboard_html = dashboard_path.read_text(encoding="utf-8").replace(
+        "/* HARNESS_RUNTIME_BOOTSTRAP */ null", bootstrap
+    ).encode("utf-8")
 
     def descriptors() -> list[dict[str, Any]]:
         if registry_path is not None:
@@ -5306,8 +5379,8 @@ def serve_runtime(
 
     started_at = now_iso()
     started_monotonic = time.monotonic()
-    ingest_token = ensure_ingest_token()
-    action_token = secrets.token_urlsafe(32)
+    ingest_token = "" if read_only else ensure_ingest_token()
+    action_token = "" if read_only else secrets.token_urlsafe(32)
     stop_event = threading.Event()
     service_state_lock = threading.Lock()
     service_state: dict[str, Any] = {
@@ -5317,7 +5390,8 @@ def serve_runtime(
         "project_count": 1 if project is not None else 0,
         "valid_project_count": 1 if project is not None else 0,
         "synced_project_count": 0,
-        "ingest_enabled": True,
+        "ingest_enabled": not read_only,
+        "collector_enabled": not read_only,
         "ingested_event_count": 0,
         "last_ingest_at": None,
     }
@@ -5374,7 +5448,8 @@ def serve_runtime(
         return {
             "status": "degraded" if scan_state.get("last_scan_error") else "ok",
             "service_name": SERVICE_NAME,
-            "service_label": SERVICE_LABEL,
+            "service_label": environment_label(environment),
+            "runtime": identity,
             "mode": "portfolio" if registry_path is not None else "project",
             "host": "127.0.0.1",
             "port": port,
@@ -5412,7 +5487,10 @@ def serve_runtime(
                     self._send_bytes(200, "application/json", json_bytes(value), head_only=head_only)
                     return
                 if path in {"/", "/index.html"}:
-                    self._send_bytes(200, "text/html; charset=utf-8", dashboard_path.read_bytes(), head_only=head_only)
+                    self._send_bytes(200, "text/html; charset=utf-8", dashboard_html, head_only=head_only)
+                    return
+                if path == "/api/runtime.json":
+                    self._send_bytes(200, "application/json", json_bytes(identity), head_only=head_only)
                     return
                 if path == "/healthz":
                     self._send_bytes(
@@ -5432,12 +5510,15 @@ def serve_runtime(
                             "schema_version": SCHEMA_VERSION,
                             "generated_at": now_iso(),
                             "detail": "full" if full_detail else "summary",
-                            "projects": [portfolio_project_record(descriptors()[0]) if full_detail else portfolio_project_summary_record(descriptors()[0])] if descriptors() else [],
+                            "projects": [portfolio_project_record(descriptors()[0], sync=not read_only) if full_detail else portfolio_project_summary_record(descriptors()[0])] if descriptors() else [],
                         }
                     self._send_bytes(200, "application/json", json_bytes(value), head_only=head_only)
                     return
                 if path == "/api/harness/versions.json":
-                    self._send_bytes(200, "application/json", json_bytes(harness_versions_snapshot(descriptors())), head_only=head_only)
+                    # Project injection health is relative to the installed release,
+                    # never to the unreleased preview code.
+                    baseline = Path(os.environ.get("MICK_HARNESS_BASELINE_ROOT", str(Path.home() / ".mick-harness"))) if read_only else None
+                    self._send_bytes(200, "application/json", json_bytes(harness_versions_snapshot(descriptors(), baseline_root=baseline)), head_only=head_only)
                     return
                 if path == "/api/agents.json":
                     self._send_bytes(
@@ -5516,8 +5597,10 @@ def serve_runtime(
                     self._send_bytes(200, "application/json", json_bytes(value), head_only=head_only)
                     return
                 if path == "/api/index.json" and project is not None and registry_path is None:
-                    sync_runtime(project)
-                    self._send_bytes(200, "application/json", (runtime_root(project) / "index.json").read_bytes(), head_only=head_only)
+                    if not read_only:
+                        sync_runtime(project)
+                    value = load_json(runtime_root(project) / "index.json", {"runs": []})
+                    self._send_bytes(200, "application/json", json_bytes(value), head_only=head_only)
                     return
                 project_index_match = re.fullmatch(r"/api/projects/([A-Za-z0-9._-]+)/index\.json", path)
                 if project_index_match:
@@ -5525,10 +5608,10 @@ def serve_runtime(
                     if selected_project is None:
                         self._send_bytes(404, "application/json", json_bytes({"error": "project-not-found"}), head_only=head_only)
                         return
-                    if registry_path is None:
+                    if registry_path is None and not read_only:
                         sync_runtime(selected_project)
                     target = runtime_root(selected_project) / "index.json"
-                    self._send_bytes(200, "application/json", target.read_bytes(), head_only=head_only)
+                    self._send_bytes(200, "application/json", json_bytes(load_json(target, {"runs": []})), head_only=head_only)
                     return
                 project_workspace_match = re.fullmatch(r"/api/projects/([A-Za-z0-9._-]+)/workspace\.json", path)
                 if project_workspace_match:
@@ -5539,6 +5622,8 @@ def serve_runtime(
                     try:
                         selected_snapshot = status_runtime(selected_project)["snapshot"]
                     except ObserveError:
+                        if read_only:
+                            raise ObserveError("尚无正式采集记录；开发预览不会补建项目账本。", 404)
                         init_runtime(selected_project)
                         selected_snapshot = sync_runtime(selected_project)["snapshot"]
                     query = parse_qs(parsed.query)
@@ -5630,6 +5715,13 @@ def serve_runtime(
             return self.headers.get("Host") in hosts and (not origin or origin in {f"http://{host}" for host in hosts})
 
         def do_POST(self) -> None:  # noqa: N802
+            if read_only:
+                self._send_bytes(403, "application/json", json_bytes({
+                    "error": "开发环境仅供只读验收；真实操作请在 6425 正式工作台完成。",
+                    "code": "development-read-only",
+                    "production_url": identity["production_url"],
+                }))
+                return
             parsed = urlparse(self.path)
             if parsed.path == "/api/reporting/configuration":
                 if not self._reporting_origin_allowed():
@@ -5939,9 +6031,16 @@ def serve_runtime(
     except OSError as error:
         raise ObserveError(f"Cannot bind 127.0.0.1:{port}: {error}") from error
     server.daemon_threads = True
-    scan_once()
-    monitor_thread = threading.Thread(target=monitor_loop, name="harness-observer-monitor", daemon=True)
-    monitor_thread.start()
+    monitor_thread = None
+    if not read_only:
+        scan_once()
+        monitor_thread = threading.Thread(target=monitor_loop, name="harness-observer-monitor", daemon=True)
+        monitor_thread.start()
+    else:
+        registered = descriptors()
+        service_state.update(project_count=len(registered), valid_project_count=sum(
+            item["validation"] == "valid" for item in registered
+        ))
     print(f"{SERVICE_NAME}: http://127.0.0.1:{port}/")
     print("Local work server; press Ctrl-C to stop.")
     try:
@@ -5950,7 +6049,8 @@ def serve_runtime(
         pass
     finally:
         stop_event.set()
-        monitor_thread.join(timeout=max(1.0, scan_interval + 0.5))
+        if monitor_thread is not None:
+            monitor_thread.join(timeout=max(1.0, scan_interval + 0.5))
         server.server_close()
 
 
@@ -5962,12 +6062,15 @@ def build_parser() -> argparse.ArgumentParser:
         child.add_argument("project", nargs="?", help="Project directory (default: current directory)")
     watch = subparsers.add_parser("watch")
     watch.add_argument("project", nargs="?", help="Project directory (default: current directory)")
-    watch.add_argument("--port", type=int, default=DEFAULT_PORT)
+    watch.add_argument("--port", type=int, help="Defaults to 6425 (production) or 6426 (development)")
+    watch.add_argument("--environment", choices=("production", "development"), default="production",
+                       help="Development reads real records without collecting or writing")
     watch.add_argument("--all", action="store_true", dest="all_projects", help="Observe all projects in the Harness registry")
     watch.add_argument("--scan-interval", type=float, default=DEFAULT_SCAN_INTERVAL, help="Background scan interval in seconds")
     service = subparsers.add_parser("service", help=f"Manage the {SERVICE_NAME} background service")
     service.add_argument("action", choices=("install", "start", "stop", "restart", "status", "logs", "uninstall"))
     service.add_argument("--port", type=int, help=f"Service port for install (default: {DEFAULT_PORT})")
+    service.add_argument("--environment", choices=("production", "development"), default="production")
     service.add_argument("--lines", type=int, default=80, help="Number of log lines to show")
     activity = subparsers.add_parser("activity", help=argparse.SUPPRESS)
     activity.add_argument("--project", required=True)
@@ -6040,19 +6143,19 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "service":
             if args.action == "install":
-                value = install_service(port=args.port or DEFAULT_PORT)
+                value = install_service(port=args.port, environment=args.environment)
             elif args.action == "start":
-                value = start_service()
+                value = start_service(environment=args.environment)
             elif args.action == "stop":
-                value = stop_service()
+                value = stop_service(environment=args.environment)
             elif args.action == "restart":
-                value = restart_service()
+                value = restart_service(environment=args.environment)
             elif args.action == "uninstall":
-                value = uninstall_service()
+                value = uninstall_service(environment=args.environment)
             elif args.action == "logs":
-                value = service_logs(lines=max(1, args.lines))
+                value = service_logs(lines=max(1, args.lines), environment=args.environment)
             else:
-                value = service_status(port=args.port)
+                value = service_status(port=args.port, environment=args.environment)
             print(json.dumps(value, ensure_ascii=False, indent=2))
             return 0 if args.action != "status" or value.get("healthy") else 2
         if args.command == "activity":
@@ -6139,7 +6242,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "watch" and args.all_projects:
             if args.project:
                 raise ObserveError("Do not pass a project directory together with --all", 64)
-            serve_runtime(None, args.port, registry_path=default_registry_path(), scan_interval=args.scan_interval)
+            serve_runtime(None, args.port if args.port is not None else environment_port(args.environment),
+                          registry_path=default_registry_path(), scan_interval=args.scan_interval,
+                          environment=args.environment)
             return 0
         project = resolve_project(args.project)
         if args.command == "init":
@@ -6159,7 +6264,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Replayed {summary['run_id']}: snapshot digest {summary['after_digest']} (changed={str(summary['changed']).lower()})")
             return 0
         if args.command == "watch":
-            serve_runtime(project, args.port, scan_interval=args.scan_interval)
+            serve_runtime(project, args.port if args.port is not None else environment_port(args.environment),
+                          scan_interval=args.scan_interval, environment=args.environment)
             return 0
     except ObserveError as error:
         print(f"observe error: {error}", file=sys.stderr)

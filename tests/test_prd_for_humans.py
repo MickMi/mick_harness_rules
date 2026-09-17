@@ -53,6 +53,41 @@ class PrdForHumansTests(unittest.TestCase):
         self.assertIn("unapproved candidates", text)
         self.assertIn("stable preference", text)
 
+    def test_collaboration_covers_revision_and_sample_provenance(self) -> None:
+        text = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("discuss, draft, revise, review, or learn style", text)
+        self.assertIn("preserve accepted content", text)
+        self.assertIn("references/sample-learning.md", text)
+        self.assertIn("references/dialogue-revision.md", text)
+        self.assertIn("does not start implementation, full testing, or release", text)
+
+        learning = (GOLDENS / "sample-learning.md").read_text(encoding="utf-8")
+        self.assertIn("one sample family", learning)
+        self.assertIn("unknown authorship/approval", learning)
+        self.assertIn("memory summary is a secondary account", learning)
+        self.assertIn("Retire that guidance", learning)
+        self.assertIn("never silently combine both versions", learning)
+        self.assertNotIn("/Users/", learning)
+
+        revision = (GOLDENS / "dialogue-revision.md").read_text(encoding="utf-8")
+        self.assertIn("not evidence of a model run", revision)
+        self.assertIn("Do not restart discovery", revision)
+        self.assertIn("reduce duplicated explanation", revision)
+
+    def test_skill_entry_supports_rough_ideas_and_keeps_stable_id(self) -> None:
+        text = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        metadata = (SKILL_ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8")
+        self.assertIn("name: prd-for-humans", text)
+        self.assertIn("$prd-for-humans", metadata)
+        self.assertIn("develop this idea", metadata)
+        self.assertNotIn("this confirmed requirement", metadata)
+
+    def test_new_learning_references_are_linked_from_profile_contract(self) -> None:
+        contract = (GOLDENS / "profile-contract.md").read_text(encoding="utf-8")
+        self.assertIn("sample-learning.md", contract)
+        self.assertIn("scope of approval", contract)
+        self.assertIn("uncertain findings out of the active Profile", contract)
+
     def test_golden_examples_are_clean_and_adapt_to_the_requirement(self) -> None:
         checker = load_module(CHECKER, "check_prd")
         small = (GOLDENS / "golden-small.md").read_text(encoding="utf-8")
@@ -91,6 +126,38 @@ class PrdForHumansTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         payload = json.loads(result.stdout)
         self.assertGreaterEqual(payload["summary"]["violations"], 3)
+
+    def test_checker_distinguishes_visible_fields_from_interface_fields(self) -> None:
+        checker = load_module(CHECKER, "check_prd_fields")
+        self.assertEqual(checker.scan_text(
+            "展示字段名称：商品名称、成交金额（元）、统计周期。商品名称必填，支持修改。\n"
+            "| 场景 | 页面字段 | 操作与反馈 |\n| 筛选 | 状态、关键词 | 清空后显示全部 |\n"
+        ), [])
+        self.assertTrue(checker.scan_text("接口字段 amount_cent 使用整数表示。"))
+        self.assertTrue(checker.scan_text("数据库字段 order_id 为主键。"))
+
+    def test_document_check_validates_local_images_without_fetching_remote_images(self) -> None:
+        checker = load_module(CHECKER, "check_prd_images")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "screen shot.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg"/>')
+            document = root / "PRD.md"
+            document.write_text(
+                '# PRD\n\n![入口](screen%20shot.svg)\n'
+                '<img src="screen shot.svg" width="260" alt="入口">\n'
+                '![外部设计](https://example.invalid/design.png)\n', encoding="utf-8"
+            )
+            self.assertEqual(checker.scan_document(document), [])
+            document.write_text('![缺图](missing.png)\n<img src="missing2.png">\n', encoding="utf-8")
+            findings = checker.scan_document(document)
+            self.assertEqual([item["code"] for item in findings], ["missing-image", "missing-image"])
+            self.assertEqual([item["line"] for item in findings], [1, 2])
+
+    def test_ui_golden_is_portable_and_boundary_clean(self) -> None:
+        checker = load_module(CHECKER, "check_prd_ui_golden")
+        document = GOLDENS / "golden-ui.md"
+        self.assertEqual(checker.scan_document(document), [])
+        self.assertNotIn("/Users/", document.read_text(encoding="utf-8"))
 
     def test_profile_resolution_obeys_project_private_generic_precedence(self) -> None:
         resolver = load_module(PROFILE, "resolve_profile")

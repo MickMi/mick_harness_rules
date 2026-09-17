@@ -889,6 +889,15 @@
       .improvement-funnel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
   </style>
+    <style>
+      .runtime-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; padding: 9px 12px; margin-bottom: 22px; border-radius: 8px; background: #fff5df; color: #735014; font-size: 12px; line-height: 1.6; }
+      .runtime-bar[data-environment="production"] { background: #edf6f0; color: #21613b; }
+      .runtime-bar[hidden] { display: none; }
+      .runtime-bar a { margin-left: auto; white-space: nowrap; font-weight: 600; }
+      .runtime-bar details { flex-basis: 100%; min-width: 0; overflow-wrap: anywhere; }
+      .runtime-bar summary { cursor: pointer; }
+      .runtime-bar p { margin: 4px 0 0; }
+    </style>
 </head>
 <body>
   <div class="app">
@@ -898,6 +907,7 @@
       <nav id="nav-tree" class="nav-tree" aria-label="项目与视图"></nav>
     </aside>
     <main class="main">
+      <section id="runtime-bar" class="runtime-bar" aria-label="工作台运行环境" hidden></section>
       <div id="content" aria-live="polite">
         <div class="empty">正在整理项目进展…</div>
       </div>
@@ -905,6 +915,7 @@
   </div>
   <script>
     (() => {
+      const runtime = /* HARNESS_RUNTIME_BOOTSTRAP */ null;
       const state = { portfolio: null, agents: null, skills: null, skillFilter: "attention", operations: null, brainHealth: null, brainCandidates: [], projectMemories: [], harnessImprovements: [], brainSyncConfirm: false, brainSyncPreview: null, focus: null, project: null, projectQuery: "", index: null, run: null, snapshot: null, workspace: null, events: [], view: "overview", taskId: null, selectedRole: null, removeProjectId: null, artifactPath: null, artifactDocument: null, artifactError: null, notice: null };
       const navTree = document.getElementById("nav-tree");
       const portfolioSummary = document.getElementById("portfolio-summary");
@@ -934,6 +945,28 @@
         if (className) node.className = className;
         if (text !== undefined) node.textContent = String(text);
         return node;
+      }
+
+      function renderRuntimeBar() {
+        const bar = document.getElementById("runtime-bar");
+        if (!bar || !runtime) return;
+        bar.hidden = false;
+        bar.dataset.environment = runtime.environment;
+        const label = runtime.read_only ? "开发验收 · 只读" : "正式工作台";
+        document.title = `${runtime.read_only ? "开发验收 6426" : "正式工作台"} · Mick Harness`;
+        const revision = runtime.commit ? runtime.commit.slice(0, 7) : "提交未知";
+        const version = runtime.version ? `v${runtime.version}` : "版本未知";
+        bar.replaceChildren(el("strong", "", label), el("span", "", `工作台 ${version}`));
+        bar.append(el("span", "", runtime.read_only ? "真实项目数据仅供查看，不执行审批、同步或更新" : "采集与写入已启用"));
+        const other = el("a", "", runtime.read_only ? "打开正式工作台 ↗" : "打开开发验收 ↗");
+        other.href = runtime.read_only ? runtime.production_url : runtime.development_url;
+        bar.append(other);
+        const source = el("details", "");
+        source.append(el("summary", "", `${runtime.branch || "分支未确认"} · ${revision}${runtime.dirty === true ? " · 含未提交修改" : runtime.dirty === false ? "" : " · 工作区状态未知"}`));
+        source.append(el("p", "", `启动于 ${runtime.started_at}；以下来源在启动时确认，修改后需重启开发服务。`));
+        source.append(el("p", "", `代码位置：${runtime.source_path}`));
+        source.append(el("p", "", "这里是工作台自身的版本；各项目的开发版本与注入规则版本仍分别展示。"));
+        bar.append(source);
       }
 
       function wait(ms) {
@@ -4468,6 +4501,7 @@
       }
 
       async function load() {
+        renderRuntimeBar();
         const requested = readUrlState();
         state.settingsBooting = state.view === "settings";
         render();
@@ -4498,7 +4532,7 @@
           state.settingsBooting = false;
           const box = el("div", "empty error", "无法读取运行数据。");
           box.append(el("div", "event-summary", error.message));
-          box.append(el("p", "muted", "请确认 Mick Harness Observer 正在 127.0.0.1:6425 运行。可执行 harness observe service status；临时模式可运行 harness observe watch --all。"));
+          box.append(el("p", "muted", runtime?.read_only ? "开发验收暂时不可用。请检查 6426 开发服务；正式工作台仍使用 6425。" : "请确认 Mick Harness Observer 正在 127.0.0.1:6425 运行。可执行 harness observe service status。"));
           const retry = el("button", "retry-button", "重新连接");
           retry.type = "button";
           retry.addEventListener("click", () => {

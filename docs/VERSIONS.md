@@ -289,8 +289,9 @@
 
 ## 0.25.0
 
-- Status: in_progress
+- Status: released
 - Branch: main
+- Tag: v0.25.0
 - Work Branches: feat/v0.25-personal-prd-workflow
 - Goal: 让用户在支持的 Agent 中稳定启动符合个人风格的 PRD 对话：需求明确时直接成稿，需求含糊时通过少量关键追问收敛；同时把 WorkBuddy 的真实接入层级做成可诊断、可安全同步的能力。
 
@@ -303,6 +304,7 @@
 - [x] `task-240` 接入 WorkBuddy 的应用检测和已验证个人 Skill 目录，未证实的 Loader 与 Hook 保持未支持
 - [x] `task-241` 在工作台展示四层接入状态，完成聚焦验证和真实预览后再进入发布流程
 - [x] `task-242` 以仓库身份聚合多 Worktree 的版本计划与事件回写，分别展示已发布、开发中和主目录状态，阻止陈旧主目录遮蔽真实进度
+- [x] `task-243` 固定正式 6425 与开发 6426 验收入口，开发只读真实进度并展示运行来源；不随版本增加端口，不在预览中写入正式数据
 
 ## Backlog
 

@@ -614,7 +614,9 @@ class ObserveRuntimeTests(unittest.TestCase):
         self.assertIn("async function fetchWithRetry", dashboard)
         self.assertIn("networkRetryDelaysMs", dashboard)
         self.assertIn("重新连接", dashboard)
-        self.assertIn("harness observe watch --all", dashboard)
+        self.assertIn("harness observe service status", dashboard)
+        self.assertIn("runtime?.read_only", dashboard)
+        self.assertIn("请检查 6426 开发服务；正式工作台仍使用 6425", dashboard)
 
     def test_dashboard_falls_back_from_invalid_url_project(self) -> None:
         dashboard = DASHBOARD.read_text(encoding="utf-8")
