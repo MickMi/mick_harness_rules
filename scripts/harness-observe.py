@@ -5291,7 +5291,9 @@ def scan_registered_projects(registry_path: Path) -> dict[str, Any]:
         try:
             sync_runtime(Path(descriptor["path"]))
             synced += 1
-        except ObserveError as error:
+        except (ObserveError, OSError, UnicodeError) as error:
+            # A temporarily unavailable project must not prevent the portfolio
+            # server from starting. Keep the error visible and retry next scan.
             errors.append(f"{descriptor['name']}: {error}")
     return {
         "project_count": len(descriptors),
@@ -5377,6 +5379,39 @@ def serve_runtime(
             return None
         return Path(descriptor["path"])
 
+    ai_spec = importlib.util.spec_from_file_location("harness_ai_curation", Path(__file__).with_name("harness-ai-curation.py"))
+    ai_module = importlib.util.module_from_spec(ai_spec)
+    ai_spec.loader.exec_module(ai_module)
+
+    def ai_records():
+        allowed = {item["project_id"] for item in descriptors() if item["validation"] == "valid"}
+        return [row for row in load_brain_boundary().list_project_memories(find_similar=False)
+                if row.get("project") in allowed]
+
+    def write_ai_report(record):
+        # Reuse the idempotent Brain writer, with an explicit isolated root.
+        # Never fall back to the user's configured production Brain.
+        target = ai_curator.root / "brain"
+        return load_brain_boundary().append_project_brain(record, brain=target)
+
+    def ai_rule_context(rows):
+        # Fixed, read-only rule files of selected registered projects only.
+        # The installed shared Harness is an expected symlink destination.
+        brain = load_brain_boundary().brain_root()
+        sources = ai_module.project_rule_sources(descriptors(), rows,
+                      shared_roots=(harness_root, Path.home() / ".mick-harness"))
+        sources += [("Harness 核心规范（当前服务版本）", harness_root / "rules/core.md"),
+                   ("Harness 交互与流程规范（当前服务版本）", harness_root / "rules/extended.md"),
+                   ("工作台设计参考（非所有项目的强制风格）", harness_root / "docs/DESIGN-SYSTEM.md")]
+        if brain:
+            sources.extend([("个人全局偏好（相关准则摘录）", brain / "global/preferences.md"),
+                            ("个人协作准则（相关摘录）", brain / "global/collaboration-style.md")])
+        return ai_module.related_rule_context(sources, rows)
+
+    ai_curator = ai_module.Curator(default_state_root(), environment, ai_records,
+                                  brain_writer=write_ai_report, rule_context=ai_rule_context,
+                                  projects=lambda: [item["project_id"] for item in descriptors() if item["validation"] == "valid"])
+    ai_action_token = secrets.token_urlsafe(32)
     started_at = now_iso()
     started_monotonic = time.monotonic()
     ingest_token = "" if read_only else ensure_ingest_token()
@@ -5478,6 +5513,17 @@ def serve_runtime(
             parsed = urlparse(self.path)
             path = parsed.path
             try:
+                if path == "/api/ai/status.json":
+                    if not self._reporting_origin_allowed() or self.headers.get("Sec-Fetch-Site") == "cross-site":
+                        self._send_bytes(403, "application/json", json_bytes({"error": "local-origin-required"}), head_only=head_only)
+                        return
+                    try:
+                        value = ai_curator.snapshot()
+                        value["action_token"] = ai_action_token
+                        self._send_bytes(200, "application/json", json_bytes(value), head_only=head_only)
+                    except Exception:
+                        self._send_bytes(500, "application/json", json_bytes({"error": "AI 本地记录读取失败，请保留数据并检查服务状态。"}), head_only=head_only)
+                    return
                 if path == "/api/reporting.json":
                     if not self._reporting_origin_allowed():
                         self._send_bytes(403, "application/json", json_bytes({"error": "local-origin-required"}), head_only=head_only)
@@ -5715,6 +5761,50 @@ def serve_runtime(
             return self.headers.get("Host") in hosts and (not origin or origin in {f"http://{host}" for host in hosts})
 
         def do_POST(self) -> None:  # noqa: N802
+            ai_routes = {"/api/ai/configuration", "/api/ai/test", "/api/ai/preview", "/api/ai/run", "/api/ai/queue", "/api/ai/report", "/api/ai/brain", "/api/ai/feedback", "/api/ai/improvement"}
+            ai_path = urlparse(self.path).path
+            if ai_path in ai_routes:
+                if not self._reporting_origin_allowed() or self.headers.get("Sec-Fetch-Site") == "cross-site":
+                    self._send_bytes(403, "application/json", json_bytes({"error": "local-origin-required"}))
+                    return
+                supplied = self.headers.get("X-Harness-Action-Token", "")
+                if not supplied or not hmac.compare_digest(supplied, ai_action_token):
+                    self._send_bytes(401, "application/json", json_bytes({"error": "操作凭据失效，请刷新页面后重试。"}))
+                    return
+                if self.headers.get_content_type() != "application/json":
+                    self._send_bytes(415, "application/json", json_bytes({"error": "需要 JSON 请求。"}))
+                    return
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                    if not 1 <= length <= (262144 if ai_path.endswith("/report") else 32768 if ai_path.endswith("/feedback") else 16384):
+                        raise ai_module.AIError("请求内容过大或为空。", 413)
+                    body = json.loads(self.rfile.read(length).decode("utf-8"))
+                    if not isinstance(body, dict):
+                        raise ValueError()
+                    if ai_path.endswith("/configuration"):
+                        result = ai_curator.save_config(body)
+                    elif ai_path.endswith("/feedback"):
+                        result = ai_curator.save_feedback(body)
+                    elif ai_path.endswith("/preview"):
+                        result = ai_curator.preview(body.get("project"), body.get("source_run_id"), body.get("feedback"))
+                    elif ai_path.endswith("/improvement"):
+                        result = ai_curator.advance_improvement(body)
+                    elif ai_path.endswith("/queue"):
+                        result = ai_curator.enqueue(body)
+                    elif ai_path.endswith("/report"):
+                        result = ai_curator.save_draft(body)
+                    elif ai_path.endswith("/brain"):
+                        result = ai_curator.save_brain(body)
+                    else:
+                        result = ai_curator.start("test" if ai_path.endswith("/test") else "curate", body)
+                    self._send_bytes(200, "application/json", json_bytes(result))
+                except ai_module.AIError as error:
+                    self._send_bytes(error.status, "application/json", json_bytes({"error": str(error)}))
+                except (ValueError, UnicodeError):
+                    self._send_bytes(400, "application/json", json_bytes({"error": "请求格式不正确。"}))
+                except Exception:
+                    self._send_bytes(500, "application/json", json_bytes({"error": "AI 操作未完成；请检查本地记录，不会自动重试。"}))
+                return
             if read_only:
                 self._send_bytes(403, "application/json", json_bytes({
                     "error": "开发环境仅供只读验收；真实操作请在 6425 正式工作台完成。",

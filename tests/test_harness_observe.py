@@ -96,6 +96,24 @@ def project_profile_text() -> str:
 
 
 class ObserveRuntimeTests(unittest.TestCase):
+    def test_portfolio_scan_isolates_unreadable_project_and_recovers(self) -> None:
+        descriptors = [
+            {"validation": "valid", "path": str(self.project / name), "name": name}
+            for name in ("unreadable", "healthy")
+        ]
+        for failure in (OSError(11, "Resource deadlock avoided"),
+                        UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid byte")):
+            with self.subTest(error=type(failure).__name__), \
+                    mock.patch.object(OBSERVE, "load_registered_projects", return_value=descriptors), \
+                    mock.patch.object(OBSERVE, "sync_runtime", side_effect=[failure, {}, {}, {}]) as sync:
+                first = OBSERVE.scan_registered_projects(self.project / "registry")
+                self.assertEqual(first["synced_project_count"], 1)
+                self.assertIn("unreadable", first["last_scan_error"])
+                self.assertEqual(sync.call_count, 2)
+                recovered = OBSERVE.scan_registered_projects(self.project / "registry")
+                self.assertEqual(recovered["synced_project_count"], 2)
+                self.assertIsNone(recovered["last_scan_error"])
+
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
         self.project = Path(self.tempdir.name)
