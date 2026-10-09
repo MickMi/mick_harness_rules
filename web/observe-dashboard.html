@@ -897,6 +897,77 @@
       .runtime-bar details { flex-basis: 100%; min-width: 0; overflow-wrap: anywhere; }
       .runtime-bar summary { cursor: pointer; }
       .runtime-bar p { margin: 4px 0 0; }
+      .ai-page { max-width: 1050px; display: grid; gap: 20px; font-size: 14px; }
+      .ai-page h2 { font-size: 18px; margin: 0 0 10px; }
+      .ai-page p { margin: 6px 0; line-height: 1.65; }
+      .ai-page details { min-width: 0; }
+      .ai-page summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
+      .ai-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px; min-width: 0; }
+      .ai-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 14px 0; }
+      .ai-field { display: grid; gap: 6px; min-width: 0; }
+      .ai-feedback-editor { margin: 14px 0; }
+      .ai-feedback-editor[open] > .ai-field { margin-top: 12px; }
+      .ai-feedback-editor textarea { min-height: 90px; resize: vertical; line-height: 1.65; }
+      .ai-feedback-item { padding: 12px; border: 1px solid var(--border); border-radius: 8px; margin-top: 10px; }
+      .ai-feedback-item p { white-space: pre-wrap; overflow-wrap: anywhere; }
+      .ai-page input:not([type=checkbox]), .ai-page select, .ai-page textarea { box-sizing: border-box; min-width: 0; width: 100%; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: inherit; font: inherit; padding: 8px 10px; }
+      .ai-improvement-progress { display: grid; gap: 10px; margin-top: 20px; padding: 14px; border-radius: 8px; background: var(--bg); }
+      .ai-improvement-progress > button { justify-self: start; }
+      .ai-improvement-progress p { margin: 0; }
+      .ai-improvement-progress textarea { min-height: 90px; line-height: 1.6; resize: vertical; }
+      .ai-page button { font: inherit; font-size: 13px; padding: 7px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--accent); cursor: pointer; white-space: nowrap; }
+      .settings-page .ai-page button:not(.settings-tab) { white-space: nowrap; overflow-wrap: normal; }
+      .ai-page button:hover:not(:disabled) { background: var(--surface-2); }
+      .ai-page button:disabled { opacity: .45; cursor: not-allowed; }
+      .ai-page button.primary { background: #2654df; color: white; border-color: #2654df; }
+      .ai-page button.primary:hover:not(:disabled) { background: #1e43b4; }
+      .ai-page :focus-visible { outline: 2px solid #2654df; outline-offset: 3px; }
+      .ai-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+      .ai-page .ai-note { color: var(--muted, #626b7a); font-size: 12px; overflow-wrap: anywhere; }
+      .ai-heading, .ai-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; }
+      .ai-heading { margin-bottom: 10px; }
+      .ai-page .ai-heading h2 { margin: 0; }
+      .ai-meta { color: var(--muted); font-size: 13px; margin: 8px 0; }
+      .ai-help { display: inline-flex; flex: 0 0 auto; align-items: center; vertical-align: middle; }
+      .ai-page button.ai-help-button { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; width: 28px; height: 28px; min-height: 28px; padding: 0; border-radius: 50%; color: var(--muted); font-size: 14px; line-height: 1; }
+      .ai-help-tip { position: fixed; z-index: 1000; box-sizing: border-box; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 24px #0002; color: var(--text); font-size: 14px; font-weight: 400; line-height: 1.65; overflow-wrap: anywhere; max-height: calc(100vh - 32px); overflow: auto; }
+      .ai-help-tip[hidden], .ai-feedback[hidden] { display: none; }
+      .ai-source-preview { max-height: 280px; overflow: auto; }
+      .ai-source-preview p { overflow-wrap: anywhere; }
+      .ai-report-save > button { justify-self: start; }
+      @media (pointer: coarse) { .ai-page button.ai-help-button { width: 44px; height: 44px; min-height: 44px; } }
+      .ai-feedback { min-height: 22px; color: #94600b; }
+      .ai-job { padding: 12px 0; overflow-wrap: anywhere; }
+      .ai-job + .ai-job { border-top: 1px solid var(--border, #dce0e8); }
+      .ai-result { margin-top: 12px; padding: 14px; border-radius: 8px; background: var(--surface-soft); overflow-wrap: anywhere; }
+      .ai-result h3 { font-size: 15px; margin: 4px 0; }
+      .ai-report { margin-top: 16px; font-size: 15px; line-height: 1.75; }
+      .ai-report-section { margin: 16px 0; padding: 20px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); overflow-wrap: anywhere; }
+      .ai-report-section[data-kind="harness_improvement"] { border-left: 3px solid var(--accent); }
+      .ai-card-header { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+      .ai-card-title { flex: 1 1 260px; min-width: 0; }
+      .ai-card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
+      .ai-card-actions .ai-report-choice { white-space: nowrap; margin: 0; font-size: 13px; }
+      .ai-card-kind { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+      .ai-card-editor, .ai-candidate-review { display: grid; gap: 12px; padding-top: 12px; }
+      .ai-card-editor[hidden], .ai-candidate-review[hidden], .ai-report-text[hidden], .ai-card-actions button[hidden] { display: none; }
+      .ai-report-text { max-width: 82ch; }
+      .ai-norm-field { margin: 12px 0; }
+      .ai-norm-field > strong { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+      .ai-norm-basis { margin-top: 14px; font-size: 14px; }
+      .ai-norm-basis > summary { cursor: pointer; color: var(--accent); }
+      .ai-report-section h3 { margin: 0 0 8px; font-size: 17px; }
+      .ai-report-section .document-reader { border: 0; padding: 0; border-radius: 0; font-size: 15px; line-height: 1.75; }
+      .ai-report-section .document-reader h1, .ai-report-section .document-reader h2 { font-size: 18px; }
+      .ai-report textarea { box-sizing: border-box; width: 100%; min-height: 140px; resize: vertical; font: inherit; line-height: 1.65; padding: 10px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: var(--surface); }
+      .ai-report .ai-note { font-size: 14px; }
+      .ai-report-choice { display: flex; align-items: baseline; gap: 8px; font-size: 14px; cursor: pointer; }
+      .ai-report-choice input { flex: 0 0 auto; }
+      .ai-report-save { padding: 12px 0; display: grid; gap: 8px; }
+      .ai-page pre { max-height: 280px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.7 ui-monospace, monospace; }
+      .ai-consent { display: flex; gap: 8px; align-items: flex-start; margin-top: 14px; }
+      .ai-consent input { margin: 4px 0; flex-shrink: 0; }
+      @media (max-width: 680px) { .ai-fields { grid-template-columns: minmax(0, 1fr); } .ai-panel { padding: 14px; } .ai-report-section { padding: 14px; } }
     </style>
 </head>
 <body>
@@ -939,6 +1010,8 @@
       Object.assign(state, { operationMessages: {}, operationReadError: null, operationSubmitting: null, operationFocus: null });
       let reportingPollTimer = null;
       Object.assign(state, { reporting: null, reportingLoading: false, reportingError: null, reportingPending: false });
+      Object.assign(state, { ai: null, aiLoading: false, aiPending: false, aiPreview: null, aiProject: "", aiMessage: "", aiFeedbackRun: null, aiDrafts: {} });
+      let aiPollTimer = null;
 
       function el(tag, className, text) {
         const node = document.createElement(tag);
@@ -1678,7 +1751,7 @@
         state.workspace = null;
         state.events = [];
         state.view = "settings";
-        state.focus = ["skills", "improvements", "reporting"].includes(section) ? section : null;
+        state.focus = ["skills", "improvements", "reporting", "ai"].includes(section) ? section : null;
         writeUrlState();
         render();
         loadSecondaryData();
@@ -1687,7 +1760,7 @@
       function renderSettingsTabs(active) {
         const tabs = el("nav", "settings-tabs");
         tabs.setAttribute("aria-label", "设置分类");
-        [["reporting", "会话上报"], ["memory", "记忆与同步"], ["skills", "能力与 Skill"], ["improvements", "Harness 改进"]].forEach(([value, label]) => {
+        [["reporting", "会话上报"], ["memory", "记忆与同步"], ["skills", "能力与 Skill"], ["ai", "AI 整理助手"], ["improvements", "Harness 改进"]].forEach(([value, label]) => {
           const button = el("button", "settings-tab", label);
           button.type = "button";
           button.setAttribute("aria-current", String(active === value));
@@ -2823,8 +2896,638 @@
         }); history.append(list); stack.append(history); content.append(stack);
       }
 
+      function aiButton(label, action, primary = false) {
+        const button = el("button", primary ? "primary" : "", label);
+        button.type = "button";
+        button.addEventListener("click", action);
+        return button;
+      }
+
+      let aiHelpSequence = 0, aiCloseHelp = null;
+      function aiHelp(label, description) {
+        const wrap = el("span", "ai-help"), tip = el("span", "ai-help-tip", description);
+        tip.id = `ai-help-${++aiHelpSequence}`; tip.hidden = true; tip.setAttribute("role", "tooltip");
+        let pinned = false, focused = false, hovered = false;
+        const button = aiButton("?", () => { pinned = !pinned; show(pinned); });
+        button.className = "ai-help-button";
+        button.setAttribute("aria-label", `${label}说明`);
+        button.setAttribute("aria-describedby", tip.id); button.setAttribute("aria-expanded", "false");
+        const close = () => { pinned = false; tip.hidden = true; button.setAttribute("aria-expanded", "false"); if (aiCloseHelp === close) aiCloseHelp = null; };
+        const show = open => {
+          if (!open) { close(); return; }
+          if (aiCloseHelp && aiCloseHelp !== close) aiCloseHelp();
+          aiCloseHelp = close; tip.hidden = false; button.setAttribute("aria-expanded", "true");
+          const rect = button.getBoundingClientRect(), width = Math.min(320, window.innerWidth - 32);
+          tip.style.width = `${width}px`;
+          tip.style.left = `${Math.max(16, Math.min(rect.left, window.innerWidth - width - 16))}px`;
+          const height = tip.getBoundingClientRect().height;
+          tip.style.top = `${Math.max(16, rect.bottom + height <= window.innerHeight - 16 ? rect.bottom : rect.top - height)}px`;
+        };
+        wrap.addEventListener("pointerenter", () => { hovered = true; show(true); });
+        wrap.addEventListener("pointerleave", () => { hovered = false; if (!pinned && !focused) close(); });
+        button.addEventListener("focus", () => { focused = true; show(true); });
+        button.addEventListener("blur", () => { focused = false; pinned = false; if (!hovered) close(); });
+        button.addEventListener("keydown", event => { if (event.key === "Escape") { event.preventDefault(); close(); } });
+        wrap.append(button, tip); return wrap;
+      }
+      window.addEventListener("scroll", event => { if (!event.target.closest?.(".ai-help-tip")) aiCloseHelp?.(); }, true);
+      window.addEventListener("resize", () => aiCloseHelp?.());
+      window.addEventListener("keydown", event => { if (event.key === "Escape") aiCloseHelp?.(); });
+      window.addEventListener("pointerdown", event => { if (!event.target.closest?.(".ai-help")) aiCloseHelp?.(); });
+
+      function aiHeading(title, description) {
+        const heading = el("div", "ai-heading"); heading.append(el("h2", "", title), aiHelp(title, description)); return heading;
+      }
+
+      function aiRunMessage(run) {
+        if (run.status === "running") return run.kind === "test" ? "正在测试连接…" : "正在整理，请稍候…";
+        if (run.brain_entry) return "已保存到试用记忆。";
+        if (run.report) return run.status === "failed" ? "只生成了部分内容，请核实后再保存。" : run.report.style === "behavior-standards-3" ? "建议已生成，请核实是否值得采纳。" : "整理好了，选择你想保留的经验。";
+        if (run.status === "succeeded") return run.kind === "test" ? "连接正常。" : "整理已完成。";
+        if (run.status === "interrupted") return "整理已中断，请检查结果后再试。";
+        const code = run.diagnostic?.code || "";
+        if (code === "tls_certificate_failed" || /证书/.test(run.message || "")) return "连接失败，请检查本机证书。";
+        if (code === "http_401") return "连接失败，请检查密钥是否有效。";
+        if (code === "http_402") return "账户余额不足，请到 DeepSeek 检查。";
+        if (code === "network_failed") return "连接超时，请检查网络后再试。";
+        return "这次未能完成，请查看详情后再试。";
+      }
+
+      function aiFeedback(message, runId = null, detail = "") {
+        state.aiMessage = message;
+        state.aiFeedbackRun = runId;
+        state.aiMessageDetail = detail;
+        const feedback = document.getElementById("ai-feedback");
+        if (feedback) {
+          const rendered = JSON.stringify([message, detail]);
+          if (feedback.dataset.rendered === rendered) return;
+          feedback.dataset.rendered = rendered;
+          feedback.hidden = !message; feedback.replaceChildren(el("span", "", message));
+          if (detail) feedback.append(aiHelp("操作结果", detail));
+        }
+      }
+
+      function scheduleAIRefresh() {
+        clearTimeout(aiPollTimer);
+        if (state.view === "settings" && state.focus === "ai") {
+          const running = state.ai?.runs?.some(run => run.status === "running");
+          aiPollTimer = setTimeout(() => {
+            if (!document.hidden) return refreshAI();
+            else scheduleAIRefresh();
+          }, running ? 1500 : 12000);
+        }
+      }
+
+      async function refreshAI() {
+        if (state.aiLoading || state.view !== "settings" || state.focus !== "ai") return;
+        state.aiLoading = true;
+        try {
+          const previous = state.ai;
+          state.ai = await fetchJson("/api/ai/status.json");
+          if (state.view === "settings" && state.focus === "ai") {
+            const tracked = state.ai.runs?.find(run => run.id === state.aiFeedbackRun);
+            if (tracked) aiFeedback(aiRunMessage(tracked), tracked.id, tracked.status === "failed" ? tracked.message : "");
+            if (!previous) renderAI();
+            else {
+              // Poll only job results, never replace an unsaved key or consent form.
+              const target = document.getElementById("ai-results");
+              if (target && !state.aiFollowupOpen && !Object.values(state.aiDrafts || {}).some(draft => draft.dirty || draft.openPanels > 0) && JSON.stringify([previous.runs, previous.queue]) !== JSON.stringify([state.ai.runs, state.ai.queue])) renderAIResults(target);
+              const status = document.getElementById("ai-connection-status");
+              if (status) status.textContent = aiConnectionLabel();
+              const counts = document.getElementById("ai-call-counts");
+              if (counts) counts.textContent = `今日已用 ${state.ai.calls_today} / ${state.ai.config.daily_requests} 次`;
+              const selector = document.getElementById("ai-project-select");
+              if (selector) for (const option of selector.options) {
+                const project = state.ai.projects.find(item => item.project === option.value);
+                if (project) option.textContent = aiProjectLabel(project);
+              }
+              if (JSON.stringify(previous.user_feedback) !== JSON.stringify(state.ai.user_feedback)) {
+                invalidateAIPreview();
+                const editor = document.getElementById("ai-user-feedback");
+                if (editor && !aiFeedbackDraft().text && !aiFeedbackDraft().id) renderAIFeedback(editor);
+              }
+            }
+          }
+        } catch (error) {
+          aiFeedback("暂时无法获取进度，正在重新连接。", state.aiFeedbackRun, error.message);
+        } finally {
+          state.aiLoading = false;
+          scheduleAIRefresh();
+        }
+      }
+
+      async function aiAction(path, body = {}) {
+        if (state.aiPending || !state.ai) return null;
+        state.aiPending = true;
+        aiFeedback("正在提交…");
+        try {
+          // Mutation requests are deliberately never retried automatically.
+          const response = await fetch(`/api/ai/${path}`, {
+            method: "POST", cache: "no-store",
+            headers: { "Content-Type": "application/json", "X-Harness-Action-Token": state.ai.action_token },
+            body: JSON.stringify(body)
+          });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+          const messages = {preview: "请确认要整理的内容。", report: "草稿已保存。", brain: "已保存到项目试用记忆。", configuration: "连接设置已保存。", queue: "建议已采纳，下一步落实；尚未修改 Harness。", improvement: "已记录你的验证结果，不代表系统自动检查通过。"};
+          aiFeedback(result.kind ? aiRunMessage(result) : messages[path] || "已保存。", result.kind && result.id ? result.id : null);
+          await refreshAI();
+          if (path === "configuration") state.ai.config = result;
+          return result;
+        } catch (error) {
+          aiFeedback(`操作未完成：${error.message.replace(/；.*$/, "").replace(/。.*$/, "")}`, null, error.message);
+          await refreshAI();
+          return null;
+        } finally { state.aiPending = false; }
+      }
+
+      function aiConnectionLabel() {
+        const config = state.ai?.config;
+        if (!config?.has_key) return "未配置密钥";
+        if (state.ai.runs?.some(run => run.kind === "test" && run.status === "running")) return "正在测试连接…";
+        return config.tested ? (config.tested.ok ? "连接正常" : "连接测试未通过，请重新检查") : "已配置 · 尚未测试";
+      }
+
+      function aiProjectLabel(project) {
+        const name = state.portfolio?.projects?.find(item => item.project_id === project.project)?.name || project.project;
+        return `${name} · ${project.new} 条新增 / ${project.total} 条记录`;
+      }
+
+      function aiFeedbackDraft() {
+        state.aiUserDrafts ||= {};
+        const saved = (state.ai?.user_feedback || []).find(item => item.project === state.aiProject && !item.processed && item.status === "active");
+        return state.aiUserDrafts[state.aiProject] ||= saved ? {text: saved.summary, id: saved.id, revision: saved.revision} : {text: ""};
+      }
+
+      function invalidateAIPreview() {
+        state.aiPreview = null;
+        const target = document.getElementById("ai-preview");
+        if (target) renderAIPreview(target);
+      }
+
+      function renderAIFeedback(target) {
+        target.replaceChildren();
+        if (!state.aiProject) return;
+        const draft = aiFeedbackDraft();
+        const editor = el("details", "ai-feedback-editor"), label = el("label", "ai-field");
+        editor.open = Boolean(draft.text);
+        editor.append(el("summary", "", "补充一句你的要求（可选）"));
+        label.append(el("span", "", "希望下次怎么做？"));
+        const input = el("textarea", ""); input.id = "ai-user-feedback-input";
+        input.maxLength = 4000; input.value = draft.text;
+        input.placeholder = "例如：按钮图标和文字分行了；希望始终同排，放不下时用带提示的纯图标。";
+        input.addEventListener("input", () => { draft.text = input.value; draft.dirty = true; invalidateAIPreview(); });
+        label.append(input);
+        editor.append(label, el("p", "ai-note", "预览时与项目记录一起保存在本机，确认后才会发送。")); target.append(editor);
+      }
+
+      function renderAIImprovement(target, entry) {
+        const labels = {approved: "已采纳 · 待落实", implemented: "已记录落实 · 待复验", verified: "人工复验有效", needs_followup: "复验未通过 · 需继续改进"};
+        const area = el("div", "ai-improvement-progress");
+        area.append(el("strong", "", labels[entry.status] || "历史建议 · 待重新核对"));
+        if (!entry.improvement_id) { target.append(area); return; }
+        area.append(el("p", "ai-note", "仅开发试用；采纳不会自动修改规则。"));
+        const handoff = el("details", ""); handoff.append(el("summary", "", "查看执行说明"));
+        handoff.append(el("p", "ai-note", "将这份说明交给开发 Agent；实施后回到本条建议记录依据。"));
+        const instructions = el("textarea", ""); instructions.readOnly = true; instructions.rows = 8; instructions.value = entry.handoff;
+        instructions.setAttribute("aria-label", "可复制的执行说明");
+        handoff.append(instructions, aiButton("复制执行说明", async () => {
+          try { await navigator.clipboard.writeText(entry.handoff); aiFeedback("执行说明已复制。尚未开始自动开发。"); }
+          catch (_) { instructions.focus?.(); instructions.select?.(); aiFeedback("请复制已选中的执行说明。"); }
+        })); area.append(handoff);
+        if (entry.implementation) {
+          const evidence = el("details", ""); evidence.append(el("summary", "", "查看落实依据"));
+          evidence.append(el("p", "", entry.implementation.artifact_path), el("p", "", entry.implementation_evidence?.scope || "未记录应用范围"), el("p", "", entry.implementation_evidence?.evidence || "未记录验证依据"));
+          if (entry.effect) evidence.append(el("p", "", `复验：${entry.effect.note}`));
+          area.append(evidence);
+        }
+        if (["approved", "implemented", "needs_followup"].includes(entry.status)) {
+          const implementing = entry.status === "approved";
+          const form = el("div", "ai-card-editor"); form.hidden = true;
+          const open = aiButton(implementing ? "记录落实" : "记录复验", () => { form.hidden = !form.hidden; state.aiFollowupOpen = Math.max(0, (state.aiFollowupOpen || 0) + (form.hidden ? -1 : 1)); open.setAttribute("aria-expanded", String(!form.hidden)); });
+          open.setAttribute("aria-expanded", "false"); area.append(open);
+          const field = (name, placeholder, type = "text") => {
+            const label = el("label", "ai-field"), input = el(type === "textarea" ? "textarea" : "input", "");
+            if (type !== "textarea") input.type = type;
+            input.placeholder = placeholder; input.value = ""; label.append(el("span", "", name), input); form.append(label); return input;
+          };
+          let artifact, scope, result;
+          if (implementing) {
+            artifact = field("实际改动文件", "例如 tests/button-layout.test.js（项目相对路径）");
+            scope = field("实际应用范围", "例如 NARC 开发分支；尚未安装到日常环境");
+          } else {
+            const label = el("label", "ai-field"); label.append(el("span", "", "复验结论")); result = el("select", "");
+            [["improved", "有改善"], ["unchanged", "没有改善"], ["regressed", "变差了"]].forEach(([value, text]) => { const option = el("option", "", text); option.value = value; result.append(option); });
+            result.value = "unchanged"; label.append(result); form.append(label);
+          }
+          const count = field(implementing ? "改进前问题次数" : "同一检查范围内的问题次数", "请填写实际观察次数", "number"); count.min = 0; count.step = 1;
+          const evidence = field("验证依据与结果", "填写检查方式、通过或失败结果、可回查的日志或测试位置。", "textarea");
+          form.append(el("p", "ai-note", "这是你的人工记录，系统不会据此执行命令或自动确认规则已生效。"));
+          const consent = el("label", "ai-report-choice"), check = el("input", ""); check.type = "checkbox";
+          consent.append(check, el("span", "", "以上来自实际检查，确认记录。")); form.append(consent);
+          const submit = aiButton("确认记录", async () => {
+            if (!count.value.trim()) { aiFeedback("请填写实际问题次数，不默认按零处理。"); return; }
+            submit.disabled = true;
+            const value = await aiAction("improvement", {improvement_id: entry.improvement_id, expected_status: entry.status, confirmed: check.checked,
+              action: implementing ? "implement" : "verify", count: Number(count.value), evidence: evidence.value,
+              ...(implementing ? {artifact_path: artifact.value, scope: scope.value} : {result: result.value})});
+            if (value) {
+              state.ai.queue = state.ai.queue.map(item => item.id === value.id ? value : item); state.aiFollowupOpen = 0;
+              renderAIResults(document.getElementById("ai-results"));
+            } else submit.disabled = !check.checked;
+          }); submit.disabled = true;
+          check.addEventListener("change", () => { submit.disabled = !check.checked; });
+          const actions = el("div", "ai-actions"); actions.append(submit, aiButton("取消", () => { form.hidden = true; state.aiFollowupOpen = Math.max(0, (state.aiFollowupOpen || 0) - 1); open.setAttribute("aria-expanded", "false"); }));
+          form.append(actions); area.append(form);
+        }
+        target.append(area);
+      }
+
+      function aiSectionKind(section) {
+        if (aiAdviceAction(section)) {
+          const fields = aiNormFields(section);
+          return ["以后怎么做", "适用范围", "如何检查", "对照现有准则", "依据"].every(label => fields[label]) && !section.issues?.length ? "harness_improvement" : "observe";
+        }
+        if (/^(改进建议|启示)\s*[:：]/.test(section.title)) {
+          return ["下次怎么做", "证据与可信度", "适用边界", "建议落点", "如何验证"].every(label => section.content.includes(label)) ? "harness_improvement" : "observe";
+        }
+        return /^(概览|待观察|待核实)(\s*[:：]|$)/.test(section.title) ? "observe" : "project_review";
+      }
+
+      function aiAdviceAction(section) {
+        return section.title.match(/^(新增准则|修订准则|落实已有准则)\s*[:：]/)?.[1] || "";
+      }
+
+      function aiNormFields(section) {
+        const parts = section.content.split(/^\s*\*\*([^*\n]+)\*\*\s*[:：]?\s*/m);
+        const fields = {};
+        for (let i=1; i<parts.length-1; i+=2) fields[parts[i].replace(/[:：]$/, "")] = parts[i+1].trim();
+        return fields;
+      }
+
+      function renderAISectionBody(target, section) {
+        target.replaceChildren();
+        const fields = aiNormFields(section);
+        if (!aiAdviceAction(section) || !["以后怎么做", "适用范围", "如何检查", "对照现有准则", "依据"].every(key => fields[key])) {
+          renderMarkdownDocument(target, {content: section.content, path: "", stages: []}, true); return;
+        }
+        function field(label, value) {
+          const row = el("div", "ai-norm-field"), body = el("div", "");
+          row.append(el("strong", "", label), body);
+          renderMarkdownDocument(body, {content: value, path: "", stages: []}, true); return row;
+        }
+        ["以后怎么做", "适用范围", "如何检查"].forEach(label => target.append(field(label, fields[label])));
+        const basis = el("details", "ai-norm-basis"); basis.append(el("summary", "", "为什么这样建议 · 查看依据"));
+        Object.entries(fields).filter(([label]) => !["以后怎么做", "适用范围", "如何检查"].includes(label)).forEach(([label, value]) => basis.append(field(label, value)));
+        target.append(basis);
+      }
+
+      function renderAIReport(container, run) {
+        state.aiDrafts ||= {};
+        let draft = state.aiDrafts[run.id];
+        if (!draft || (!draft.dirty && draft.revision !== run.report.revision)) {
+          draft = {revision: run.report.revision, sections: run.report.sections.map(s => ({...s})), dirty: false};
+          state.aiDrafts[run.id] = draft;
+        }
+        const report = el("article", "ai-report");
+        const insights = ["reusable-insights-1", "harness-advice-2", "behavior-standards-3"].includes(run.report.style);
+        if (!run.brain_entry) {
+          const hint = el("div", "ai-meta");
+          hint.append(el("span", "", "先看以后怎么做，再决定是否采纳。"), aiHelp("审阅", "新增、修订与落实已有准则分别评估；检索仅覆盖相关摘录，仍需人工核实。提交不等于修改 Harness；项目复盘只留在项目内。"));
+          report.append(hint);
+          if (run.report.style !== "behavior-standards-3") report.append(el("p", "ai-note", "这是之前的整理结果，尚未对照现有准则。可点击下方「重新整理」，生成行为准则建议。"));
+          if (!draft.sections.some(s => aiSectionKind(s) === "harness_improvement")) report.append(el("p", "ai-note", "这份结果尚无完整的改进建议，可保留项目复盘，或重新提炼。"));
+        }
+        if (run.report.warnings?.length) {
+          const warnings = el("div", "ai-meta");
+          warnings.append(el("span", "ai-feedback", "有内容需要核实，保存前请查看。"), aiHelp("待核实内容", run.report.warnings.join("\n")));
+          report.append(warnings);
+        }
+        const controls = el("div", "ai-report-save");
+        const note = el("p", "ai-note", "");
+        const approval = el("input", ""); approval.type = "checkbox";
+        let save, commit, rethink;
+        const candidateButtons = [];
+        const update = () => {
+          const count = draft.sections.filter(s => s.selected).length;
+          note.textContent = draft.dirty ? `已选 ${count} 项 · 请先保存修改` : `已选 ${count} 项`;
+          if (save) save.disabled = !draft.dirty || Boolean(run.brain_entry);
+          if (commit) commit.disabled = draft.dirty || !count || !approval.checked || Boolean(run.brain_entry) || !state.ai.sandbox;
+          if (rethink) rethink.disabled = draft.dirty;
+          candidateButtons.forEach(item => { item.button.disabled = draft.dirty || !item.check.checked || item.submitted || !state.ai.sandbox; });
+        };
+        const changed = () => { draft.dirty = true; approval.checked = false; update(); };
+        const persistDraft = async () => {
+          const result = await aiAction("report", {run_id: run.id, revision: draft.revision, sections: draft.sections});
+          if (result) {
+            state.aiDrafts[run.id] = {revision: result.report.revision, sections: result.report.sections.map(s => ({...s})), dirty: false};
+            const current = state.ai.runs.find(r => r.id === run.id); if (current) current.report = result.report;
+            renderAIResults(document.getElementById("ai-results"));
+          } else update();
+        };
+        draft.sections.forEach(section => {
+          const kind = aiSectionKind(section);
+          const lifecycle = (state.ai.queue || []).find(item => item.improvement_id && item.run_id === run.id && item.section_id === section.id);
+          const accepted = lifecycle && ["approved", "implemented", "verified", "needs_followup"].includes(lifecycle.status) ? lifecycle : null;
+          const secondary = insights && /^(问题经过|项目复盘|待观察)/.test(section.title);
+          const block = el(secondary ? "details" : "section", "ai-report-section");
+          block.dataset.kind = kind;
+          if (secondary) block.append(el("summary", "", section.title));
+          const header = el("div", "ai-card-header"), titles = el("div", "ai-card-title"), actions = el("div", "ai-card-actions");
+          const heading = el("h3", "", section.title);
+          const action = aiAdviceAction(section);
+          titles.append(el("span", "ai-card-kind", kind === "harness_improvement" ? `${action || "旧版改进建议"}${accepted ? "" : " · 待评估"}` : kind === "observe" ? "待核实 · 不进入记忆" : "项目复盘 · 仅本项目"), heading);
+          header.append(titles, actions);
+          const text = el("div", "ai-report-text");
+          renderAISectionBody(text, section);
+          // Reuse the text-node Markdown reader; model HTML is never executed.
+          block.append(header, text);
+          if (kind === "project_review" || section.selected) {
+            const choice = el("label", "ai-report-choice");
+            const check = el("input", ""); check.type = "checkbox"; check.checked = section.selected; check.disabled = Boolean(run.brain_entry);
+            check.setAttribute("aria-label", `保留到项目记忆：${section.title}`);
+            check.addEventListener("change", () => { section.selected = check.checked; changed(); });
+            choice.append(check, el("span", "", "保留")); actions.append(choice);
+          }
+          if (!run.brain_entry && !lifecycle) {
+            const edit = el("div", "ai-card-editor"); edit.hidden = true;
+            let original;
+            const editButton = aiButton("编辑", () => { original = {title: section.title, content: section.content}; draft.openPanels = (draft.openPanels || 0) + 1; edit.hidden = false; text.hidden = true; editButton.hidden = true; titleInput.focus?.(); });
+            editButton.setAttribute("aria-label", `编辑：${section.title}`); actions.append(editButton);
+            const titleLabel = el("label", "ai-field"); titleLabel.append(el("span", "", "段落标题"));
+            const titleInput = el("input", ""); titleInput.value = section.title;
+            titleInput.addEventListener("input", () => { section.title = titleInput.value; heading.textContent = titleInput.value; changed(); });
+            titleLabel.append(titleInput);
+            const bodyLabel = el("label", "ai-field"); bodyLabel.append(el("span", "", "段落内容"));
+            const input = el("textarea", ""); input.value = section.content;
+            input.addEventListener("input", () => { section.content = input.value; renderAISectionBody(text, section); changed(); });
+            bodyLabel.append(input);
+            const editActions = el("div", "ai-actions");
+            editActions.append(aiButton("保存修改", persistDraft), aiButton("取消", () => {
+              section.title = original.title; section.content = original.content;
+              titleInput.value = section.title; input.value = section.content; heading.textContent = section.title;
+              renderAISectionBody(text, section);
+              edit.hidden = true; text.hidden = false; editButton.hidden = false;
+              draft.openPanels = Math.max(0, (draft.openPanels || 0) - 1);
+              draft.dirty = draft.sections.some(s => { const old = run.report.sections.find(o => o.id === s.id); return s.title !== old.title || s.content !== old.content || s.selected !== old.selected; });
+              update(); editButton.focus?.();
+            }));
+            edit.append(titleLabel, bodyLabel, editActions); block.append(edit);
+          }
+          if (kind === "harness_improvement" && action) {
+            if (accepted) { renderAIImprovement(block, accepted); report.append(block); return; }
+            const submitted = false;
+            const review = el("div", "ai-candidate-review"); review.hidden = true;
+            const open = aiButton("采纳建议", () => { review.hidden = !review.hidden; draft.openPanels = Math.max(0, (draft.openPanels || 0) + (review.hidden ? -1 : 1)); open.setAttribute("aria-expanded", String(!review.hidden)); });
+            open.disabled = submitted || !state.ai.sandbox; open.setAttribute("aria-expanded", "false"); actions.append(open);
+            const targetLabel = el("label", "ai-field"); targetLabel.append(el("span", "", "改进方向"));
+            const target = el("select", "");
+            [["checker", "自动检查"], ["skill", "技能与流程"], ["rule", "行为规则"]].filter(([value]) => action !== "落实已有准则" || value !== "rule").forEach(([value, label]) => { const option = el("option", "", label); option.value = value; target.append(option); });
+            target.value = "checker"; targetLabel.append(target);
+            const checked = el("input", ""); checked.type = "checkbox";
+            const reviewed = el("label", "ai-report-choice"); reviewed.append(checked, el("span", "", "我已核实改动、依据和适用范围。"));
+            const submit = aiButton("确认采纳", async () => {
+              submit.disabled = true;
+              const entry = await aiAction("queue", {run_id: run.id, section_id: section.id, revision: draft.revision, target: target.value, confirmed: true, reviewed: checked.checked});
+              if (entry) { state.ai.queue = [...state.ai.queue.filter(item => item.id !== entry.id), entry]; draft.openPanels = 0; renderAIResults(document.getElementById("ai-results")); } else update();
+            });
+            checked.addEventListener("change", update);
+            candidateButtons.push({button: submit, check: checked, submitted});
+            review.append(targetLabel, el("p", "ai-note", "在这条建议中继续落实与复验；仅开发试用，不会自动修改规则或全局记忆。"), reviewed, submit);
+            block.append(review);
+          }
+          report.append(block);
+        });
+        if (!run.brain_entry) {
+          save = aiButton("保存修改", persistDraft);
+          const confirmLabel = el("label", "ai-report-choice");
+          confirmLabel.append(approval, el("span", "", "我已核实选中内容，确认保存。"));
+          approval.addEventListener("change", update);
+          commit = aiButton("保存到项目记忆", async () => {
+            commit.disabled = true;
+            const result = await aiAction("brain", {run_id: run.id, revision: draft.revision, confirmed: approval.checked, warnings_reviewed: approval.checked});
+            if (result) {
+              const current = state.ai.runs.find(r => r.id === run.id); if (current) current.brain_entry = result.entry;
+              renderAIResults(document.getElementById("ai-results"));
+            } else update();
+          }, true);
+          const destination = el("div", "ai-meta");
+          destination.append(el("span", "", "仅保存到该项目的试用记忆，不进入全局 Brain。"), aiHelp("保存位置", "内容写入开发 Brain 的 brain/projects/<项目>/learnings.md。不会同步到远端，也不会自动修改 Harness 规则。"));
+          controls.append(note, save, destination, confirmLabel, commit);
+          report.append(controls); update();
+        } else {
+          const saved = el("div", "ai-meta");
+          saved.append(el("span", "", `已保存 ${run.brain_entry.selected_ids.length} 条经验 · 项目试用记忆`), aiHelp("保存位置", `${run.brain_entry.path}。未同步远端，不影响正式记忆或全局 Brain。`)); report.append(saved);
+        }
+        const sources = el("details", "");
+        sources.append(el("summary", "", `查看原始记录 · ${run.sources?.length || 0} 条`));
+        (run.sources || []).forEach(source => sources.append(el("p", "ai-note", `[${source.ref_id}] ${source.task} · ${source.source_id}`), el("p", "", source.summary)));
+        report.append(sources);
+        if (run.rule_context) {
+          const rules = el("details", "ai-norm-basis"); rules.append(el("summary", "", `查看本次对照的准则 · ${run.rule_context.rules.length} 条`), el("p", "ai-note", run.rule_context.coverage));
+          run.rule_context.rules.forEach(rule => rules.append(el("p", "ai-note", `[${rule.ref_id}] ${rule.source} · ${rule.heading}`), el("p", "", rule.content)));
+          report.append(rules);
+        }
+        if (run.sources?.length) {
+          rethink = aiButton("重新整理", async () => {
+            if (aiFeedbackDraft().dirty) { aiFeedback("补充要求尚未预览，请先预览新增内容；重新整理只使用原报告的来源。"); return; }
+            rethink.disabled = true;
+            const value = await aiAction("preview", {project: run.project, source_run_id: run.id});
+            if (value) {
+              state.aiPreview = value;
+              aiFeedback("请确认本次要重新整理的内容。");
+              const target = document.getElementById("ai-preview");
+              if (target) { renderAIPreview(target); target.scrollIntoView?.({behavior: "smooth", block: "start"}); }
+            }
+            update();
+          });
+          const actions = el("div", "ai-actions");
+          actions.append(rethink, aiHelp("重新整理", "会保留原报告，重新整理它所依据的记录，不发送你的报告编辑。请先保存未保存的修改；再次确认发送后会产生新的费用。")); report.append(actions);
+        }
+        update(); container.append(report);
+      }
+
+      function renderAIResults(target) {
+        target.replaceChildren();
+        state.aiFollowupOpen = 0;
+        const runs = state.ai?.runs || [];
+        const labels = { running: "运行中", succeeded: "已完成", failed: "失败", interrupted: "已中断" };
+        const categories = { progress: "进度摘要", project_issue: "项目问题", harness_improvement: "通用改进", observe: "待观察" };
+        target.append(aiHeading("整理结果", "保留最近 20 次整理与连接测试。生成的内容需要你审阅；确认保存后才会进入试用记忆。"));
+        if (!runs.length) target.append(el("p", "ai-note", "还没有整理结果，先选择一个项目。"));
+        runs.forEach((run, index) => {
+          const item = el(index > 2 ? "details" : "section", "ai-job");
+          const reportStatus = run.brain_entry ? "已保存" : run.report ? (run.status === "failed" ? "待核实" : "待审阅") : labels[run.status] || run.status;
+          const title = `${run.kind === "test" ? "连接测试" : `整理 ${run.source_count} 条记录`} · ${reportStatus}`;
+          const meta = el("div", "ai-meta");
+          meta.append(el("span", "", formattedTime(run.created_at)), aiHelp("本次用量", `${run.model} · ${run.usage?.total_tokens != null ? `${run.usage.total_tokens} tokens` : "用量未返回"}。费用以 DeepSeek 账单为准。`));
+          item.append(el(index > 2 ? "summary" : "strong", "", title), meta);
+          if (run.status === "running" || run.status === "failed" || run.status === "interrupted") item.append(el("p", "", aiRunMessage(run)));
+          if (run.report) renderAIReport(item, run);
+          if (run.kind === "curate") {
+            const diagnostic = el("details", "");
+            diagnostic.append(el("summary", "", "查看处理详情"));
+            diagnostic.append(el("p", "ai-note", run.message));
+            diagnostic.append(el("p", "ai-note", run.diagnostic ? `阶段：${run.diagnostic.stage === "provider" ? "模型请求与返回" : "报告整理"} · ${run.diagnostic.code}` : "历史任务未记录具体诊断。"));
+            diagnostic.append(el("pre", "", run.response_text || "这次任务没有可回查的模型正文；旧版失败正文未保存，无法恢复。不会自动再次调用。"));
+            item.append(diagnostic);
+          }
+          (run.groups || []).forEach(group => {
+            const result = el("article", "ai-result");
+            result.append(el("span", "ai-note", categories[group.category] || "待观察"), el("h3", "", group.title), el("p", "", group.summary), el("p", "", `建议：${group.recommendation}`));
+            const sources = el("details", "");
+            sources.append(el("summary", "", `查看 ${group.evidence_ids.length} 条来源`));
+            (group.evidence || []).forEach(source => sources.append(el("p", "ai-note", `${source.task} · ${source.source_id}`), el("p", "", source.summary)));
+            result.append(sources);
+            if (group.category === "harness_improvement") {
+              const submitted = (state.ai.queue || []).some(entry => entry.run_id === run.id && entry.evidence_ids.join() === group.evidence_ids.join());
+              const button = aiButton(submitted ? "已提交 · 待审批" : "提交到开发改进队列", async () => {
+                button.disabled = true;
+                const saved = await aiAction("queue", { run_id: run.id, group_id: group.id, confirmed: true });
+                if (!saved) button.disabled = false;
+              });
+              button.disabled = submitted || !state.ai.sandbox;
+              result.append(button);
+            }
+            item.append(result);
+          });
+          target.append(item);
+        });
+        const older = (state.ai?.queue || []).filter(entry => !entry.section_id || !runs.some(run => run.id === entry.run_id && run.report?.sections.some(section => section.id === entry.section_id)));
+        if (!older.length) return;
+        const queue = el("details", "ai-job");
+        queue.append(el("summary", "", `之前的建议 · ${older.length} 条`));
+        older.forEach(entry => {
+          const item = el("details", "ai-report-section"); item.append(el("summary", "", entry.title));
+          const body = el("div", ""); renderMarkdownDocument(body, {content: entry.recommendation || entry.summary, path: "", stages: []}, true);
+          item.append(body); renderAIImprovement(item, entry); queue.append(item);
+        });
+        queue.append(el("p", "ai-note", "建议尚未实施，不会自动修改 Harness 或写入全局记忆。"));
+        target.append(queue);
+      }
+
+      function renderAIPreview(target) {
+        target.replaceChildren();
+        const preview = state.aiPreview;
+        if (!preview) return;
+        const panel = el("div", "ai-result");
+        const heading = el("div", "ai-heading");
+        heading.append(el("h3", "", `${preview.source_run_id ? "重新整理" : "本次整理"} ${preview.payload.length} 条记录`), aiHelp("本次整理", `${preview.destination} · ${preview.model}。摘要共 ${preview.input_characters} 字符，输出最多 ${preview.max_output_tokens} tokens。全部记录一次发送，不截断或自动拆批；预览有效期 10 分钟，设置或来源变化后需重新确认。`));
+        const ruleContext = preview.rule_context || {rules: [], coverage: "尚未提供规范摘录。"};
+        panel.append(heading, el("p", "", "将记录摘要、你补充的要求与下方准则摘录发送给 DeepSeek，可能产生费用。请先检查是否含有敏感信息。"));
+        const feedbackItems = preview.payload.filter(record => record.kind === "user_feedback");
+        if (feedbackItems.length) {
+          const feedback = el("div", "ai-feedback-item"); feedback.append(el("strong", "", `包含你补充的 ${feedbackItems.length} 条反馈`));
+          feedbackItems.forEach(item => feedback.append(el("p", "", item.summary))); panel.append(feedback);
+        }
+        const rules = el("details", ""); rules.append(el("summary", "", `本次对照 ${ruleContext.rules.length} 条准则 · 查看发送内容`), el("p", "ai-note", ruleContext.coverage));
+        if (ruleContext.unavailable?.length) rules.append(el("p", "ai-note", `未能读取：${ruleContext.unavailable.join("、")}`));
+        ruleContext.rules.forEach(rule => rules.append(el("p", "ai-note", `[${rule.ref_id}] ${rule.source} · ${rule.heading}`), el("p", "", rule.content)));
+        panel.append(rules);
+        if (preview.source_run_id) panel.append(el("p", "ai-note", "原报告会保留，本次重新整理会再次计费。"));
+        const details = el("details", "");
+        details.append(el("summary", "", "查看将发送的内容"));
+        const records = el("div", "ai-source-preview");
+        preview.payload.forEach((record, index) => records.append(el("p", "", `${index + 1}. ${record.kind === "user_feedback" ? "[用户反馈] " : ""}${record.summary}`)));
+        const raw = el("details", ""); raw.append(el("summary", "", "查看完整数据"), el("pre", "", JSON.stringify({records: preview.payload, rule_context: ruleContext}, null, 2)));
+        details.append(el("p", "ai-note", "只发送上述记录摘要与规范摘录，不发送完整会话或文件。已隐藏常见密钥等信息，但仍需你核实内容。"), records, raw);
+        const consent = el("label", "ai-consent");
+        const check = el("input", ""); check.type = "checkbox";
+        consent.append(check, el("span", "", "我已检查上述记录与准则摘录，同意发送给 DeepSeek 整理。"));
+        const submit = aiButton("确认并整理", async () => {
+          submit.disabled = true;
+          const run = await aiAction("run", { preview_id: preview.id, confirmed: check.checked });
+          if (run) { state.aiPreview = null; target.replaceChildren(); }
+          else submit.disabled = !check.checked;
+        }, true);
+        submit.disabled = true;
+        check.addEventListener("change", () => { submit.disabled = !check.checked; });
+        panel.append(details, consent, submit);
+        target.append(panel);
+      }
+
+      function renderAI() {
+        content.replaceChildren();
+        aiCloseHelp?.();
+        content.append(el("h1", "", "提炼行为准则"));
+        renderSettingsTabs("ai");
+        const page = el("div", "ai-page");
+        if (!state.aiMessage && state.ai?.runs?.[0]?.status === "running") {
+          const latest = state.ai.runs[0];
+          aiFeedback(aiRunMessage(latest), latest.id);
+        }
+        const feedback = el("div", "ai-feedback ai-meta"); feedback.id = "ai-feedback"; feedback.setAttribute("role", "status");
+        const scope = el("div", "ai-meta"); scope.append(el("span", "", "试用模式 · 不影响正式记忆"), aiHelp("试用模式", "整理前会请你确认发送范围；原始记录不变，只有你勾选并确认的内容会保存到本机试用记忆。不会修改正式 Brain 或 Harness 规则。"));
+        page.append(scope, feedback);
+        content.append(page);
+        aiFeedback(state.aiMessage, state.aiFeedbackRun, state.aiMessageDetail);
+        if (!state.ai) {
+          page.append(el("p", "", "正在读取 AI 配置…"), aiButton("重新读取", refreshAI));
+          refreshAI(); return;
+        }
+        const config = state.ai.config;
+        const connection = el("details", "ai-panel"); connection.open = !config.has_key;
+        connection.append(el("summary", "", `AI 连接 · ${config.has_key ? "已配置" : "未配置"}`));
+        const status = el("p", "ai-note", aiConnectionLabel()); status.id = "ai-connection-status"; connection.append(status);
+        const fields = el("div", "ai-fields");
+        function field(label, value, type = "text") {
+          const wrap = el("label", "ai-field"); const input = el("input", ""); input.type = type; input.value = value;
+          wrap.append(el("span", "", label), input); fields.append(wrap); return input;
+        }
+        const model = field("模型", config.model);
+        const key = field("API Key", "", "password"); key.autocomplete = "off"; key.placeholder = config.has_key ? "已保存，留空保留；不会回显" : "仅存本机，不写入 Git 或 Brain";
+        const daily = field("每日使用上限（可调整）", config.daily_requests, "number"); daily.min = 1; daily.max = 100;
+        const actions = el("div", "ai-actions");
+        actions.append(aiButton("保存连接", async () => {
+          const result = await aiAction("configuration", { base_url: config.base_url, model: model.value.trim(), api_key: key.value.trim(), daily_requests: Number(daily.value) });
+          if (result) { key.value = ""; state.aiPreview = null; renderAI(); }
+        }), aiButton("测试连接", async () => { await aiAction("test"); }), aiButton("移除本机密钥", async () => {
+          if (!config.has_key) return;
+          if (await aiAction("configuration", { forget_key: true })) { state.aiPreview = null; renderAI(); }
+        }));
+        actions.append(aiHelp("连接设置", `使用 DeepSeek 官方接口 ${config.base_url}。修改后请先保存，再测试。密钥仅存本机，不回显；同一电脑账户下的其他程序仍可能读取。测试不发送项目资料，但会产生少量费用。`));
+        connection.append(fields, actions, el("p", "ai-note", "连接测试不发送项目内容，可能产生少量费用。"));
+        page.append(connection);
+        const organize = el("section", "ai-panel"); organize.append(aiHeading("整理经验", "对照已有规范，找出值得新增、修订或落实的行为准则；项目复盘留在项目内。默认只整理新增或变化记录，旧结果可手动重新整理。不会把报告或日志加入常驻上下文。"));
+        const label = el("label", "ai-field"); label.append(el("span", "", "选择项目")); const select = el("select", ""); select.id = "ai-project-select";
+        const placeholder = el("option", "", "请选择项目"); placeholder.value = ""; select.append(placeholder);
+        (state.ai.projects || []).forEach(project => {
+          const option = el("option", "", aiProjectLabel(project)); option.value = project.project; select.append(option);
+        }); select.value = state.aiProject;
+        const preview = el("div", ""); preview.id = "ai-preview";
+        const userFeedback = el("div", ""); userFeedback.id = "ai-user-feedback";
+        select.addEventListener("change", () => { state.aiProject = select.value; state.aiPreview = null; renderAIPreview(preview); renderAIFeedback(userFeedback); });
+        const organizeActions = el("div", "ai-actions");
+        organizeActions.append(aiButton("预览内容", async () => {
+          const project = select.value, draft = aiFeedbackDraft();
+          const feedback = draft.text.trim() || draft.id ? {summary: draft.text, ...(draft.id ? {id: draft.id, revision: draft.revision} : {}),
+            ...(draft.id && !draft.text.trim() ? {action: "withdraw"} : {})} : null;
+          const value = await aiAction("preview", {project, ...(feedback ? {feedback} : {})});
+          if (value) {
+            const saved = value.feedback;
+            if (saved) state.aiUserDrafts[project] = saved.status === "active" ? {text: saved.summary, id: saved.id, revision: saved.revision} : {text: ""};
+            else draft.dirty = false;
+            if (state.aiProject !== project) return;
+            renderAIFeedback(userFeedback);
+            state.aiPreview = value; aiFeedback("请确认要整理的内容，尚未发送。"); renderAIPreview(preview);
+          } else if (draft.id && !state.ai.user_feedback?.some(item => item.id === draft.id)) {
+            state.aiUserDrafts[project] = {text: ""};
+            if (state.aiProject === project) renderAIFeedback(userFeedback);
+          }
+        }));
+        label.append(select); organize.append(label, userFeedback, organizeActions, preview);
+        renderAIFeedback(userFeedback);
+        renderAIPreview(preview);
+        const counts = el("span", "", `今日已用 ${state.ai.calls_today} / ${config.daily_requests} 次`); counts.id = "ai-call-counts";
+        const usage = el("div", "ai-meta"); usage.append(counts, aiButton("调整上限", () => { connection.open = true; daily.focus?.(); daily.scrollIntoView?.({block: "center", behavior: "smooth"}); }), aiHelp("使用次数", "这是你可自行调整的费用保护，不是 DeepSeek 的限制。连接测试也计入次数，每天 UTC 零点重置。费用以 DeepSeek 账单为准；超时也可能计费，因此不会自动重试。")); organize.append(usage);
+        if (!state.ai.projects.length) organize.append(el("p", "ai-note", "暂无可整理的项目记录。"));
+        const results = el("section", "ai-panel"); results.id = "ai-results"; renderAIResults(results);
+        page.append(organize, results); scheduleAIRefresh();
+      }
+
       function renderSettings() {
-        if (state.focus === "reporting") renderReporting();
+        if (state.focus === "ai") renderAI();
+        else if (state.focus === "reporting") renderReporting();
         else if (state.focus === "skills") renderSkills();
         else if (state.focus === "improvements") renderImprovements();
         else renderBrain();
@@ -3904,10 +4607,10 @@
         return candidate;
       }
 
-      function renderMarkdownDocument(container, documentValue) {
-        const shell = el("div", "markdown-shell");
+      function renderMarkdownDocument(container, documentValue, compact = false) {
+        const shell = el("div", compact ? "" : "markdown-shell");
         const reader = el("article", "document-reader");
-        reader.append(el("div", "eyebrow", "Markdown 阅读"));
+        if (!compact) reader.append(el("div", "eyebrow", "Markdown 阅读"));
         const lines = String(documentValue.content).replace(/\r\n?/g, "\n").split("\n");
         const headings = [];
         const usedIds = new Set();
@@ -3977,7 +4680,7 @@
           }
           const paragraph = el("p", ""); appendInlineMarkdown(paragraph, paragraphLines.join(" "), documentValue.path); reader.append(paragraph);
         }
-        renderDocumentOutline(shell, headings, documentValue.stages || []);
+        if (!compact) renderDocumentOutline(shell, headings, documentValue.stages || []);
         shell.append(reader);
         container.append(shell);
       }
@@ -4470,7 +5173,7 @@
             ["/api/harness/improvements.json", "harnessImprovements", true],
           ];
         }
-        if (state.focus === "reporting") return [];
+        if (state.focus === "reporting" || state.focus === "ai") return [];
         return [
           ["/api/brain/status.json", "brainHealth", false],
           ["/api/brain/candidates.json", "brainCandidates", true],

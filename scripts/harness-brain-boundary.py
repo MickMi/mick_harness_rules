@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import contextvars
 import datetime as dt
 import difflib
 import hashlib
@@ -47,11 +48,26 @@ class BrainBoundaryError(RuntimeError):
     pass
 
 
+_state_scope = contextvars.ContextVar("brain_boundary_state_scope", default=None)
+
+
+@contextlib.contextmanager
+def isolated_state(root: Path):
+    """Reuse the lifecycle in a sandbox without mutating process-wide environment."""
+    token = _state_scope.set(Path(root))
+    try:
+        yield
+    finally:
+        _state_scope.reset(token)
+
+
 def now_iso() -> str:
     return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()
 
 
 def state_root() -> Path:
+    if _state_scope.get() is not None:
+        return _state_scope.get()
     configured = os.environ.get("MICK_HARNESS_STATE_ROOT") or os.environ.get("MICK_HARNESS_STATE_DIR")
     return Path(configured).expanduser() if configured else Path.home() / ".local" / "state" / "mick-harness"
 
@@ -1031,6 +1047,33 @@ def merge_harness_improvements(
         return harness_improvement_view(primary)
 
 
+def create_curated_harness_improvement(entry: dict[str, Any]) -> dict[str, Any]:
+    """Admit a validated, human-reviewed curation into the existing lifecycle.
+
+    Its evidence is a curation snapshot, not invented project-memory facts or
+    a count of independent recurrences. Approval remains a separate operation.
+    """
+    if not re.fullmatch(r"ai_candidate_[a-f0-9]{20}", str(entry.get("id", ""))):
+        raise BrainBoundaryError("Invalid curation reference.")
+    if entry.get("target") not in {"checker", "skill", "rule"} or not entry.get("evidence"):
+        raise BrainBoundaryError("Curated improvement needs a target and evidence.")
+    identifier = "improvement_" + hashlib.sha256(entry["id"].encode()).hexdigest()[:20]
+    with simple_lock(harness_improvement_root() / ".write.lock"):
+        if harness_improvement_path(identifier).exists():
+            return harness_improvement_view(get_harness_improvement(identifier))
+        record = {
+            "schema_version": "1", "improvement_id": identifier,
+            "summary": validate_summary(entry["summary"]), "target": entry["target"],
+            "status": "observed", "created_at": now_iso(), "updated_at": now_iso(),
+            "sources": [{"memory_id": row["source_id"], "project": row["project"],
+                         "kind": row["kind"], "summary_digest": hashlib.sha256(row["summary"].encode()).hexdigest()}
+                        for row in entry["evidence"]],
+            "evidence_group": "task_digest", "occurrence_count": 1,
+            "evidence_count": len(entry["evidence"]), "curation": entry,
+        }
+        return harness_improvement_view(save_harness_improvement(record))
+
+
 def submit_harness_improvement(identifier: str, *, force: bool = False) -> dict[str, Any]:
     with simple_lock(harness_improvement_root() / ".write.lock"):
         record = get_harness_improvement(identifier)
@@ -1059,10 +1102,20 @@ def harness_improvement_proposal(record: dict[str, Any]) -> tuple[Path, str]:
         f"- 来源项目：{projects}\n"
         f"- 项目数：{view['project_count']}\n"
         f"- 出现次数：{view['occurrence_count']}\n"
-        f"- 审批时间：{now_iso()}\n\n"
+        f"- 审批时间：{record.get('approved_at') or record.get('created_at') or now_iso()}\n\n"
         "## 后续落地\n\n"
         "由受控开发回合确定具体文件、验证方式和回滚边界；落地前不得把本提案视为已生效。\n"
     )
+    if record.get("curation"):
+        entry = record["curation"]
+        content += (
+            f"\n## 适用范围\n\n{entry.get('scope', '')}\n"
+            f"\n## 最小验证\n\n{entry.get('verification', '')}\n"
+            f"\n## 对照已有准则\n\n{entry.get('comparison', '')}\n"
+            "\n## 执行边界\n\n只在上述范围内实施；优先复用检查或修订已有规则，不追加同义常驻上下文。"
+            "交付需记录实际文件、验证结果和生效范围；未安装或未观察效果时不得宣称已经生效。"
+            "不自动发布，不把报告、案例和来源摘要写入全局记忆。\n"
+        )
     return relative, content
 
 
@@ -1073,10 +1126,10 @@ def approve_harness_improvement(identifier: str) -> dict[str, Any]:
             return harness_improvement_view(record)
         if record.get("status") != "pending_approval":
             raise BrainBoundaryError("Harness improvement must enter approval before it can be approved.")
+        record["approved_at"] = now_iso()
         relative, content = harness_improvement_proposal(record)
         atomic_text(state_root() / relative, content)
         record["status"] = "approved"
-        record["approved_at"] = now_iso()
         record["proposal_path"] = relative.as_posix()
         return harness_improvement_view(save_harness_improvement(record))
 
@@ -1107,6 +1160,7 @@ def validate_release_version(value: str) -> str:
 
 def mark_harness_improvement_implemented(
     identifier: str, *, artifact_path: str, baseline_count: int, release_version: str | None = None,
+    evidence: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     with simple_lock(harness_improvement_root() / ".write.lock"):
         record = get_harness_improvement(identifier)
@@ -1121,6 +1175,8 @@ def mark_harness_improvement_implemented(
             "release_version": validate_release_version(release_version) if release_version else None,
             "implemented_at": now_iso(),
         }
+        if evidence is not None:
+            record["implementation_evidence"] = evidence
         return harness_improvement_view(save_harness_improvement(record))
 
 
@@ -1142,6 +1198,7 @@ def verify_harness_improvement_effect(
             "note": redact(note)[:1000],
             "verified_at": now_iso(),
         }
+        record.setdefault("effect_history", []).append(dict(record["effect"]))
         return harness_improvement_view(save_harness_improvement(record))
 
 

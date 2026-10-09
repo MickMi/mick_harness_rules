@@ -7,6 +7,43 @@ All notable changes to Mick Agent Harness are documented in this file.
 This project follows Semantic Versioning 2.0. Git tags in the form `vX.Y.Z`
 are the release source of truth.
 
+## [0.26.0] - 2026-10-09
+
+### Reviewable Behavior Suggestions in the Development Sandbox
+
+- The optional DeepSeek assistant previews all new project summaries, optional
+  user feedback, and selected existing rules before explicit permission to send.
+  Keys stay local; a configurable daily cap and no automatic paid retries remain.
+- Readable suggestions distinguish adding, revising, and enforcing existing
+  behavior standards. Project retrospectives stay project-local and never enter
+  global memory through this workflow. Original reports and sources remain available.
+- A single suggestion now supports adoption, a copyable implementation brief,
+  recorded implementation evidence, and manual effect review. It reuses the
+  existing improvement lifecycle instead of adding another queue. Manual records
+  are not proof of installation, automatic tests, or active rule enforcement.
+- Optional feedback is folded into the preview step. Independent suggestion
+  cards, inline editing, contextual help, and polling preserve active user input.
+- Scoped NARC button-source checks demonstrate enforcing an existing rule with
+  deterministic checks rather than adding permanent prompt context; these checks
+  do not certify rendered layouts or other projects.
+- An unreadable project state file no longer crashes the portfolio monitor at
+  startup. Other projects continue updating; the read error stays visible until
+  the affected project can be read again.
+
+Compatibility: production monitoring at `127.0.0.1:6425`, existing loaders,
+Brain data, and legacy reports remain compatible. AI configuration, curation,
+and adoption remain development-only at `127.0.0.1:6426`; releasing this code
+does not enable production AI writes or automatic Harness evolution.
+
+Migration: update the code and restart the existing development service. No API
+keys, reports, feedback, or Brain data are copied between environments. Preserve
+local rule edits before updating; do not automatically stash or overwrite them.
+
+Verification: 332 Python tests and three frontend interaction checks passed,
+along with generated-rule consistency, public-release audit, context-budget and
+diff checks. Real model quality and long-term effect still require user review;
+release validation does not send project data or create billable requests.
+
 ## [0.25.0] - 2026-09-17
 
 ### Personal PRD Workflow, WorkBuddy Support, and Unified Worktree Progress
